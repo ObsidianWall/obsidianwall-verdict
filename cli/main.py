@@ -1,5 +1,8 @@
 # cli/main.py
 
+# Purpose: User interface → runs the engine
+
+
 import typer
 import json
 from engine.evaluator import DecisionEngine
