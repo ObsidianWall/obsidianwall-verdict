@@ -1,7 +1,9 @@
-#
+# engine/decision_resolver.py
 
 def resolve_decision(policy, conditions_passed):
+    decision_block = policy["policy"]["decision"]
+
     if conditions_passed:
-        return policy["decision"]["allow"]
+        return decision_block["allow"]
     else:
-        return policy["decision"]["deny"]
+        return decision_block["deny"]
