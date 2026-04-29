@@ -1,6 +1,6 @@
 #engine/condition_evaluator.py
 
-# Purpose -- User interface → runs the engine.
+# Purpose -- Executes logic.
 
 def evaluate_conditions(policy, context):
     conditions = policy["policy"]["conditions"]
