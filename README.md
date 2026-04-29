@@ -1,2 +1,3 @@
 # obsidianwall-guardrails
-Production-Ready v0.1
+
+## A pre-deployment decision engine that blocks or approves infrastructure changes based on rules (starting with cost)
