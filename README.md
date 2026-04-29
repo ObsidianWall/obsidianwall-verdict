@@ -9,6 +9,7 @@ ___
 
 ## We are using ONE structure for the first executable unit:
 
+text''
 obsidianwall-guardrails/
 │
 ├── cli/
