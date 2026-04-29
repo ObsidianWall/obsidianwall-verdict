@@ -10,13 +10,12 @@ class DecisionEngine:
         self.policy = load_policy(policy_path)
 
     def evaluate(self, context: dict):
-        conditions_result = evaluate_conditions(self.policy, context)
-
-        decision = resolve_decision(self.policy, conditions_result)
+        conditions_passed = evaluate_conditions(self.policy, context)
+        decision = resolve_decision(self.policy, conditions_passed)
 
         return {
             "decision": decision,
-            "conditions_passed": conditions_result
+            "conditions_passed": conditions_passed,
+            "context": context,
+            "policy": self.policy["policy"]["name"]
         }
-
-
