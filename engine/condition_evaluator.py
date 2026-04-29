@@ -1,19 +1,20 @@
-#
+#engine/condition_evaluator.py
+
+# Purpose -- User interface → runs the engine.
 
 def evaluate_conditions(policy, context):
+    conditions = policy["policy"]["conditions"]
+    parameters = policy["policy"].get("parameters", {})
+
     results = []
 
-    parameters = policy.get("parameters", {})
+    for condition in conditions:
+        expr = condition["expression"]
 
-    for condition in policy["conditions"]:
-        expr = condition
-
-        # inject parameters
-        for key, value in parameters.items():
-            expr = expr.replace(key, str(value))
+        env = {**context, **parameters}
 
         try:
-            result = eval(expr, {}, context)
+            result = eval(expr, {}, env)
         except Exception:
             result = False
 
