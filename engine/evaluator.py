@@ -1,5 +1,8 @@
 # engine/evaluator.py
 
+# Purpose: Orchestrates the system
+
+
 from engine.policy_loader import load_policy
 from engine.condition_evaluator import evaluate_conditions
 from engine.decision_resolver import resolve_decision
