@@ -1,33 +1,26 @@
 # cli/main.py
 
 import typer
-from packages.decision_engine.engine import DecisionEngine
-from packages.policy_engine.loader import load_policy
-from packages.context_engine.context import build_context
+import json
+from engine.evaluator import DecisionEngine
 
 app = typer.Typer()
 
 @app.command()
 def evaluate(plan: str, policy: str):
     """
-    Evaluate a Terraform plan against a policy.
-    
-    plan: path to plan.json
-    policy: path to policy.yaml
+    Evaluate Terraform plan against policy
     """
 
-    # 1. Load policy (intent)
-    policy_data = load_policy(policy)
+    engine = DecisionEngine(policy_path=policy)
 
-    # 2. Build context (reality)
-    context = build_context(plan)
+    with open(plan, "r") as f:
+        context = json.load(f)
 
-    # 3. Run decision engine
-    engine = DecisionEngine(policy_data, context)
-    result = engine.evaluate()
+    result = engine.evaluate(context)
 
-    # 4. Output result
-    print(result)
+    print(json.dumps(result, indent=2))
+
 
 if __name__ == "__main__":
     app()
