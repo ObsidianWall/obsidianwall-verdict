@@ -9,7 +9,7 @@ ___
 
 ## We are using ONE structure for the first executable unit:
 
-text''
+text'''
 obsidianwall-guardrails/
 │
 ├── cli/
@@ -50,3 +50,4 @@ obsidianwall-guardrails/
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
+'''
