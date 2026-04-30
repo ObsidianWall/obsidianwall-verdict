@@ -1,4 +1,7 @@
-#
+
+# policies/cost_policy.yaml
+
+# Cost Policy for Budget Guardrail
 
 policy:
   name: budget_guardrail

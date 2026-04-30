@@ -1,24 +1,44 @@
 # engine/evaluator.py
 
-# Purpose: Orchestrates the system
+# Purpose:Orchestrates entire decision lifecycle
+
+# Purpose: Main entry point for policy evaluation. Orchestrates the entire process.
+
+# Purpose: Ensure policy is valid before execution (audit + safety)
 
 
-from engine.policy_loader import load_policy
 from engine.condition_evaluator import evaluate_conditions
 from engine.decision_resolver import resolve_decision
+from engine.recommender import generate_suggestions
+from utils.logger import get_logger
+from datetime import datetime
+
+logger = get_logger()
 
 
 class DecisionEngine:
-    def __init__(self, policy_path: str):
-        self.policy = load_policy(policy_path)
 
-    def evaluate(self, context: dict):
-        conditions_passed = evaluate_conditions(self.policy, context)
-        decision = resolve_decision(self.policy, conditions_passed)
+    def __init__(self, policy, context):
+        self.policy = policy
+        self.context = context
 
-        return {
+    def evaluate(self):
+
+        passed, failures = evaluate_conditions(self.policy, self.context)
+        decision = resolve_decision(self.policy, passed)
+
+        suggestions = generate_suggestions(self.context)
+
+        result = {
             "decision": decision,
-            "conditions_passed": conditions_passed,
-            "context": context,
-            "policy": self.policy["policy"]["name"]
+            "reasons": failures if failures else ["All conditions passed"],
+            "actions": [a.message for a in self.policy.actions],
+            "suggestions": suggestions,
+            "metadata": self.policy.metadata.dict(),
+            "override_allowed": True,
+            "timestamp": datetime.utcnow().isoformat()
         }
+
+        logger.info("Decision made", extra=result)
+
+        return result

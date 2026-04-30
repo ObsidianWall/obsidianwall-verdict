@@ -1,6 +1,19 @@
 # engine/validator.py
 
+# Purpose: Validates Terraform plans against defined policies.
 
-class PolicyModel(BaseModel):
-    version: str
-    policy: dict
+
+from schemas.policy_schema import PolicyModel
+from utils.logger import get_logger
+
+logger = get_logger()
+
+
+def validate_policy(policy_dict: dict) -> PolicyModel:
+    try:
+        policy = PolicyModel(**policy_dict)
+        logger.info("Policy validation successful", extra={"policy": policy.name})
+        return policy
+    except Exception as e:
+        logger.error("Policy validation failed", extra={"error": str(e)})
+        raise

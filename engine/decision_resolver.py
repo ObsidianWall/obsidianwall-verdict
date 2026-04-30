@@ -1,9 +1,13 @@
 # engine/decision_resolver.py
 
-def resolve_decision(policy, conditions_passed):
-    decision_block = policy["policy"]["decision"]
+# Purpose: Convert condition results → decision
 
-    if conditions_passed:
-        return decision_block["allow"]
+# Purpose: Determines the final decision based on condition evaluation results.
+# In a more complex system, this could involve multiple policies, weighted decisions, or even ML models. For now, it's a simple allow/deny based on the primary policy decision.
+
+
+def resolve_decision(policy, passed: bool):
+    if passed:
+        return policy.decision.allow
     else:
-        return decision_block["deny"]
+        return policy.decision.deny

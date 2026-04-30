@@ -1,23 +1,29 @@
-#engine/condition_evaluator.py
+# engine/condition_evaluator.py
 
-# Purpose -- Executes logic.
+# Purpose: Evaluate policy conditions deterministically
+
+from utils.logger import get_logger
+
+logger = get_logger()
+
 
 def evaluate_conditions(policy, context):
-    conditions = policy["policy"]["conditions"]
-    parameters = policy["policy"].get("parameters", {})
-
     results = []
+    failures = []
 
-    for condition in conditions:
-        expr = condition["expression"]
+    env = {**context, **policy.parameters}
 
-        env = {**context, **parameters}
-
+    for cond in policy.conditions:
         try:
-            result = eval(expr, {}, env)
-        except Exception:
-            result = False
+            result = eval(cond.expression, {}, env)
+            results.append(result)
 
-        results.append(result)
+            if not result:
+                failures.append(cond.message)
 
-    return all(results)
+        except Exception as e:
+            logger.error("Condition evaluation error", extra={"error": str(e)})
+            results.append(False)
+            failures.append(f"Evaluation error: {str(e)}")
+
+    return all(results), failures

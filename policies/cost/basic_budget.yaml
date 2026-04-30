@@ -1,0 +1,32 @@
+
+# policies/cost/basic_budget.yaml
+
+# Basic Budget Guardrail Policy
+
+
+name: basic_budget_guardrail
+version: "0.1"
+
+inputs:
+  - estimated_cost
+  - current_spend
+
+parameters:
+  max_budget: 50
+
+conditions:
+  - expression: "(estimated_cost + current_spend) <= max_budget"
+    message: "Projected cost exceeds allowed budget"
+
+decision:
+  allow: "ALLOW"
+  deny: "DENY"
+  warn: "WARN"
+
+actions:
+  - type: notify
+    message: "Budget threshold violated"
+
+metadata:
+  severity: "medium"
+  category: "cost"
