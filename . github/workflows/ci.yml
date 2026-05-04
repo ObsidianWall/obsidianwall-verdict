@@ -1,4 +1,8 @@
 # .github/workflows/ci.yml
+# Purpose: This simulates:
+           # tighter environments
+           # production constraints
+           #override-required scenarios
 
 
 name: ObsidianWall CI
