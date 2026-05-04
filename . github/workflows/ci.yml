@@ -1,8 +1,35 @@
 # .github/workflows/ci.yml
 
-name: CI
+
+name: ObsidianWall CI
+
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run lint (optional but recommended)
+        run: |
+          pip install flake8
+          flake8 .
+
+      - name: Run tests
+        run: pytest --maxfail=1 --disable-warnings -q
