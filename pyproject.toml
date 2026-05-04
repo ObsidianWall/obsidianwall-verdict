@@ -1,1 +1,14 @@
 
+[project]
+name = "obsidianwall-guardrails"
+version = "0.1.0"
+description = "Pre-deployment decision engine for cloud cost governance"
+authors = [{ name="ObsidianWall", email="founder@obsidianwall.com" }]
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "venv"]
