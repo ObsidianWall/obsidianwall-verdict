@@ -2,26 +2,45 @@
 
 # Purpose:Convert Terraform plan → normalized decision context
 
+# context/terraform_parser.py
 
 import json
-from utils.logger import get_logger
-
-logger = get_logger()
 
 
-def parse_terraform_plan(path: str) -> dict:
-    with open(path, "r") as f:
+def parse_terraform_plan(plan_path: str) -> dict:
+    """
+    Parses Terraform plan JSON and extracts resource-level data.
+    
+    Returns:
+        dict with resource summary used for cost estimation.
+    """
+
+    with open(plan_path, "r") as f:
         plan = json.load(f)
 
-    # v0.1 simplified mapping
-    estimated_cost = plan.get("estimated_cost", 0)
-    current_spend = plan.get("current_spend", 0)
+    resources = []
 
-    context = {
-        "estimated_cost": estimated_cost,
-        "current_spend": current_spend
+    # Terraform plan structure: planned_values.root_module.resources
+    try:
+        root = plan.get("planned_values", {}).get("root_module", {})
+        resources.extend(root.get("resources", []))
+
+        # Handle child modules if present
+        for child in root.get("child_modules", []):
+            resources.extend(child.get("resources", []))
+
+    except Exception:
+        raise ValueError("Invalid Terraform plan format")
+
+    parsed_resources = []
+
+    for r in resources:
+        parsed_resources.append({
+            "type": r.get("type"),
+            "name": r.get("name"),
+            "values": r.get("values", {})
+        })
+
+    return {
+        "resources": parsed_resources
     }
-
-    logger.info("Context built", extra=context)
-
-    return context
