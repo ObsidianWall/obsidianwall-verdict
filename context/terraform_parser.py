@@ -2,7 +2,7 @@
 
 # Purpose:Convert Terraform plan → normalized decision context
 
-# context/terraform_parser.py
+
 
 import json
 
