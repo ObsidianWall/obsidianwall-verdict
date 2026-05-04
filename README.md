@@ -9,7 +9,11 @@ ___
 
 ## We are using ONE structure for the first executable unit:
 
-text'''
+✅ LOCKED REPO STRUCTURE (NO MORE CHANGES)
+
+We are staying with:
+
+```
 obsidianwall-guardrails/
 │
 ├── cli/
@@ -26,13 +30,16 @@ obsidianwall-guardrails/
 ├── schemas/
 │   └── policy_schema.py
 │
+├── context/
+│   └── terraform_parser.py
+│
+├── logging/
+│   └── audit_logger.py   ← ✅ THIS is where your logging file goes
+│
 ├── policies/
 │   └── cost/
 │       ├── basic_budget.yaml
 │       └── strict_budget.yaml
-│
-├── context/
-│   └── terraform_parser.py
 │
 ├── samples/
 │   └── terraform_plan.json
@@ -50,4 +57,21 @@ obsidianwall-guardrails/
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
-'''
+```
+
+## ✅ logging/
+explicit domain
+audit-focused
+aligns with compliance
+
+### Future expansion
+
+That folder will evolve into:
+
+```
+logging/
+├── audit_logger.py
+├── decision_store.py
+├── event_stream.py
+```
+-This becomes your * audit subsystem *

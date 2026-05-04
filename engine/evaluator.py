@@ -1,44 +1,67 @@
 # engine/evaluator.py
 
-# Purpose:Orchestrates entire decision lifecycle
+# purpose: Orchestrates full decision lifecycle
+# Pupose: produces auditable, immutable decision record
+# Purpose: Central orchestrator with full traceability + logging
 
 # Purpose: Main entry point for policy evaluation. Orchestrates the entire process.
 
 # Purpose: Ensure policy is valid before execution (audit + safety)
 
 
+import uuid
+from datetime import datetime
+
+from engine.policy_loader import load_policy
+from engine.validator import validate_policy
 from engine.condition_evaluator import evaluate_conditions
 from engine.decision_resolver import resolve_decision
 from engine.recommender import generate_suggestions
-from utils.logger import get_logger
-from datetime import datetime
+from logging.audit_logger import get_logger
 
 logger = get_logger()
 
 
 class DecisionEngine:
+    def __init__(self, policy_path: str):
+        raw_policy = load_policy(policy_path)
+        self.policy = validate_policy(raw_policy)
 
-    def __init__(self, policy, context):
-        self.policy = policy
-        self.context = context
+    def evaluate(self, context: dict, user_role: str = "engineer"):
+        decision_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
 
-    def evaluate(self):
+        # 1. Evaluate conditions
+        conditions_passed, trace = evaluate_conditions(self.policy, context)
 
-        passed, failures = evaluate_conditions(self.policy, self.context)
-        decision = resolve_decision(self.policy, passed)
+        # 2. Resolve decision
+        decision, override_required = resolve_decision(
+            self.policy,
+            conditions_passed,
+            user_role
+        )
 
-        suggestions = generate_suggestions(self.context)
+        # 3. Generate advisory suggestions (NON-authoritative)
+        suggestions = generate_suggestions(context, decision)
 
+        # 4. Build result
         result = {
+            "decision_id": decision_id,
+            "timestamp": timestamp,
+            "policy": self.policy.policy.name,
             "decision": decision,
-            "reasons": failures if failures else ["All conditions passed"],
-            "actions": [a.message for a in self.policy.actions],
+            "override_required": override_required,
+            "conditions_passed": conditions_passed,
+            "trace": trace,
+            "actions": [a.dict() for a in self.policy.actions],
             "suggestions": suggestions,
-            "metadata": self.policy.metadata.dict(),
-            "override_allowed": True,
-            "timestamp": datetime.utcnow().isoformat()
+            "context": context,
         }
 
-        logger.info("Decision made", extra=result)
+        # 5. Audit log (structured)
+        logger.info(
+            "decision_evaluated",
+            extra={"extra": result}
+        )
 
         return result

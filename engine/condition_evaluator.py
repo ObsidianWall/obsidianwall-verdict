@@ -1,29 +1,67 @@
 # engine/condition_evaluator.py
 
+# Purpose: Deterministic, secure expression evaluation
+
 # Purpose: Evaluate policy conditions deterministically
 
-from utils.logger import get_logger
+import operator
 
-logger = get_logger()
+OPS = {
+    "<=": operator.le,
+    ">=": operator.ge,
+    "<": operator.lt,
+    ">": operator.gt,
+    "==": operator.eq,
+}
+
+
+def evaluate_expression(expr: str, context: dict):
+    """
+    Supports simple expressions like:
+    (current_spend + estimated_cost) <= max_budget
+    """
+
+    # VERY controlled parsing (v0.2 scope)
+    expr = expr.replace("(", "").replace(")", "")
+    left, op, right = None, None, None
+
+    for symbol in OPS.keys():
+        if symbol in expr:
+            left, right = expr.split(symbol)
+            op = symbol
+            break
+
+    if not op:
+        raise ValueError("Unsupported expression")
+
+    left_value = eval_arithmetic(left.strip(), context)
+    right_value = eval_arithmetic(right.strip(), context)
+
+    return OPS[op](left_value, right_value)
+
+
+def eval_arithmetic(part: str, context: dict):
+    if "+" in part:
+        items = [i.strip() for i in part.split("+")]
+        return sum(context.get(i, float(i)) for i in items)
+
+    return context.get(part, float(part))
 
 
 def evaluate_conditions(policy, context):
     results = []
-    failures = []
+    trace = []
 
-    env = {**context, **policy.parameters}
+    for cond in policy["conditions"]:
+        expr = cond["expression"]
 
-    for cond in policy.conditions:
-        try:
-            result = eval(cond.expression, {}, env)
-            results.append(result)
+        result = evaluate_expression(expr, context)
 
-            if not result:
-                failures.append(cond.message)
+        trace.append({
+            "expression": expr,
+            "result": result
+        })
 
-        except Exception as e:
-            logger.error("Condition evaluation error", extra={"error": str(e)})
-            results.append(False)
-            failures.append(f"Evaluation error: {str(e)}")
+        results.append(result)
 
-    return all(results), failures
+    return all(results), trace

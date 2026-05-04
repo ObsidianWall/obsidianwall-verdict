@@ -3,30 +3,43 @@
 
 # Basic Budget Guardrail Policy
 
-
-name: basic_budget_guardrail
-version: "0.1"
+policy:
+  name: basic_budget_guardrail
+  version: 0.2
+  description: "Prevents infrastructure deployment if projected cost exceeds defined budget"
 
 inputs:
   - estimated_cost
   - current_spend
 
 parameters:
-  max_budget: 50
+  budget:
+    amount: 50
+    period: monthly
+    scope: project:default
+    owner: team-alpha
+    flexibility: soft   # soft | hard
+    override_allowed: true
 
 conditions:
-  - expression: "(estimated_cost + current_spend) <= max_budget"
-    message: "Projected cost exceeds allowed budget"
+  - id: budget_check
+    expression: "(current_spend + estimated_cost) <= budget.amount"
+    description: "Projected monthly spend must not exceed allocated monthly budget"
 
 decision:
   allow: "ALLOW"
   deny: "DENY"
   warn: "WARN"
 
+override:
+  roles:
+    - budget_owner
+
 actions:
   - type: notify
-    message: "Budget threshold violated"
+    severity: high
+    message: "Budget exceeded. Approval required before deployment."
 
-metadata:
-  severity: "medium"
-  category: "cost"
+  - type: log
+    severity: info
+    message: "Decision recorded for audit trail"

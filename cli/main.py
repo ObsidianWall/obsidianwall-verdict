@@ -8,39 +8,56 @@ import json
 from pathlib import Path
 
 from engine.evaluator import DecisionEngine
-from engine.policy_loader import load_policy
-from engine.validator import validate_policy
 from context.terraform_parser import parse_terraform_plan
-from utils.logger import get_logger
+from logging.audit_logger import get_logger
 
 app = typer.Typer()
 logger = get_logger()
 
+
 @app.command()
-def evaluate(plan: str, policy: str, output: str = "output/result.json"):
+def evaluate(
+    plan: str,
+    policy: str,
+    role: str = "engineer",
+    output: str = "output/result.json"
+):
     """
-    Evaluate Terraform plan against policy.
+    Evaluate Terraform plan against policy with audit logging.
     """
 
-    logger.info("Starting evaluation", extra={"plan": plan, "policy": policy})
+    logger.info("evaluation_started", extra={
+        "extra": {"plan": plan, "policy": policy, "role": role}
+    })
 
-    # Load + validate policy
-    policy_dict = load_policy(policy)
-    policy_obj = validate_policy(policy_dict)
-
-    # Build context
+    # 1. Parse Terraform plan → context
     context = parse_terraform_plan(plan)
 
-    # Run engine
-    engine = DecisionEngine(policy_obj, context)
-    result = engine.evaluate()
 
-    # Write output
+    # 2. Run decision engine (PROTECTED BLOCK)
+    try:
+        engine = DecisionEngine(policy_path=policy)
+        result = engine.evaluate(context, user_role=role)
+
+    except Exception as e:
+        logger.error("evaluation_failed", extra={
+            "extra": {
+                "error": str(e),
+                "plan": plan,
+                "policy": policy,
+                "role": role
+            }
+        })
+        raise typer.Exit(code=1)
+
+    # 3. Persist result (audit artifact)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w") as f:
         json.dump(result, f, indent=2)
 
-    logger.info("Evaluation complete", extra={"decision": result["decision"]})
+    logger.info("evaluation_completed", extra={
+        "extra": {"decision": result["decision"], "decision_id": result["decision_id"]}
+    })
 
     print(json.dumps(result, indent=2))
 
