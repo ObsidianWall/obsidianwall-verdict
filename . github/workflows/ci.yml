@@ -1,9 +1,10 @@
 # .github/workflows/ci.yml
-# Purpose: This simulates:
-           # tighter environments
-           # production constraints
-           #override-required scenarios
+# Purpose: This enforces code quality + reliability automatically.
 
+            # Every push:
+            # installs dependencies
+            # runs tests
+            # fails if something breaks
 
 name: ObsidianWall CI
 
