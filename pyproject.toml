@@ -1,3 +1,10 @@
+# 
+
+# Purpose: Defines:
+             # project metadata
+             # dependencies (optional alternative to requirements.txt)
+             # packaging readiness
+
 
 [project]
 name = "obsidianwall-guardrails"
