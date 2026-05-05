@@ -9,6 +9,7 @@ from pathlib import Path
 
 from engine.evaluator import DecisionEngine
 from context.terraform_parser import parse_terraform_plan
+from context.context_builder import build_context
 from logging.audit_logger import get_logger
 
 app = typer.Typer()
@@ -31,7 +32,7 @@ def evaluate(
     })
 
     # 1. Parse Terraform plan → context
-    context = parse_terraform_plan(plan)
+    context = build_context(plan, current_spend=20)  # Example current spend, could be dynamic
 
 
     # 2. Run decision engine (PROTECTED BLOCK)

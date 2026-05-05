@@ -1,4 +1,20 @@
+
 {
-  "estimated_cost": 30,
-  "current_spend": 25
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "type": "azurerm_virtual_machine",
+          "name": "vm1",
+          "values": {
+            "vm_size": "Standard_D2s_v3"
+          }
+        },
+        {
+          "type": "azurerm_sentinel_log_analytics_workspace",
+          "name": "sentinel"
+        }
+      ]
+    }
+  }
 }
