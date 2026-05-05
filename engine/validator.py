@@ -4,7 +4,7 @@
 
 
 from schemas.policy_schema import PolicyModel
-from logging.audit_logger import get_logger
+from audit.audit_logger import get_logger
 
 logger = get_logger()
 

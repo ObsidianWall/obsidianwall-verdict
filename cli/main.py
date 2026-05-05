@@ -10,7 +10,7 @@ from pathlib import Path
 from engine.evaluator import DecisionEngine
 from context.terraform_parser import parse_terraform_plan
 from context.context_builder import build_context
-from logging.audit_logger import get_logger
+from audit.audit_logger import get_logger
 
 app = typer.Typer()
 logger = get_logger()

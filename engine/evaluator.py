@@ -17,7 +17,7 @@ from engine.validator import validate_policy
 from engine.condition_evaluator import evaluate_conditions
 from engine.decision_resolver import resolve_decision
 from engine.recommender import generate_suggestions
-from logging.audit_logger import get_logger
+from audit.audit_logger import get_logger
 
 logger = get_logger()
 

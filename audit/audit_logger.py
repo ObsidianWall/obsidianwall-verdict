@@ -1,4 +1,4 @@
-# logging/audit_logger.py
+# audit/audit_logger.py
 
 # Purpose: Enterprise-grade structured logging + audit trail foundation
 # Purpose: Structured audit logging (CRITICAL for compliance)

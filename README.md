@@ -16,6 +16,11 @@ We are staying with:
 ```
 obsidianwall-guardrails/
 │
+├── .devcontainer/
+│   ├── devcontainer.json
+│   ├── Dockerfile
+│   └── requirements.txt
+|
 ├── cli/
 │   └── main.py
 │
@@ -24,6 +29,7 @@ obsidianwall-guardrails/
 │   ├── policy_loader.py
 │   ├── validator.py
 │   ├── condition_evaluator.py
+|   ├── cost_estimator.py
 │   ├── decision_resolver.py
 │   └── recommender.py
 │
@@ -31,9 +37,10 @@ obsidianwall-guardrails/
 │   └── policy_schema.py
 │
 ├── context/
+|   ├── context_builder.py
 │   └── terraform_parser.py
 │
-├── logging/
+├── audit/
 │   └── audit_logger.py   ← ✅ THIS is where your logging file goes
 │
 ├── policies/
