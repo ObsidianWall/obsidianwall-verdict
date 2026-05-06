@@ -3,43 +3,48 @@
 
 # Basic Budget Guardrail Policy
 
-policy:
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
   name: basic_budget_guardrail
   version: 0.2
-  description: "Prevents infrastructure deployment if projected cost exceeds defined budget"
+  owner: team-alpha
+  description: "Prevents infra spend overruns"
 
-inputs:
-  - estimated_cost
-  - current_spend
+spec:
+  inputs:
+    - estimated_cost
+    - current_spend
 
-parameters:
-  budget:
-    amount: 50
-    period: monthly
-    scope: project:default
-    owner: team-alpha
-    flexibility: soft   # soft | hard
-    override_allowed: true
+  parameters:
+    budget:
+      amount: 50
+      period: monthly
+      scope: project:default
+      owner: team-alpha
+      flexibility: soft
+      override_allowed: true
 
-conditions:
-  - id: budget_check
-    expression: "(current_spend + estimated_cost) <= budget.amount"
-    description: "Projected monthly spend must not exceed allocated monthly budget"
+  conditions:
+    - id: budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Monthly spend cap enforcement"
 
-decision:
-  allow: "ALLOW"
-  deny: "DENY"
-  warn: "WARN"
+  decision:
+    allow: ALLOW
+    deny: DENY
+    warn: WARN
 
-override:
-  roles:
-    - budget_owner
+  override:
+    roles:
+      - budget_owner
 
-actions:
-  - type: notify
-    severity: high
-    message: "Budget exceeded. Approval required before deployment."
+  actions:
+    - type: notify
+      severity: high
+      message: "Budget exceeded"
 
-  - type: log
-    severity: info
-    message: "Decision recorded for audit trail"
+    - type: log
+      severity: info
+      message: "Decision recorded"
