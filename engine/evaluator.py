@@ -48,12 +48,12 @@ class DecisionEngine:
         result = {
             "decision_id": decision_id,
             "timestamp": timestamp,
-            "policy": self.policy.policy.name,
+            "policy": self.policy.metadata.name,
             "decision": decision,
             "override_required": override_required,
             "conditions_passed": conditions_passed,
             "trace": trace,
-            "actions": [a.dict() for a in self.policy.actions],
+            "actions": [a.dict() for a in self.policy.spec.actions],
             "suggestions": suggestions,
             "context": context,
         }
