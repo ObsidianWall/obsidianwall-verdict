@@ -52,7 +52,7 @@ def evaluate_conditions(policy, context):
     results = []
     trace = []
 
-    for cond in policy["conditions"]:
+    for condition in policy.spec.conditions:
         expr = cond["expression"]
 
         result = evaluate_expression(expr, context)
