@@ -34,12 +34,13 @@ app = typer.Typer()
 logger = get_logger()
 
 
+
 @app.command()
 def evaluate(
-    plan: str,
-    policy: str,
-    role: str = "engineer",
-    output: str = "output/result.json"
+    plan: str = typer.Option(..., "--plan", help="Path to Terraform plan JSON"),
+    policy: str = typer.Option(..., "--policy", help="Path to policy YAML"),
+    role: str = typer.Option("engineer", "--role"),
+    output: str = typer.Option("output/result.json", "--output")
 ):
     """
     Evaluate Terraform plan against policy.
@@ -83,7 +84,9 @@ def evaluate(
 
 
 @app.command()
-def validate(policy: str):
+def validate(
+    policy: str = typer.Option(..., "--policy", help="Path to policy YAML")
+):
     """
     Validate policy schema only.
     """
