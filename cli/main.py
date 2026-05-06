@@ -3,13 +3,15 @@
 # Purpose: User interface → runs the engine
 
 
+
 import typer
 import json
 from pathlib import Path
 
 from engine.evaluator import DecisionEngine
 from context.terraform_parser import parse_terraform_plan
-from context.context_builder import build_context
+from engine.policy_loader import load_policy
+from engine.validator import validate_policy
 from audit.audit_logger import get_logger
 
 app = typer.Typer()
@@ -24,43 +26,66 @@ def evaluate(
     output: str = "output/result.json"
 ):
     """
-    Evaluate Terraform plan against policy with audit logging.
+    Evaluate Terraform plan against policy.
     """
 
-    logger.info("evaluation_started", extra={
-        "extra": {"plan": plan, "policy": policy, "role": role}
-    })
-
-    # 1. Parse Terraform plan → context
-    context = build_context(plan, current_spend=20)  # Example current spend, could be dynamic
-
-
-    # 2. Run decision engine (PROTECTED BLOCK)
     try:
+        logger.info("evaluation_started", extra={
+            "extra": {"plan": plan, "policy": policy, "role": role}
+        })
+
+        # 1. Load + validate policy (CRITICAL for compliance)
+        policy_dict = load_policy(policy)
+        validate_policy(policy_dict)
+
+        # 2. Parse Terraform plan
+        context = parse_terraform_plan(plan)
+
+        # 3. Run engine
         engine = DecisionEngine(policy_path=policy)
         result = engine.evaluate(context, user_role=role)
 
+        # 4. Persist audit artifact
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w") as f:
+            json.dump(result, f, indent=2)
+
+        logger.info("evaluation_completed", extra={
+            "extra": {
+                "decision": result["decision"],
+                "decision_id": result["decision_id"]
+            }
+        })
+
+        print(json.dumps(result, indent=2))
+
     except Exception as e:
         logger.error("evaluation_failed", extra={
-            "extra": {
-                "error": str(e),
-                "plan": plan,
-                "policy": policy,
-                "role": role
-            }
+            "extra": {"error": str(e)}
         })
         raise typer.Exit(code=1)
 
-    # 3. Persist result (audit artifact)
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    with open(output, "w") as f:
-        json.dump(result, f, indent=2)
 
-    logger.info("evaluation_completed", extra={
-        "extra": {"decision": result["decision"], "decision_id": result["decision_id"]}
-    })
+@app.command()
+def validate(policy: str):
+    """
+    Validate policy schema only.
+    """
+    try:
+        policy_dict = load_policy(policy)
+        validate_policy(policy_dict)
 
-    print(json.dumps(result, indent=2))
+        print(json.dumps({
+            "status": "valid",
+            "policy": policy
+        }, indent=2))
+
+    except Exception as e:
+        print(json.dumps({
+            "status": "invalid",
+            "error": str(e)
+        }, indent=2))
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
