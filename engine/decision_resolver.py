@@ -1,4 +1,7 @@
+
 # engine/decision_resolver.py
+
+# Responsibilities: deterministic enforcement. This is the PRIMARY deterministic enforcement layer.
 
 
 # Purpose:

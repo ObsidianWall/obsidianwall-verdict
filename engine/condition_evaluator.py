@@ -1,12 +1,23 @@
+
 # engine/condition_evaluator.py
 
-# Purpose: Deterministic, secure expression evaluation
+# Purpose:
+# Deterministic and secure policy condition evaluation.
+#
+# IMPORTANT:
+# - No arbitrary code execution
+# - No dynamic eval()
+# - Deterministic only
+# - Fully auditable
+# - Restricted expression grammar
 
-# Purpose: Evaluate policy conditions deterministically
+print("LOADED NEW CONDITION EVALUATOR")
+
 
 import operator
 
-OPS = {
+
+SUPPORTED_OPERATORS = {
     "<=": operator.le,
     ">=": operator.ge,
     "<": operator.lt,
@@ -15,53 +26,165 @@ OPS = {
 }
 
 
-def evaluate_expression(expr: str, context: dict):
+def evaluate_expression(expression: str, evaluation_context: dict):
     """
-    Supports simple expressions like:
-    (current_spend + estimated_cost) <= max_budget
+    Evaluate a restricted deterministic expression.
+
+    Example:
+        (current_spend + estimated_cost) <= max_budget
     """
 
-    # VERY controlled parsing (v0.2 scope)
-    expr = expr.replace("(", "").replace(")", "")
-    left, op, right = None, None, None
+    # ---------------------------------------------------
+    # Normalize expression
+    # ---------------------------------------------------
 
-    for symbol in OPS.keys():
-        if symbol in expr:
-            left, right = expr.split(symbol)
-            op = symbol
+    normalized_expression = (
+        expression
+        .replace("(", "")
+        .replace(")", "")
+    )
+
+    left_side = None
+    right_side = None
+    comparison_operator = None
+
+    # ---------------------------------------------------
+    # Find supported operator
+    # ---------------------------------------------------
+
+    for supported_operator in SUPPORTED_OPERATORS.keys():
+
+        if supported_operator in normalized_expression:
+
+            left_side, right_side = normalized_expression.split(
+                supported_operator
+            )
+
+            comparison_operator = supported_operator
             break
 
-    if not op:
-        raise ValueError("Unsupported expression")
+    if not comparison_operator:
+        raise ValueError(
+            f"Unsupported expression operator in: {expression}"
+        )
 
-    left_value = eval_arithmetic(left.strip(), context)
-    right_value = eval_arithmetic(right.strip(), context)
+    # ---------------------------------------------------
+    # Evaluate both sides
+    # ---------------------------------------------------
 
-    return OPS[op](left_value, right_value)
+    left_value = evaluate_arithmetic_expression(
+        left_side.strip(),
+        evaluation_context
+    )
+
+    right_value = evaluate_arithmetic_expression(
+        right_side.strip(),
+        evaluation_context
+    )
+
+    # ---------------------------------------------------
+    # Deterministic comparison
+    # ---------------------------------------------------
+
+    return SUPPORTED_OPERATORS[comparison_operator](
+        left_value,
+        right_value
+    )
 
 
-def eval_arithmetic(part: str, context: dict):
-    if "+" in part:
-        items = [i.strip() for i in part.split("+")]
-        return sum(context.get(i, float(i)) for i in items)
+def evaluate_arithmetic_expression(
+    arithmetic_expression: str,
+    evaluation_context: dict
+):
+    """
+    Evaluate restricted arithmetic operations.
 
-    return context.get(part, float(part))
+    Supported:
+        a + b
+        a
+        numeric literals
+    """
+
+    # ---------------------------------------------------
+    # Addition support
+    # ---------------------------------------------------
+
+    if "+" in arithmetic_expression:
+
+        expression_parts = [
+            part.strip()
+            for part in arithmetic_expression.split("+")
+        ]
+
+        resolved_values = []
+
+        for expression_part in expression_parts:
+
+            if expression_part in evaluation_context:
+                resolved_value = evaluation_context[
+                    expression_part
+                ]
+            else:
+                resolved_value = float(expression_part)
+
+            resolved_values.append(resolved_value)
+
+        return sum(resolved_values)
+    
 
 
-def evaluate_conditions(policy, context):
-    results = []
-    trace = []
+    # ---------------------------------------------------
+    # Single value resolution
+    # ---------------------------------------------------
+
+    if arithmetic_expression in evaluation_context:
+        return evaluation_context[arithmetic_expression]
+
+    return float(arithmetic_expression)
+
+
+
+def evaluate_conditions(policy, evaluation_context):
+    """
+    Evaluate all policy conditions.
+
+    Returns:
+        tuple[bool, list]
+        (
+            all_conditions_passed,
+            evaluation_trace
+        )
+    """
+
+    evaluation_results = []
+    evaluation_trace = []
+
+    # ---------------------------------------------------
+    # Evaluate each condition
+    # ---------------------------------------------------
 
     for condition in policy.spec.conditions:
-        expr = cond["expression"]
 
-        result = evaluate_expression(expr, context)
+        condition_expression = condition.expression
 
-        trace.append({
-            "expression": expr,
-            "result": result
+        condition_result = evaluate_expression(
+            condition_expression,
+            evaluation_context
+        )
+
+        evaluation_trace.append({
+            "condition_id": condition.id,
+            "expression": condition_expression,
+            "result": condition_result,
+            "description": condition.description
         })
 
-        results.append(result)
+        evaluation_results.append(condition_result)
 
-    return all(results), trace
+    # ---------------------------------------------------
+    # Deterministic final outcome
+    # ---------------------------------------------------
+
+    all_conditions_passed = all(evaluation_results)
+
+    return all_conditions_passed, evaluation_trace

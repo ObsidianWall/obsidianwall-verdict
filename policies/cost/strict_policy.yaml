@@ -7,7 +7,7 @@
 
 
 policy:
-  name: strict_budget_guardrail
+  name: strict_budget_verdict
   version: 0.2
   description: "Strict enforcement of budget limits for controlled environments"
 

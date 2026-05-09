@@ -1,4 +1,8 @@
+
 # engine/recommender.py
+
+# Responsibilities: optimization intelligence.
+
 
 # Purpose:
 # Generate NON-authoritative optimization recommendations.

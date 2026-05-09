@@ -5,13 +5,32 @@
 
 # Note: This is a simplified example. In a real-world application, the schema would likely be more complex and include additional fields and validation logic.
 
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+# schemas/policy_schema.py
+
+print("LOADED NEW POLICY SCHEMA")
+
+
+from pydantic import BaseModel
+from typing import List, Optional
+
+
+class Metadata(BaseModel):
+    name: str
+    version: float
+    owner: str
+    description: Optional[str] = None
 
 
 class Condition(BaseModel):
+    id: str
     expression: str
+    description: str
+
+
+class Action(BaseModel):
+    type: str
     message: str
+    severity: Optional[str] = "info"
 
 
 class Decision(BaseModel):
@@ -20,22 +39,34 @@ class Decision(BaseModel):
     warn: Optional[str] = None
 
 
-class Action(BaseModel):
-    type: str
-    message: str
+class Override(BaseModel):
+    roles: List[str]
 
 
-class Metadata(BaseModel):
-    severity: str
-    category: str
+class Budget(BaseModel):
+    amount: float
+    period: str
+    scope: str
+    owner: str
+    flexibility: str
+    override_allowed: bool
+
+
+class Parameters(BaseModel):
+    budget: Budget
+
+
+class Spec(BaseModel):
+    inputs: List[str]
+    parameters: Parameters
+    conditions: List[Condition]
+    decision: Decision
+    override: Override
+    actions: List[Action]
 
 
 class PolicyModel(BaseModel):
-    name: str
-    version: str
-    inputs: List[str]
-    parameters: Dict[str, Any]
-    conditions: List[Condition]
-    decision: Decision
-    actions: List[Action]
+    apiVersion: str
+    kind: str
     metadata: Metadata
+    spec: Spec

@@ -7,7 +7,7 @@ apiVersion: obsidianwall.io/v1
 kind: Policy
 
 metadata:
-  name: basic_budget_guardrail
+  name: basic_budget_verdict
   version: 0.2
   owner: team-alpha
   description: "Prevents infra spend overruns"
