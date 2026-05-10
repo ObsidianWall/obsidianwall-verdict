@@ -92,6 +92,7 @@ def evaluate_expression(expression: str, evaluation_context: dict):
     )
 
 
+
 def evaluate_arithmetic_expression(
     arithmetic_expression: str,
     evaluation_context: dict
@@ -158,6 +159,10 @@ def evaluate_conditions(policy, evaluation_context):
 
     evaluation_results = []
     evaluation_trace = []
+
+
+    print("EVALUATION CONTEXT:")
+    print(evaluation_context)
 
     # ---------------------------------------------------
     # Evaluate each condition

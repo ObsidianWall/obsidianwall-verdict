@@ -1,4 +1,5 @@
-#policies/cost/strict_budget.yaml
+
+# policies/cost/strict_budget.yaml
 
 # Purpose: This simulates:
                # tighter environments

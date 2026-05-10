@@ -1,3 +1,4 @@
+
 # cli/main.py
 
 # Purpose: User interface → runs the engine
@@ -25,7 +26,8 @@ import json
 from pathlib import Path
 
 from engine.evaluator import DecisionEngine
-from context.terraform_parser import parse_terraform_plan
+from context.context_builder import build_context
+# from context.terraform_parser import parse_terraform_plan
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from audit.audit_logger import get_logger
@@ -56,7 +58,8 @@ def evaluate(
         validate_policy(policy_dict)
 
         # 2. Parse Terraform plan
-        context = parse_terraform_plan(plan)
+        # context = parse_terraform_plan(plan)
+        context = build_context(plan)
 
         # 3. Run engine
         engine = DecisionEngine(policy_path=policy)

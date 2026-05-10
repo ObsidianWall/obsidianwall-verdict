@@ -2,8 +2,6 @@
 # context/context_builder.py
 
 
-
-
 from context.terraform_parser import parse_terraform_plan
 from engine.cost_estimator import estimate_cost
 

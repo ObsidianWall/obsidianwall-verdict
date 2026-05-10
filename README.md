@@ -14,7 +14,7 @@ ___
 We are staying with:
 
 ```
-obsidianwall-guardrails/
+obsidianwall-verdict/
 │
 ├── .devcontainer/
 │   ├── devcontainer.json
@@ -22,25 +22,33 @@ obsidianwall-guardrails/
 │   └── requirements.txt
 |
 ├── cli/
+│   ├── __init__.py
 │   └── main.py
 │
 ├── engine/
+│   ├── __init__.py
 │   ├── evaluator.py
 │   ├── policy_loader.py
+│   ├── policy_normalizer.py
 │   ├── validator.py
 │   ├── condition_evaluator.py
 |   ├── cost_estimator.py
 │   ├── decision_resolver.py
+│   ├── lint_validator.py
+│   ├── optimiation_catalog.py
 │   └── recommender.py
 │
 ├── schemas/
+│   ├── __init__.py
 │   └── policy_schema.py
 │
 ├── context/
+│   ├── __init__.py
 |   ├── context_builder.py
 │   └── terraform_parser.py
 │
 ├── audit/
+│   ├── __init__.py
 │   └── audit_logger.py   ← ✅ THIS is where your logging file goes
 │
 ├── policies/
@@ -49,6 +57,8 @@ obsidianwall-guardrails/
 │       └── strict_budget.yaml
 │
 ├── samples/
+│   ├── plan_over_budget.json
+│   ├── plan_under_budget.json
 │   └── terraform_plan.json
 │
 ├── output/
@@ -58,8 +68,9 @@ obsidianwall-guardrails/
 │   ├── test_engine.py
 │   └── test_policy.py
 │
-├── .github/workflows/
-│   └── ci.yml
+├── .github/
+|     └──workflows/
+│            └── ci.yml
 │
 ├── pyproject.toml
 ├── requirements.txt
