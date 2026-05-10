@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "/home/codespace/.vscode-remote/extensions/ms-security.ms-sentinel-2.1.0/python"
+        "/home/codespace/.vscode-remote/extensions/ms-security.ms-sentinel-2.1.0/python",
+        "/home/vscode/.vscode-remote/extensions/ms-security.ms-sentinel-2.1.0/python"
     ]
 }
