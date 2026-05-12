@@ -122,9 +122,11 @@ logging/
               ┌────────────┴────────────┐
               │                         │
    ┌──────────▼──────────┐   ┌──────────▼──────────┐
-   │ Recommendation Layer │   │ Structured Audit    │
-   │ (Intelligent)        │   │ Logging             │
-   └──────────────────────┘   └─────────────────────┘
+   │ Recommendation Layer│   │ Structured Audit    │
+   │ (Intelligent)       │   │ Logging             │
+   └─────────────────────┘   └─────────────────────┘
+
+
 
 ## That is now a legitimate governance-engine architecture.
 
