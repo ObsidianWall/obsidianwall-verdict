@@ -10,11 +10,11 @@ def normalize_policy(raw: dict) -> dict:
     - DSL format (apiVersion/kind/metadata/spec)
     """
 
-    # Already DSL → return as-is
+    # if data Already DSL → return as-is
     if "apiVersion" in raw and "spec" in raw:
         return raw
 
-    # Legacy format → transform
+    # if data is in Legacy format → transform into DSL format
     if "policy" in raw:
         p = raw["policy"]
 

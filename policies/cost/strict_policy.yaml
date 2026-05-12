@@ -7,44 +7,49 @@
                # override-required scenarios
 
 
-policy:
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
   name: strict_budget_verdict
   version: 0.2
+  owner: finance-team
   description: "Strict enforcement of budget limits for controlled environments"
 
-inputs:
-  - estimated_cost
-  - current_spend
+spec:
+  inputs:
+    - estimated_cost
+    - current_spend
 
-parameters:
-  budget:
-    amount: 40
-    period: monthly
-    scope: project:production
-    owner: finance-team
-    flexibility: hard
-    override_allowed: true
+  parameters:
+    budget:
+      amount: 40
+      period: monthly
+      scope: project:production
+      owner: finance-team
+      flexibility: hard
+      override_allowed: true
 
-conditions:
-  - id: strict_budget_check
-    expression: "(current_spend + estimated_cost) <= budget.amount"
-    description: "Projected spend must not exceed strict budget"
+  conditions:
+    - id: strict_budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Projected spend must not exceed strict budget"
 
-decision:
-  allow: "ALLOW"
-  deny: "DENY"
-  warn: "WARN"
+  decision:
+    allow: "ALLOW"
+    deny: "DENY"
+    warn: "WARN"
 
-override:
-  roles:
-    - budget_owner
-    - finance_admin
+  override:
+    roles:
+      - budget_owner
+      - finance_admin
 
-actions:
-  - type: notify
-    severity: critical
-    message: "Strict budget exceeded. Approval required."
+  actions:
+    - type: notify
+      severity: critical
+      message: "Strict budget exceeded. Approval required."
 
-  - type: log
-    severity: info
-    message: "Strict policy evaluation logged"
+    - type: log
+      severity: info
+      message: "Strict policy evaluation logged"
