@@ -1,0 +1,64 @@
+{
+  "decision_id": "b84e413a-715e-460f-a258-df1d0fb068eb",
+  "timestamp": "2026-05-12T22:36:43.813123",
+  "policy": "basic_budget_verdict",
+  "decision": "DENY",
+  "override_required": false,
+  "conditions_passed": false,
+  "trace": [
+    {
+      "condition_id": "budget_check",
+      "expression": "(current_spend + estimated_cost) <= budget.amount",
+      "result": false,
+      "description": "Monthly spend cap enforcement"
+    }
+  ],
+  "actions": [
+    {
+      "type": "notify",
+      "message": "Budget exceeded",
+      "severity": "high"
+    },
+    {
+      "type": "log",
+      "message": "Decision recorded",
+      "severity": "info"
+    }
+  ],
+  "suggestions": [
+    "Projected infrastructure cost exceeds recommended budget threshold.",
+    "Consider migrating burst workloads to serverless infrastructure.",
+    "Evaluate smaller compute instance sizes for non-production workloads.",
+    "Deployment blocked by policy enforcement. Review trace output for remediation guidance."
+  ],
+  "context": {
+    "resources": [
+      {
+        "type": "azurerm_virtual_machine",
+        "name": "vm1",
+        "values": {
+          "vm_size": "Standard_D2s_v3"
+        }
+      },
+      {
+        "type": "azurerm_sentinel_log_analytics_workspace",
+        "name": "sentinel",
+        "values": {}
+      }
+    ],
+    "estimated_cost": 100,
+    "cost_breakdown": [
+      {
+        "resource": "vm1",
+        "type": "azurerm_virtual_machine",
+        "estimated_cost": 50
+      },
+      {
+        "resource": "sentinel",
+        "type": "azurerm_sentinel_log_analytics_workspace",
+        "estimated_cost": 50
+      }
+    ],
+    "current_spend": 0
+  }
+}

@@ -14,6 +14,9 @@ from datetime import datetime
 
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
+from engine.policy_normalizer import (
+    build_policy_runtime_context
+)
 from engine.condition_evaluator import evaluate_conditions
 from engine.decision_resolver import resolve_decision
 from engine.recommender import generate_suggestions
@@ -32,7 +35,10 @@ class DecisionEngine:
         timestamp = datetime.utcnow().isoformat()
 
         # 1. Evaluate conditions
-        conditions_passed, trace = evaluate_conditions(self.policy, context)
+
+        runtime_context = build_policy_runtime_context(self.policy,context)
+
+        conditions_passed, trace = evaluate_conditions(self.policy, runtime_context)
 
         # 2. Resolve decision
         decision, override_required = resolve_decision(

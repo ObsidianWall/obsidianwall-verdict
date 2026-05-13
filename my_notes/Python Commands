@@ -56,3 +56,32 @@ pip install --upgrade -r requirements.txt
 python -m pip install -r requirements.txt
 ```
 
+
+
+
+
+Run these:
+
+ 
+
+python -m cli.main validate \
+--policy policies/cost/basic_budget.yaml
+
+
+python -m cli.main evaluate \
+--plan samples/terraform_plan.json \
+--policy policies/cost/basic_budget.yaml \
+--role engineer
+
+
+# **✅ Expected Outcome**
+
+You should finally get:
+
+{
+"decision": "DENY",
+"suggestions": [
+"Projected infrastructure cost exceeds recommended budget threshold.",
+"Evaluate smaller compute instance sizes..."
+]
+}
