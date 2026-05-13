@@ -73,3 +73,6 @@ The remaining work is mostly:
 —not foundational architecture anymore.
 
 And that is the hard part most projects never get right.
+
+
+

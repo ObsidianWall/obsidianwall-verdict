@@ -1,5 +1,3 @@
-
-
 # engine/optimization_catalog.py
 
 # Responsibilities: proprietary heuristics

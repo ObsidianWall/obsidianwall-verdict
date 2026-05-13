@@ -10,7 +10,7 @@
 
 
 import uuid
-from datetime import datetime
+from datetime import datetime,timezone
 
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
@@ -32,13 +32,19 @@ class DecisionEngine:
 
     def evaluate(self, context: dict, user_role: str = "engineer"):
         decision_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         # 1. Evaluate conditions
 
-        runtime_context = build_policy_runtime_context(self.policy,context)
+        runtime_context = build_policy_runtime_context(
+            self.policy,
+            context
+        )
 
-        conditions_passed, trace = evaluate_conditions(self.policy, runtime_context)
+        conditions_passed, trace = evaluate_conditions(
+            self.policy, 
+            runtime_context
+            )
 
         # 2. Resolve decision
         decision, override_required = resolve_decision(
@@ -59,9 +65,10 @@ class DecisionEngine:
             "override_required": override_required,
             "conditions_passed": conditions_passed,
             "trace": trace,
-            "actions": [a.dict() for a in self.policy.spec.actions],
+            "actions": [a.model_dump() for a in self.policy.spec.actions],
             "suggestions": suggestions,
-            "context": context,
+            "input_context": context,
+            "runtime_context": runtime_context,
         }
 
         # 5. Audit log (structured)
