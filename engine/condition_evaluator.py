@@ -11,7 +11,6 @@
 # - Fully auditable
 # - Restricted expression grammar
 
-print("LOADED NEW CONDITION EVALUATOR")
 
 
 import operator
@@ -160,9 +159,6 @@ def evaluate_conditions(policy, evaluation_context):
     evaluation_results = []
     evaluation_trace = []
 
-
-    print("EVALUATION CONTEXT:")
-    print(evaluation_context)
 
     # ---------------------------------------------------
     # Evaluate each condition

@@ -3,7 +3,7 @@
 # Purpose: Validates Terraform plans against defined policies.
 
 
-from schemas.policy_schema import PolicyModel
+from schemas.policy_schema import Policy
 from engine.policy_normalizer import normalize_policy
 from engine.lint_validator import lint_policy
 from audit.audit_logger import get_logger
@@ -12,7 +12,7 @@ logger = get_logger()
 
 
 
-def validate_policy(policy_dict: dict) -> PolicyModel:
+def validate_policy(policy_dict: dict) -> Policy:
     try:
         # 1. Normalize
         normalized = normalize_policy(policy_dict)
@@ -23,7 +23,7 @@ def validate_policy(policy_dict: dict) -> PolicyModel:
             raise ValueError(f"Lint errors: {lint_errors}")
 
         # 3. Schema validation
-        policy = PolicyModel(**normalized)
+        policy = Policy(**normalized)
 
         logger.info("policy_validation_success", extra={
             "extra": {"policy": policy.metadata.name}

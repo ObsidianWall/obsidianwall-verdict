@@ -7,7 +7,7 @@
 
 # schemas/policy_schema.py
 
-print("LOADED NEW POLICY SCHEMA")
+
 
 
 from pydantic import BaseModel
@@ -65,7 +65,7 @@ class Spec(BaseModel):
     actions: List[Action]
 
 
-class PolicyModel(BaseModel):
+class Policy(BaseModel):
     apiVersion: str
     kind: str
     metadata: Metadata

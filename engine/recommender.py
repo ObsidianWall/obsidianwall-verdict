@@ -17,83 +17,140 @@
 # - operational guidance
 
 
-def generate_suggestions(context: dict, decision: str):
+# Purpose:
+# Deterministic recommendation orchestration engine.
+#
+# IMPORTANT:
+# Recommendations NEVER influence enforcement decisions.
+# Recommendations are advisory only.
+
+
+from engine.optimization_catalog import (
+    RESOURCE_CLASSES,
+    OPTIMIZATION_RULES
+)
+
+
+def classify_resource(resource_type: str) -> str:
     """
-    Generate advisory optimization suggestions.
+    Resolve semantic resource classification.
+    """
 
-    Parameters:
-        context (dict): Parsed infrastructure context
-        decision (str): Final engine decision
+    return RESOURCE_CLASSES.get(
+        resource_type,
+        "unknown"
+    )
 
-    Returns:
-        list[str]
+
+def match_rule_conditions(
+    rule_conditions: dict,
+    context: dict
+) -> bool:
+    """
+    Evaluate optimization rule applicability.
+    """
+
+    for key, expected_value in rule_conditions.items():
+
+        actual_value = context.get(key)
+
+        if actual_value != expected_value:
+            return False
+
+    return True
+
+
+def generate_semantic_recommendations(
+    resource_class: str,
+    context: dict
+) -> list[dict]:
+    """
+    Generate semantic optimization recommendations.
+    """
+
+    recommendations = []
+
+    for rule in OPTIMIZATION_RULES:
+
+        if rule["resource_class"] != resource_class:
+            continue
+
+        if not match_rule_conditions(
+            rule["conditions"],
+            context
+        ):
+            continue
+
+        recommendations.extend(
+            rule["recommendations"]
+        )
+
+    return recommendations
+
+
+def generate_suggestions(
+    context: dict,
+    decision: str
+) ->list[str]:
+    """
+    Generate deterministic infrastructure recommendations.
     """
 
     suggestions = []
 
-    estimated_cost = context.get("estimated_cost", 0)
-    resource_count = context.get("resource_count", 0)
     resources = context.get("resources", [])
 
-    # ---------------------------------------------------
-    # COST OPTIMIZATION
-    # ---------------------------------------------------
-
-    if estimated_cost > 50:
-        suggestions.append(
-            "Projected infrastructure cost exceeds recommended budget threshold."
-        )
-
-        suggestions.append(
-            "Consider migrating burst workloads to serverless infrastructure."
-        )
-
-        suggestions.append(
-            "Evaluate smaller compute instance sizes for non-production workloads."
-        )
-
-    # ---------------------------------------------------
-    # RESOURCE FOOTPRINT OPTIMIZATION
-    # ---------------------------------------------------
-
-    if resource_count > 10:
-        suggestions.append(
-            "Large infrastructure footprint detected. Consider workload consolidation."
-        )
-
-    # ---------------------------------------------------
-    # SECURITY + ARCHITECTURE RECOMMENDATIONS
-    # ---------------------------------------------------
+    # -------------------------------------------------
+    # RESOURCE ANALYSIS
+    # -------------------------------------------------
 
     for resource in resources:
 
-        resource_type = resource.get("type", "").lower()
-
-        # VM optimization
-        if "aws_instance" in resource_type:
-            suggestions.append(
-                "EC2 instances detected. Evaluate autoscaling or spot instances for cost efficiency."
-            )
-
-        # Storage optimization
-        if "s3" in resource_type:
-            suggestions.append(
-                "S3 resources detected. Review lifecycle policies for storage cost optimization."
-            )
-
-        # Database optimization
-        if "db" in resource_type:
-            suggestions.append(
-                "Database resources detected. Review reserved capacity options."
-            )
-
-    # ---------------------------------------------------
-    # DENY-SPECIFIC GUIDANCE
-    # ---------------------------------------------------
-
-    if decision.startswith("DENY"):
-        suggestions.append(
-            "Deployment blocked by policy enforcement. Review trace output for remediation guidance."
+        resource_type = resource.get(
+            "type",
+            ""
         )
 
-    return suggestions
+        resource_class = classify_resource(
+            resource_type
+        )
+
+        semantic_recommendations = (
+            generate_semantic_recommendations(
+                resource_class,
+                context
+            )
+        )
+
+        for recommendation in semantic_recommendations:
+
+            suggestions.append(
+                recommendation
+            )
+
+
+    # -------------------------------------------------
+    # DECISION GUIDANCE
+    # -------------------------------------------------
+
+    # Change to suggestions.append(recommendation) — full dict
+    # Fix the DENY guidance to match:
+    if decision.startswith("DENY"):
+        suggestions.append({
+            "type": "enforcement",
+            "message": (
+                "Deployment blocked by policy enforcement. "
+                "Review evaluation trace for remediation guidance."
+            ),
+            "estimated_savings_percent": 0
+        })
+
+    # Then dict deduplication works correctly
+    seen_messages = set()
+    deduped = []
+    for suggestion in suggestions:
+        message = suggestion["message"]
+        if message not in seen_messages:
+            seen_messages.add(message)
+            deduped.append(suggestion)
+    return deduped
