@@ -89,7 +89,13 @@ OPTIMIZATION_RULES = [
                     "Development burst workloads detected. "
                     "Consider smaller burstable compute instances."
                 ),
-                "estimated_savings_percent": 30
+                "estimated_savings_percent": 30,
+                
+                 "priority_score": 82,
+
+                "confidence": 0.91,
+
+                "severity": "medium"
             },
 
             {
@@ -97,7 +103,13 @@ OPTIMIZATION_RULES = [
                 "message": (
                     "Workload may be a candidate for serverless migration."
                 ),
-                "estimated_savings_percent": 45
+                "estimated_savings_percent": 45,
+                
+                 "priority_score": 90,
+
+                "confidence": 0.87,
+
+                "severity": "high"
             }
         ]
     },
@@ -120,7 +132,13 @@ OPTIMIZATION_RULES = [
                     "Review storage lifecycle policies "
                     "for cold/archive optimization."
                 ),
-                "estimated_savings_percent": 20
+                "estimated_savings_percent": 20,
+                
+                "priority_score": 70,
+
+                "confidence": 0.93,
+
+                "severity": "medium"
             }
         ]
     },
@@ -143,7 +161,13 @@ OPTIMIZATION_RULES = [
                     "Production database workloads detected. "
                     "Evaluate reserved capacity pricing models."
                 ),
-                "estimated_savings_percent": 35
+                "estimated_savings_percent": 35,
+                
+                "priority_score": 88,
+
+                "confidence": 0.95,
+
+                "severity": "high"
             }
         ]
     },
@@ -166,7 +190,13 @@ OPTIMIZATION_RULES = [
                     "Container workloads detected. "
                     "Review autoscaling thresholds."
                 ),
-                "estimated_savings_percent": 15
+                "estimated_savings_percent": 15,
+                
+                 "priority_score": 60,
+
+                "confidence": 0.84,
+
+                "severity": "low"
             }
         ]
     }
