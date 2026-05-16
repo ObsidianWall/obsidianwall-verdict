@@ -68,7 +68,7 @@ def evaluate(
         # engine = DecisionEngine(policy_path=policy)
         engine = (
         PolicyOrchestrator
-        .from_policy_path(policy_path)
+        .from_policy_path(policy)
 )
         result = engine.evaluate(context, user_role=role)
 
