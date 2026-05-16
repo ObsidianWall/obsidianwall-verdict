@@ -25,7 +25,10 @@ import typer
 import json
 from pathlib import Path
 
-from engine.evaluator import DecisionEngine
+#from engine.evaluator import DecisionEngine
+from engine.orchestrator import (
+    PolicyOrchestrator
+)
 from context.context_builder import build_context
 # from context.terraform_parser import parse_terraform_plan
 from engine.policy_loader import load_policy
@@ -62,7 +65,11 @@ def evaluate(
         context = build_context(plan)
 
         # 3. Run engine
-        engine = DecisionEngine(policy_path=policy)
+        # engine = DecisionEngine(policy_path=policy)
+        engine = (
+        PolicyOrchestrator
+        .from_policy_path(policy_path)
+)
         result = engine.evaluate(context, user_role=role)
 
         # 4. Persist audit artifact
