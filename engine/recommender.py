@@ -1,28 +1,11 @@
-
 # engine/recommender.py
 
-# Responsibilities: optimization intelligence.
-
-
 # Purpose:
-# Generate NON-authoritative optimization recommendations.
-#
-# IMPORTANT:
-# Suggestions NEVER influence enforcement decisions.
-#
-# This layer provides:
-# - cost optimization
-# - architecture recommendations
-# - infrastructure right-sizing
-# - operational guidance
-
-
-# Purpose:
-# Deterministic recommendation orchestration engine.
+# Deterministic recommendation intelligence engine.
 #
 # IMPORTANT:
 # Recommendations NEVER influence enforcement decisions.
-# Recommendations are advisory only.
+# Advisory systems are isolated from governance authority.
 
 
 from engine.optimization_catalog import (
@@ -31,10 +14,13 @@ from engine.optimization_catalog import (
 )
 
 
-def classify_resource(resource_type: str) -> str:
-    """
-    Resolve semantic resource classification.
-    """
+# =====================================================
+# RESOURCE CLASSIFICATION
+# =====================================================
+
+def classify_resource(
+    resource_type: str
+) -> str:
 
     return RESOURCE_CLASSES.get(
         resource_type,
@@ -42,13 +28,14 @@ def classify_resource(resource_type: str) -> str:
     )
 
 
+# =====================================================
+# RULE CONDITION MATCHING
+# =====================================================
+
 def match_rule_conditions(
     rule_conditions: dict,
     context: dict
 ) -> bool:
-    """
-    Evaluate optimization rule applicability.
-    """
 
     for key, expected_value in rule_conditions.items():
 
@@ -60,13 +47,14 @@ def match_rule_conditions(
     return True
 
 
+# =====================================================
+# SEMANTIC CATALOG RECOMMENDATIONS
+# =====================================================
+
 def generate_semantic_recommendations(
     resource_class: str,
     context: dict
 ) -> list[dict]:
-    """
-    Generate semantic optimization recommendations.
-    """
 
     recommendations = []
 
@@ -88,21 +76,137 @@ def generate_semantic_recommendations(
     return recommendations
 
 
+# =====================================================
+# ANALYZER RECOMMENDATION ENRICHMENT
+# =====================================================
+
+def enrich_from_analyzers(
+    analyzer_results: dict
+) -> list[dict]:
+
+    enriched_recommendations = []
+
+    for analyzer_name, analyzer_data in analyzer_results.items():
+
+        findings = analyzer_data.get(
+            "findings",
+            []
+        )
+
+        optimization_candidates = analyzer_data.get(
+            "optimization_candidates",
+            []
+        )
+
+        # -------------------------------------------------
+        # FINDING-BASED RECOMMENDATIONS
+        # -------------------------------------------------
+
+        for finding in findings:
+
+            enriched_recommendations.append({
+
+                "type": finding.get(
+                    "type",
+                    "analyzer_finding"
+                ),
+
+                "message": finding.get(
+                    "message",
+                    "Analyzer finding detected."
+                ),
+
+                "severity": finding.get(
+                    "severity",
+                    "medium"
+                ),
+
+                "priority_score": 70,  # TODO: replace with scoring engine output
+
+                "confidence": 0.85,  # TODO: derive from analyzer confidence signal
+
+                "estimated_savings_percent": 0,
+            })
+
+        # -------------------------------------------------
+        # OPTIMIZATION CANDIDATES
+        # -------------------------------------------------
+
+        for candidate in optimization_candidates:
+
+            enriched_recommendations.append({
+
+                "type": candidate.get(
+                    "type",
+                    "optimization"
+                ),
+
+                "message": (
+                    "Optimization opportunity identified."
+                ),
+
+                "severity": "medium",
+
+                "priority_score": 85,  # TODO: replace with scoring engine output
+
+                "confidence": 0.90,   # TODO: derive from analyzer confidence signal
+
+                "estimated_savings_percent": (
+                    candidate.get(
+                        "estimated_savings_percent",
+                        0
+                    )
+                ),
+            })
+
+    return enriched_recommendations
+
+
+# =====================================================
+# RECOMMENDATION DEDUPLICATION
+# =====================================================
+
+def deduplicate_recommendations(
+    recommendations: list[dict]
+) -> list[dict]:
+
+    seen_messages = set()
+
+    deduped = []
+
+    for recommendation in recommendations:
+
+        message = recommendation["message"]
+
+        if message not in seen_messages:
+
+            seen_messages.add(message)
+
+            deduped.append(recommendation)
+
+    return deduped
+
+
+# =====================================================
+# MAIN RECOMMENDATION PIPELINE
+# =====================================================
+
 def generate_suggestions(
     context: dict,
-    decision: str
-) ->list[str]:
-    """
-    Generate deterministic infrastructure recommendations.
-    """
+    decision: str,
+    analyzer_results: dict
+) -> list[dict]:
 
     suggestions = []
 
-    resources = context.get("resources", [])
+    resources = context.get(
+        "resources",
+        []
+    )
 
-    # -------------------------------------------------
-    # RESOURCE ANALYSIS
-    # -------------------------------------------------
+    # =================================================
+    # SEMANTIC RESOURCE RECOMMENDATIONS
+    # =================================================
 
     for resource in resources:
 
@@ -122,35 +226,52 @@ def generate_suggestions(
             )
         )
 
-        for recommendation in semantic_recommendations:
+        suggestions.extend(
+            semantic_recommendations
+        )
 
-            suggestions.append(
-                recommendation
-            )
+    # =================================================
+    # ANALYZER ENRICHMENT
+    # =================================================
 
+    analyzer_recommendations = (
+        enrich_from_analyzers(
+            analyzer_results
+        )
+    )
 
-    # -------------------------------------------------
-    # DECISION GUIDANCE
-    # -------------------------------------------------
+    suggestions.extend(
+        analyzer_recommendations
+    )
 
-    # Change to suggestions.append(recommendation) — full dict
-    # Fix the DENY guidance to match:
+    # =================================================
+    # ENFORCEMENT GUIDANCE
+    # =================================================
+
     if decision.startswith("DENY"):
+
         suggestions.append({
+
             "type": "enforcement",
+
             "message": (
                 "Deployment blocked by policy enforcement. "
                 "Review evaluation trace for remediation guidance."
             ),
-            "estimated_savings_percent": 0
+
+            "severity": "high",
+
+            "priority_score": 95,  # TODO: replace with scoring engine output
+
+            "confidence": 1.0,    # TODO: derive from analyzer confidence signal
+
+            "estimated_savings_percent": 0,
         })
 
-    # Then dict deduplication works correctly
-    seen_messages = set()
-    deduped = []
-    for suggestion in suggestions:
-        message = suggestion["message"]
-        if message not in seen_messages:
-            seen_messages.add(message)
-            deduped.append(suggestion)
-    return deduped
+    # =================================================
+    # FINAL DEDUPLICATION
+    # =================================================
+
+    return deduplicate_recommendations(
+        suggestions
+    )
