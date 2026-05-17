@@ -13,6 +13,7 @@
 # - Deterministic evaluation
 # - Recommendation generation
 # - Explainability artifact construction
+# - Governance reasoning chain construction
 # - Audit artifact construction
 #
 # IMPORTANT:
@@ -104,7 +105,7 @@ class PolicyOrchestrator:
         3.  Compute consolidated risk summary
         4.  Deterministic policy evaluation
         5.  Recommendation generation
-        6.  Explainability artifact construction
+        6.  Explainability + reasoning chain construction
         7.  Audit artifact construction + logging
         """
 
@@ -176,8 +177,7 @@ class PolicyOrchestrator:
 
         # =============================================
         # CONSOLIDATED RISK SCORING
-        # Computed after all analyzers complete.
-        # Policy severity used as the baseline —
+        # Policy severity is the baseline —
         # analyzer risk can escalate but not reduce it.
         # =============================================
 
@@ -213,7 +213,23 @@ class PolicyOrchestrator:
         )
 
         # =============================================
+        # GOVERNANCE CONFIG SERIALIZATION
+        # Passed into explainability for reasoning chain
+        # governance routing stage construction.
+        # =============================================
+
+        policy_governance = (
+            self.policy.spec.governance.model_dump()
+            if self.policy.spec.governance
+            else None
+        )
+
+        # =============================================
         # EXPLAINABILITY ARTIFACT
+        # Includes governance reasoning chain,
+        # risk summary, condition reasoning,
+        # analyzer findings, explained recommendations,
+        # and execution trace graph.
         # =============================================
 
         explanation = build_explanation_artifact(
@@ -222,6 +238,9 @@ class PolicyOrchestrator:
             recommendations=suggestions,
             runtime_context=runtime_context,
             risk_summary=risk_summary,
+            policy_name=self.policy.metadata.name,
+            user_role=user_role,
+            policy_governance=policy_governance,
         )
 
         # =============================================
@@ -256,6 +275,10 @@ class PolicyOrchestrator:
                 "governance_severity"
             ],
 
+            "effective_severity": risk_summary[
+                "effective_severity"
+            ],
+
             "resolution_reason": evaluation_result[
                 "resolution_reason"
             ],
@@ -268,16 +291,9 @@ class PolicyOrchestrator:
 
             # -----------------------------------------
             # RISK SUMMARY
-            # Consolidated across all analyzers.
-            # Surfaces at top level for dashboard +
-            # governance routing consumption.
             # -----------------------------------------
 
             "risk_summary": risk_summary,
-
-            "effective_severity": risk_summary[
-                "effective_severity"
-            ],
 
             # -----------------------------------------
             # ACTIONS
@@ -325,6 +341,7 @@ class PolicyOrchestrator:
                     "requires_approval":    evaluation_result["requires_approval"],
                     "override_required":    evaluation_result["override_required"],
                     "total_findings":       risk_summary["total_findings"],
+                    "user_role":            user_role,
                 }
             }
         )
