@@ -121,9 +121,13 @@ def enrich_from_analyzers(
                     "medium"
                 ),
 
-                "priority_score": 70,  # TODO: replace with scoring engine output
+                # TODO:
+                # Replace with scoring engine output
+                "priority_score": 70,
 
-                "confidence": 0.85,  # TODO: derive from analyzer confidence signal
+                # TODO:
+                # Derive from analyzer confidence signals
+                "confidence": 0.85,
 
                 "estimated_savings_percent": 0,
             })
@@ -141,15 +145,23 @@ def enrich_from_analyzers(
                     "optimization"
                 ),
 
-                "message": (
+                "message": candidate.get(
+                    "message",
                     "Optimization opportunity identified."
                 ),
 
-                "severity": "medium",
+                "severity": candidate.get(
+                    "severity",
+                    "medium"
+                ),
 
-                "priority_score": 85,  # TODO: replace with scoring engine output
+                # TODO:
+                # Replace with scoring engine output
+                "priority_score": 85,
 
-                "confidence": 0.90,   # TODO: derive from analyzer confidence signal
+                # TODO:
+                # Derive from analyzer confidence signals
+                "confidence": 0.90,
 
                 "estimated_savings_percent": (
                     candidate.get(
@@ -205,8 +217,10 @@ def generate_suggestions(
     )
 
     # =================================================
-    # SEMANTIC RESOURCE RECOMMENDATIONS
+    # RESOURCE CLASS DEDUPLICATION
     # =================================================
+
+    seen_resource_classes = set()
 
     for resource in resources:
 
@@ -217,6 +231,13 @@ def generate_suggestions(
 
         resource_class = classify_resource(
             resource_type
+        )
+
+        if resource_class in seen_resource_classes:
+            continue
+
+        seen_resource_classes.add(
+            resource_class
         )
 
         semantic_recommendations = (
@@ -261,9 +282,9 @@ def generate_suggestions(
 
             "severity": "high",
 
-            "priority_score": 95,  # TODO: replace with scoring engine output
+            "priority_score": 95,
 
-            "confidence": 1.0,    # TODO: derive from analyzer confidence signal
+            "confidence": 1.0,
 
             "estimated_savings_percent": 0,
         })
