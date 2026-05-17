@@ -8,6 +8,7 @@
 # - Model evaluation execution as a directed graph
 # - Capture nodes: inputs, conditions, analyzers, decision
 # - Capture edges: data flow between execution stages
+# - Surface consolidated risk summary (pre-computed)
 # - Produce replay-ready execution lineage artifacts
 # - Foundation for simulation and governance replay
 #
@@ -64,14 +65,13 @@ def _build_input_nodes(
 ) -> list[dict]:
     """
     Build graph nodes for runtime context inputs.
-    Each context key becomes an input node.
+    Each scalar context key becomes an input node.
     """
 
     input_nodes = []
 
     for key, value in runtime_context.items():
 
-        # Skip complex nested values — inputs are scalars
         if isinstance(value, (dict, list)):
             continue
 
@@ -120,7 +120,6 @@ def _build_analyzer_nodes(
 ) -> list[dict]:
     """
     Build graph nodes for each analyzer execution.
-    Includes risk score and finding count.
     """
 
     analyzer_nodes = []
@@ -130,12 +129,12 @@ def _build_analyzer_nodes(
         if not isinstance(analyzer_data, dict):
 
             analyzer_nodes.append({
-                "node_id":      f"analyzer::{analyzer_name}",
-                "node_type":    NodeType.ANALYZER,
-                "label":        analyzer_name,
-                "status":       "failed",
-                "risk_score":   0,
-                "finding_count": 0,
+                "node_id":          f"analyzer::{analyzer_name}",
+                "node_type":        NodeType.ANALYZER,
+                "label":            analyzer_name,
+                "status":           "failed",
+                "risk_score":       0,
+                "finding_count":    0,
             })
 
             continue
@@ -207,10 +206,11 @@ def _build_condition_edges(
         if not isinstance(trace_item, dict):
             continue
 
-        condition_id    = trace_item.get("condition_id", "unknown")
+        condition_id    = trace_item.get(
+            "condition_id", "unknown"
+        )
         expression      = trace_item.get("expression", "")
 
-        # Infer input references from expression
         for key in runtime_context.keys():
 
             if isinstance(runtime_context[key], (dict, list)):
@@ -219,7 +219,7 @@ def _build_condition_edges(
             if key in expression:
 
                 edges.append({
-                    "edge_id":      (
+                    "edge_id": (
                         f"input::{key}"
                         f"→condition::{condition_id}"
                     ),
@@ -243,16 +243,17 @@ def _build_decision_edges(
 
     edges = []
 
-    # Condition → Decision edges
     for trace_item in trace:
 
         if not isinstance(trace_item, dict):
             continue
 
-        condition_id = trace_item.get("condition_id", "unknown")
+        condition_id = trace_item.get(
+            "condition_id", "unknown"
+        )
 
         edges.append({
-            "edge_id":      (
+            "edge_id": (
                 f"condition::{condition_id}"
                 f"→decision::final"
             ),
@@ -263,11 +264,10 @@ def _build_decision_edges(
             "result":       trace_item.get("result", False),
         })
 
-    # Analyzer → Decision edges
     for analyzer_name in analyzer_results.keys():
 
         edges.append({
-            "edge_id":      (
+            "edge_id": (
                 f"analyzer::{analyzer_name}"
                 f"→decision::final"
             ),
@@ -281,58 +281,6 @@ def _build_decision_edges(
 
 
 # =====================================================
-# RISK SUMMARY
-# =====================================================
-
-def _build_risk_summary(
-    analyzer_results: dict
-) -> dict:
-    """
-    Aggregate risk scores across all analyzers into
-    a consolidated governance risk summary.
-    """
-
-    total_risk_score    = 0
-    highest_risk        = None
-    highest_score       = 0
-
-    analyzer_scores = {}
-
-    for analyzer_name, analyzer_data in analyzer_results.items():
-
-        if not isinstance(analyzer_data, dict):
-            continue
-
-        score = analyzer_data.get("risk_score", 0)
-        analyzer_scores[analyzer_name] = score
-        total_risk_score += score
-
-        if score > highest_score:
-            highest_score   = score
-            highest_risk    = analyzer_name
-
-    # Normalize overall score to 100
-    overall_score = min(total_risk_score, 100)
-
-    if overall_score >= 70:
-        severity = "high"
-    elif overall_score >= 40:
-        severity = "medium"
-    elif overall_score >= 10:
-        severity = "low"
-    else:
-        severity = "informational"
-
-    return {
-        "overall_risk_score":       overall_score,
-        "highest_risk_analyzer":    highest_risk,
-        "highest_risk_score":       highest_score,
-        "severity":                 severity,
-        "analyzer_scores":          analyzer_scores,
-    }
-
-
-# =====================================================
 # TRACE GRAPH BUILDER
 # =====================================================
 
@@ -340,6 +288,7 @@ def build_trace_graph(
     evaluation_result: dict,
     analyzer_results: dict,
     runtime_context: dict,
+    risk_summary: dict | None = None,
 ) -> dict:
     """
     Build the structured governance execution lineage graph.
@@ -352,14 +301,16 @@ def build_trace_graph(
         condition nodes → decision node     (EVALUATES)
         analyzer nodes  → decision node     (INFORMS)
 
-    This artifact is the foundation for:
-    - Governance replay
-    - Simulation (what-if analysis)
-    - Execution visualization
-    - Distributed tracing
+    Args:
+        risk_summary: Pre-computed from risk_scorer.
+                      If provided, surfaces at graph level
+                      without recomputing.
+                      If None, risk_summary is omitted
+                      from the graph artifact.
 
     Raises:
-        TypeError: if any input is not the expected type.
+        TypeError: if any required input is not the
+                   expected type.
     """
 
     # =================================================
@@ -367,13 +318,19 @@ def build_trace_graph(
     # =================================================
 
     if not isinstance(evaluation_result, dict):
-        raise TypeError("evaluation_result must be a dict")
+        raise TypeError(
+            "evaluation_result must be a dict"
+        )
 
     if not isinstance(analyzer_results, dict):
-        raise TypeError("analyzer_results must be a dict")
+        raise TypeError(
+            "analyzer_results must be a dict"
+        )
 
     if not isinstance(runtime_context, dict):
-        raise TypeError("runtime_context must be a dict")
+        raise TypeError(
+            "runtime_context must be a dict"
+        )
 
     trace = evaluation_result.get("trace", [])
 
@@ -410,12 +367,6 @@ def build_trace_graph(
     all_edges = condition_edges + decision_edges
 
     # =================================================
-    # RISK SUMMARY
-    # =================================================
-
-    risk_summary = _build_risk_summary(analyzer_results)
-
-    # =================================================
     # EXECUTION SUMMARY
     # =================================================
 
@@ -433,16 +384,23 @@ def build_trace_graph(
         ),
     }
 
+    # =================================================
+    # ASSEMBLE GRAPH
+    # =================================================
+
     graph = {
         "nodes":                all_nodes,
         "edges":                all_edges,
+
+        # Pre-computed risk summary passed in from
+        # risk_scorer — no internal recomputation.
         "risk_summary":         risk_summary,
+
         "execution_summary":    execution_summary,
 
         # NOTE:
         # Replay and simulation will consume this graph
         # to reconstruct or modify evaluation state.
-        # These fields are reserved for those capabilities.
         "replay_ready":         True,
         "simulation_ready":     False,  # TODO: Phase 5
     }
@@ -451,17 +409,15 @@ def build_trace_graph(
         "trace_graph_built",
         extra={
             "extra": {
-                "node_count":           len(all_nodes),
-                "edge_count":           len(all_edges),
-                "overall_risk_score":   risk_summary[
-                    "overall_risk_score"
-                ],
-                "risk_severity":        risk_summary[
-                    "severity"
-                ],
-                "final_decision":       execution_summary[
+                "node_count":   len(all_nodes),
+                "edge_count":   len(all_edges),
+                "final_decision": execution_summary[
                     "final_decision"
                 ],
+                "overall_risk_score": (
+                    risk_summary.get("overall_risk_score", 0)
+                    if risk_summary else 0
+                ),
             }
         }
     )
