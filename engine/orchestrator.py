@@ -12,8 +12,9 @@
 # - Consolidated risk scoring
 # - Deterministic evaluation
 # - Recommendation generation
+# - Governance workflow routing
+#   (notifications + approval requests)
 # - Explainability artifact construction
-# - Governance reasoning chain construction
 # - Audit artifact construction
 #
 # IMPORTANT:
@@ -46,6 +47,11 @@ from engine.analyzers import (
     analyze_topology,
     analyze_architecture,
     analyze_utilization,
+)
+
+from engine.workflows import (
+    route_notifications,
+    build_approval_request,
 )
 
 from engine.explainability import (
@@ -105,8 +111,11 @@ class PolicyOrchestrator:
         3.  Compute consolidated risk summary
         4.  Deterministic policy evaluation
         5.  Recommendation generation
-        6.  Explainability + reasoning chain construction
-        7.  Audit artifact construction + logging
+        6.  Governance workflow routing
+            6a. Notification manifest
+            6b. Approval request (if required)
+        7.  Explainability + reasoning chain
+        8.  Audit artifact construction + logging
         """
 
         decision_id = str(uuid.uuid4())
@@ -177,8 +186,6 @@ class PolicyOrchestrator:
 
         # =============================================
         # CONSOLIDATED RISK SCORING
-        # Policy severity is the baseline —
-        # analyzer risk can escalate but not reduce it.
         # =============================================
 
         policy_severity = (
@@ -214,8 +221,6 @@ class PolicyOrchestrator:
 
         # =============================================
         # GOVERNANCE CONFIG SERIALIZATION
-        # Passed into explainability for reasoning chain
-        # governance routing stage construction.
         # =============================================
 
         policy_governance = (
@@ -225,11 +230,34 @@ class PolicyOrchestrator:
         )
 
         # =============================================
+        # GOVERNANCE WORKFLOW ROUTING
+        # Runs AFTER deterministic enforcement.
+        # Workflow routing NEVER influences enforcement.
+        # =============================================
+
+        # 6a — Notification manifest
+        notification_manifest = route_notifications(
+            decision=evaluation_result["decision"],
+            effective_severity=risk_summary[
+                "effective_severity"
+            ],
+            policy_name=self.policy.metadata.name,
+            evaluation_result=evaluation_result,
+            risk_summary=risk_summary,
+            policy_governance=policy_governance,
+        )
+
+        # 6b — Approval request (only if required)
+        approval_request = build_approval_request(
+            decision_id=decision_id,
+            policy_name=self.policy.metadata.name,
+            evaluation_result=evaluation_result,
+            risk_summary=risk_summary,
+            policy_governance=policy_governance,
+        )
+
+        # =============================================
         # EXPLAINABILITY ARTIFACT
-        # Includes governance reasoning chain,
-        # risk summary, condition reasoning,
-        # analyzer findings, explained recommendations,
-        # and execution trace graph.
         # =============================================
 
         explanation = build_explanation_artifact(
@@ -296,6 +324,14 @@ class PolicyOrchestrator:
             "risk_summary": risk_summary,
 
             # -----------------------------------------
+            # GOVERNANCE WORKFLOW
+            # -----------------------------------------
+
+            "notification_manifest": notification_manifest,
+
+            "approval_request":      approval_request,
+
+            # -----------------------------------------
             # ACTIONS
             # -----------------------------------------
 
@@ -341,6 +377,12 @@ class PolicyOrchestrator:
                     "requires_approval":    evaluation_result["requires_approval"],
                     "override_required":    evaluation_result["override_required"],
                     "total_findings":       risk_summary["total_findings"],
+                    "notifications":        notification_manifest[
+                        "notification_count"
+                    ],
+                    "approval_status":      approval_request.get(
+                        "approval_status"
+                    ),
                     "user_role":            user_role,
                 }
             }
