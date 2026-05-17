@@ -1,4 +1,3 @@
-
 # engine/explainability/explanation_builder.py
 
 # Purpose:
@@ -8,6 +7,7 @@
 # - Orchestrate explainability sub-modules
 # - Assemble the complete explanation artifact
 # - Surface consolidated risk summary
+# - Build governance reasoning chain
 # - Summarize decisions, reasoning, findings,
 #   recommendations
 #
@@ -28,6 +28,10 @@ from engine.explainability.trace_graph import (
     build_trace_graph
 )
 
+from engine.explainability.governance_reasoning_chain import (
+    build_governance_reasoning_chain
+)
+
 from audit.audit_logger import get_logger
 
 
@@ -40,16 +44,20 @@ def build_explanation_artifact(
     recommendations: list[dict],
     runtime_context: dict,
     risk_summary: dict | None = None,
+    policy_name: str = "unknown",
+    user_role: str = "engineer",
+    policy_governance: dict | None = None,
 ) -> dict:
     """
     Build the complete governance explainability artifact.
 
     Assembles:
-    - Consolidated risk summary (from risk_scorer)
-    - Policy reasoning chain (why the decision was made)
-    - Analyzer findings summary (what was detected)
-    - Explained recommendations (what to do and why)
-    - Evaluation trace graph (how the decision was reached)
+    - Governance reasoning chain (causal pipeline narrative)
+    - Consolidated risk summary
+    - Policy reasoning (condition-level explanation)
+    - Analyzer findings summary
+    - Explained recommendations
+    - Evaluation trace graph
 
     Args:
         evaluation_result:  Output from evaluate_policy()
@@ -57,7 +65,11 @@ def build_explanation_artifact(
         recommendations:    Output from generate_suggestions()
         runtime_context:    Normalized runtime evaluation context
         risk_summary:       Pre-computed from compute_risk_summary()
-                            If None, risk summary is omitted.
+        policy_name:        Name of the evaluated policy
+        user_role:          Role of the requesting user
+        policy_governance:  Serialized governance config from
+                            policy.spec.governance.model_dump()
+                            None if policy has no governance block.
 
     Raises:
         TypeError:  if inputs are not expected types.
@@ -103,7 +115,25 @@ def build_explanation_artifact(
         )
 
     # =================================================
+    # GOVERNANCE REASONING CHAIN
+    # Built first — provides the complete causal
+    # narrative connecting all pipeline stages.
+    # =================================================
+
+    governance_reasoning = build_governance_reasoning_chain(
+        evaluation_result=evaluation_result,
+        analyzer_results=analyzer_results,
+        risk_summary=risk_summary or {},
+        runtime_context=runtime_context,
+        policy_name=policy_name,
+        user_role=user_role,
+        policy_governance=policy_governance,
+    )
+
+    # =================================================
     # POLICY REASONING
+    # Condition-level explanation — WHY each
+    # condition passed or failed.
     # =================================================
 
     policy_reasoning = build_policy_reasoning(
@@ -137,8 +167,8 @@ def build_explanation_artifact(
 
     # =================================================
     # TRACE GRAPH
-    # Pre-computed risk_summary passed in to avoid
-    # duplicate computation inside trace_graph.
+    # Pre-computed risk_summary passed in —
+    # no internal recomputation.
     # =================================================
 
     trace_graph = build_trace_graph(
@@ -160,16 +190,35 @@ def build_explanation_artifact(
             "conditions_passed"
         ),
 
-        # Risk summary surfaces at top level of
-        # explainability artifact for enterprise readability.
+        # -----------------------------------------
+        # RISK SUMMARY
+        # Consolidated across all analyzers.
+        # Surfaces at top level for readability.
+        # -----------------------------------------
         "risk_summary": risk_summary,
 
-        "policy_reasoning":             policy_reasoning,
+        # -----------------------------------------
+        # GOVERNANCE REASONING CHAIN
+        # Complete causal pipeline narrative.
+        # Primary compliance artifact.
+        # -----------------------------------------
+        "governance_reasoning": governance_reasoning,
 
+        # -----------------------------------------
+        # CONDITION-LEVEL REASONING
+        # -----------------------------------------
+        "policy_reasoning": policy_reasoning,
+
+        # -----------------------------------------
+        # INTELLIGENCE SUMMARIES
+        # -----------------------------------------
         "analyzer_findings":            analyzer_findings,
 
         "explained_recommendations":    explained_recommendations,
 
+        # -----------------------------------------
+        # EXECUTION LINEAGE GRAPH
+        # -----------------------------------------
         "trace_graph":                  trace_graph,
     }
 
@@ -177,30 +226,26 @@ def build_explanation_artifact(
         "explanation_artifact_built",
         extra={
             "extra": {
-                "decision": artifact["decision"],
-                "reasoning_steps": len(
-                    policy_reasoning.get(
-                        "reasoning_chain", []
-                    )
+                "decision":             artifact["decision"],
+                "policy_name":          policy_name,
+                "reasoning_stages":     governance_reasoning.get(
+                    "total_stages", 0
                 ),
-                "analyzer_finding_count": len(
-                    analyzer_findings
+                "governance_stages":    governance_reasoning.get(
+                    "governance_stage_count", 0
                 ),
+                "analyzer_findings":    len(analyzer_findings),
                 "recommendation_count": len(
                     explained_recommendations.get(
                         "all_recommendations", []
                     )
                 ),
                 "overall_risk_score": (
-                    risk_summary.get(
-                        "overall_risk_score", 0
-                    )
+                    risk_summary.get("overall_risk_score", 0)
                     if risk_summary else 0
                 ),
                 "effective_severity": (
-                    risk_summary.get(
-                        "effective_severity", "unknown"
-                    )
+                    risk_summary.get("effective_severity", "unknown")
                     if risk_summary else "unknown"
                 ),
             }
