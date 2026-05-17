@@ -1,40 +1,134 @@
+
 # .github/workflows/ci.yml
+#
+# ObsidianWall Verdict — CI Pipeline
+#
 # Purpose: This enforces code quality + reliability automatically.
+# - Every push:
+# - installs dependencies
+# - runs tests
+# - fails if something breaks
+#
+# Triggers:
+# - Push to main or dev branches
+# - Pull requests targeting main
+#
+# Jobs:
+# - lint:   ruff + bandit static analysis
+# - test:   pytest with coverage enforcement
+# - build:  package build verification
 
-            # Every push:
-            # installs dependencies
-            # runs tests
-            # fails if something breaks
 
-name: ObsidianWall CI
+name: ObsidianWall Verdict CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - dev
   pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+
+  # ===================================================
+  # STATIC ANALYSIS
+  # ===================================================
+
+  lint:
+    name: Static Analysis
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint dependencies
+        run: |
+          pip install ruff bandit
+
+      - name: Ruff lint
+        run: |
+          ruff check engine/ schemas/ audit/ cli/
+
+      - name: Bandit security scan
+        run: |
+          bandit -r engine/ schemas/ audit/ -ll -f txt
+        continue-on-error: false
+
+  # ===================================================
+  # UNIT AND INTEGRATION TESTS
+  # ===================================================
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Run lint (optional but recommended)
+      - name: Run unit tests with coverage
         run: |
-          pip install flake8
-          flake8 .
+          pytest tests/unit/ \
+            -v \
+            --cov=engine \
+            --cov=schemas \
+            --cov-report=term-missing \
+            --cov-fail-under=75
 
-      - name: Run tests
-        run: pytest --maxfail=1 --disable-warnings -q
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v
+
+      - name: Run contract tests
+        run: |
+          pytest tests/contracts/ -v
+
+  # ===================================================
+  # BUILD VERIFICATION
+  # ===================================================
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: |
+          pip install build
+
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Verify CLI entry point
+        run: |
+          pip install -e .
+          obsidianwall-verdict --help
