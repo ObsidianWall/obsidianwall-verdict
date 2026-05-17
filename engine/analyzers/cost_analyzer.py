@@ -1,14 +1,40 @@
-
 # engine/analyzers/cost_analyzer.py
-
 
 # Purpose:
 # Deterministic infrastructure cost analysis.
+#
+# Responsibilities:
+# - Cost threshold analysis
+# - Cost anomaly identification
+# - Optimization candidate generation
+# - Cost risk scoring
+#
+# IMPORTANT:
+# This analyzer NEVER performs enforcement.
+# Findings are advisory only.
+
+
+# =====================================================
+# ANALYZER CONSTANTS
+# =====================================================
+
+# USD — default high-cost detection threshold
+# TODO:
+# Move into configurable policy parameters.
+COST_THRESHOLD = 100
+
+
+# TODO:
+# Replace with centralized scoring engine.
+HIGH_COST_RISK_WEIGHT = 40
 
 
 def analyze_cost(
     runtime_context: dict
 ) -> dict:
+    """
+    Analyze infrastructure cost posture.
+    """
 
     estimated_cost = runtime_context.get(
         "estimated_cost",
@@ -21,9 +47,13 @@ def analyze_cost(
 
     risk_score = 0
 
-    if estimated_cost > 100:
+    # =================================================
+    # HIGH COST DETECTION
+    # =================================================
 
-        risk_score += 40
+    if estimated_cost > COST_THRESHOLD:
+
+        risk_score += HIGH_COST_RISK_WEIGHT
 
         findings.append({
 
@@ -41,6 +71,13 @@ def analyze_cost(
 
             "type": "cost_optimization",
 
+            "message": (
+                "Review resource sizing and consider "
+                "reserved capacity pricing models."
+            ),
+
+            # TODO:
+            # Replace with pricing intelligence engine.
             "estimated_savings_percent": 25
         })
 
