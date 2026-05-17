@@ -1,16 +1,31 @@
-
-
 # engine/analyzers/topology_analyzer.py
 
+# Purpose:
+# Analyze infrastructure topology patterns.
+#
+# Responsibilities:
+# - Network topology assessment
+# - Connectivity risk detection
+# - Multi-region/zone analysis
+# - Exposure analysis
+#
+# Future Detection Goals:
+# - Single availability zone deployments
+# - Missing load balancers
+# - Public exposure of private resources
+# - Missing segmentation
+#
+# IMPORTANT:
+# This analyzer NEVER performs enforcement.
+# Findings are advisory only.
 
-from typing import Any
 
 def analyze_topology(
-    runtime_context: dict[str, Any]
+    runtime_context: dict
 ) -> dict:
-
-    # Example access to runtime_context to avoid unused parameter error
-    _ = runtime_context
+    """
+    Analyze infrastructure topology posture.
+    """
 
     findings = []
 
