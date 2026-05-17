@@ -16,3 +16,7 @@ from engine.explainability.recommendation_explainer import (
 from engine.explainability.trace_graph import (
     build_trace_graph
 )
+
+from engine.explainability.governance_reasoning_chain import (
+    build_governance_reasoning_chain
+)
