@@ -1,11 +1,34 @@
-
-
 # engine/analyzers/architecture_analyzer.py
+
+# Purpose:
+# Analyze infrastructure architecture patterns.
+#
+# Responsibilities:
+# - Architecture anti-pattern detection
+# - Resilience assessment
+# - Deployment structure analysis
+# - Architecture risk scoring
+#
+# IMPORTANT:
+# This analyzer NEVER performs enforcement.
+# Findings are advisory only.
+
+
+# =====================================================
+# ANALYZER CONSTANTS
+# =====================================================
+
+# TODO:
+# Replace with centralized scoring engine.
+SINGLE_RESOURCE_RISK_WEIGHT = 20
 
 
 def analyze_architecture(
     runtime_context: dict
 ) -> dict:
+    """
+    Analyze infrastructure architecture posture.
+    """
 
     findings = []
 
@@ -13,6 +36,23 @@ def analyze_architecture(
         "resources",
         []
     )
+
+    # =================================================
+    # SINGLE RESOURCE DETECTION
+    # =================================================
+
+    # NOTE:
+    # Currently flags all single-resource deployments.
+    #
+    # Future:
+    # Weight by:
+    # - resource_class
+    # - environment
+    # - redundancy expectations
+    #
+    # Example:
+    # - single S3 bucket → probably acceptable
+    # - single production DB → higher concern
 
     if len(resources) == 1:
 
@@ -27,11 +67,17 @@ def analyze_architecture(
             )
         })
 
+    risk_score = (
+        SINGLE_RESOURCE_RISK_WEIGHT
+        if findings
+        else 0
+    )
+
     return {
 
         "analyzer": "architecture_analyzer",
 
-        "risk_score": 20 if findings else 0,
+        "risk_score": risk_score,
 
         "findings": findings,
 
