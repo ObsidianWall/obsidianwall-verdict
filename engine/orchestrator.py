@@ -1,20 +1,6 @@
 
 # engine/orchestrator.py
 
-# Responsibilities:
-      # load policy,
-      # normalize policy,
-      # validate policy,
-      # build runtime context,
-      # invoke evaluator,
-      # invoke analyzers,
-      # invoke recommender,
-      # construct audit artifact.
-
-   # This becomes:
-
-       # the execution coordinator.
-
 # Purpose:
 # Central execution orchestration layer.
 #
@@ -22,9 +8,10 @@
 # - Policy loading
 # - Policy validation
 # - Runtime normalization
-# - Analyzer execution
+# - Analyzer execution with isolation
 # - Deterministic evaluation
 # - Recommendation generation
+# - Explainability artifact construction
 # - Audit artifact construction
 #
 # IMPORTANT:
@@ -57,6 +44,10 @@ from engine.analyzers import (
     analyze_utilization,
 )
 
+from engine.explainability import (
+    build_explanation_artifact
+)
+
 from audit.audit_logger import get_logger
 
 
@@ -81,14 +72,14 @@ class PolicyOrchestrator:
         cls,
         policy_path: str
     ) -> "PolicyOrchestrator":
+        """
+        Load, normalize, and validate a policy from
+        a file path. Returns a ready orchestrator instance.
+        """
 
-        raw_policy = load_policy(
-            policy_path
-        )
+        raw_policy = load_policy(policy_path)
 
-        validated_policy = validate_policy(
-            raw_policy
-        )
+        validated_policy = validate_policy(raw_policy)
 
         return cls(validated_policy)
 
@@ -101,6 +92,17 @@ class PolicyOrchestrator:
         context: dict,
         user_role: str = "engineer"
     ) -> dict:
+        """
+        Execute the full governance evaluation pipeline.
+
+        Pipeline:
+        1. Build runtime context
+        2. Execute analyzers (isolated — failures degrade gracefully)
+        3. Deterministic policy evaluation
+        4. Recommendation generation
+        5. Explainability artifact construction
+        6. Audit artifact construction + logging
+        """
 
         decision_id = str(uuid.uuid4())
 
@@ -108,75 +110,62 @@ class PolicyOrchestrator:
             timezone.utc
         ).isoformat()
 
+        logger.info(
+            "evaluation_started",
+            extra={
+                "extra": {
+                    "decision_id":  decision_id,
+                    "policy":       self.policy.metadata.name,
+                    "user_role":    user_role,
+                }
+            }
+        )
+
         # =============================================
         # RUNTIME CONTEXT
         # =============================================
 
-        runtime_context = (
-            build_policy_runtime_context(
-                self.policy,
-                context
-            )
+        runtime_context = build_policy_runtime_context(
+            self.policy,
+            context
         )
 
         # =============================================
         # ANALYZER EXECUTION
+        # Isolated — analyzer failures NEVER break
+        # deterministic governance execution.
         # =============================================
 
         analyzer_results = {}
 
         analyzers = [
-
-            (
-                "cost_analysis",
-                analyze_cost
-            ),
-
-            (
-                "topology_analysis",
-                analyze_topology
-            ),
-
-            (
-                "architecture_analysis",
-                analyze_architecture
-            ),
-
-            (
-                "utilization_analysis",
-                analyze_utilization
-            ),
+            ("cost_analysis",         analyze_cost),
+            ("topology_analysis",     analyze_topology),
+            ("architecture_analysis", analyze_architecture),
+            ("utilization_analysis",  analyze_utilization),
         ]
 
         for analyzer_name, analyzer_fn in analyzers:
 
             try:
 
-                analyzer_results[
-                    analyzer_name
-                ] = analyzer_fn(
-                    runtime_context
+                analyzer_results[analyzer_name] = (
+                    analyzer_fn(runtime_context)
                 )
 
             except Exception as error:
 
-                analyzer_results[
-                    analyzer_name
-                ] = {
-
+                analyzer_results[analyzer_name] = {
                     "status": "failed",
-
-                    "error": str(error)
+                    "error":  str(error)
                 }
 
                 logger.warning(
                     "analyzer_failed",
                     extra={
                         "extra": {
-
                             "analyzer": analyzer_name,
-
-                            "error": str(error)
+                            "error":    str(error),
                         }
                     }
                 )
@@ -186,11 +175,8 @@ class PolicyOrchestrator:
         # =============================================
 
         evaluation_result = evaluate_policy(
-
             policy=self.policy,
-
             runtime_context=runtime_context,
-
             user_role=user_role
         )
 
@@ -199,14 +185,20 @@ class PolicyOrchestrator:
         # =============================================
 
         suggestions = generate_suggestions(
-
             context=runtime_context,
-
-            decision=evaluation_result[
-                "decision"
-            ],
-
+            decision=evaluation_result["decision"],
             analyzer_results=analyzer_results
+        )
+
+        # =============================================
+        # EXPLAINABILITY ARTIFACT
+        # =============================================
+
+        explanation = build_explanation_artifact(
+            evaluation_result=evaluation_result,
+            analyzer_results=analyzer_results,
+            recommendations=suggestions,
+            runtime_context=runtime_context,
         )
 
         # =============================================
@@ -221,39 +213,58 @@ class PolicyOrchestrator:
 
             "policy": self.policy.metadata.name,
 
+            # -----------------------------------------
+            # GOVERNANCE DECISION
+            # -----------------------------------------
+
             "decision": evaluation_result[
                 "decision"
             ],
 
-            "override_required": (
-                evaluation_result[
-                    "override_required"
-                ]
-            ),
-
-            "conditions_passed": (
-                evaluation_result[
-                    "conditions_passed"
-                ]
-            ),
-
-            "trace": evaluation_result[
-                "trace"
+            "override_required": evaluation_result[
+                "override_required"
             ],
+
+            "requires_approval": evaluation_result[
+                "requires_approval"
+            ],
+
+            "governance_severity": evaluation_result[
+                "governance_severity"
+            ],
+
+            "resolution_reason": evaluation_result[
+                "resolution_reason"
+            ],
+
+            "conditions_passed": evaluation_result[
+                "conditions_passed"
+            ],
+
+            "trace": evaluation_result["trace"],
+
+            # -----------------------------------------
+            # ACTIONS
+            # -----------------------------------------
 
             "actions": [
-
                 action.model_dump()
-
-                for action
-                in self.policy.spec.actions
+                for action in self.policy.spec.actions
             ],
 
-            "analyzer_results": (
-                analyzer_results
-            ),
+            # -----------------------------------------
+            # INTELLIGENCE LAYERS
+            # -----------------------------------------
+
+            "analyzer_results": analyzer_results,
 
             "suggestions": suggestions,
+
+            "explanation": explanation,
+
+            # -----------------------------------------
+            # CONTEXT TRACEABILITY
+            # -----------------------------------------
 
             "input_context": context,
 
@@ -265,31 +276,16 @@ class PolicyOrchestrator:
         # =============================================
 
         logger.info(
-
             "decision_evaluated",
-
             extra={
                 "extra": {
-
-                    "decision_id": (
-                        decision_id
-                    ),
-
-                    "policy": (
-                        self.policy.metadata.name
-                    ),
-
-                    "decision": (
-                        evaluation_result[
-                            "decision"
-                        ]
-                    ),
-
-                    "conditions_passed": (
-                        evaluation_result[
-                            "conditions_passed"
-                        ]
-                    ),
+                    "decision_id":          decision_id,
+                    "policy":               self.policy.metadata.name,
+                    "decision":             evaluation_result["decision"],
+                    "conditions_passed":    evaluation_result["conditions_passed"],
+                    "governance_severity":  evaluation_result["governance_severity"],
+                    "requires_approval":    evaluation_result["requires_approval"],
+                    "override_required":    evaluation_result["override_required"],
                 }
             }
         )
