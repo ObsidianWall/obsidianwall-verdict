@@ -1,21 +1,27 @@
 
 # policies/cost/basic_budget.yaml
-
-# Basic Budget Guardrail Policy
-
-
-
+#
+# Purpose:
+# Basic budget guardrail policy.
+#
+# Governance model:
+# - Soft budget enforcement
+# - Budget owner notified on breach
+# - Engineering lead notified simultaneously
+# - Override available without approval requirement
+# - Preserves engineering velocity
 
 apiVersion: obsidianwall.io/v1
 kind: Policy
 
 metadata:
   name: basic_budget_verdict
-  version: 0.2
+  version: "0.2"
   owner: team-alpha
-  description: "Prevents infra spend overruns"
+  description: "Prevents infrastructure spend overruns with accountable governance routing"
 
 spec:
+
   inputs:
     - estimated_cost
     - current_spend
@@ -36,18 +42,40 @@ spec:
 
   decision:
     allow: ALLOW
-    deny: DENY
-    warn: WARN
+    deny: DENY_WITH_OVERRIDE
+    warn: ALLOW_WITH_NOTIFICATION
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # ---------------------------------------------------
+  # Defines stakeholder routing and approval requirements.
+  # Notifications fire simultaneously to all targets.
+  # Budget owner holds override authority without
+  # formal approval for soft-budget policies.
+
+  governance:
+    severity: medium
+
+    notifications:
+      - role: budget_owner
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - budget_owner
 
   override:
     roles:
       - budget_owner
+    requires_approval: false
 
   actions:
     - type: notify
       severity: high
-      message: "Budget exceeded"
+      message: "Budget threshold exceeded. Governance workflow triggered."
 
     - type: log
       severity: info
-      message: "Decision recorded"
+      message: "Decision recorded in audit trail."
