@@ -9,6 +9,7 @@
 # - Policy validation
 # - Runtime normalization
 # - Analyzer execution with isolation
+# - Consolidated risk scoring
 # - Deterministic evaluation
 # - Recommendation generation
 # - Explainability artifact construction
@@ -32,6 +33,8 @@ from engine.validator import validate_policy
 from engine.policy_normalizer import (
     build_policy_runtime_context
 )
+
+from engine.risk_scorer import compute_risk_summary
 
 from engine.evaluator import evaluate_policy
 
@@ -96,12 +99,13 @@ class PolicyOrchestrator:
         Execute the full governance evaluation pipeline.
 
         Pipeline:
-        1. Build runtime context
-        2. Execute analyzers (isolated — failures degrade gracefully)
-        3. Deterministic policy evaluation
-        4. Recommendation generation
-        5. Explainability artifact construction
-        6. Audit artifact construction + logging
+        1.  Build runtime context
+        2.  Execute analyzers (isolated)
+        3.  Compute consolidated risk summary
+        4.  Deterministic policy evaluation
+        5.  Recommendation generation
+        6.  Explainability artifact construction
+        7.  Audit artifact construction + logging
         """
 
         decision_id = str(uuid.uuid4())
@@ -157,7 +161,7 @@ class PolicyOrchestrator:
 
                 analyzer_results[analyzer_name] = {
                     "status": "failed",
-                    "error":  str(error)
+                    "error":  str(error),
                 }
 
                 logger.warning(
@@ -169,6 +173,24 @@ class PolicyOrchestrator:
                         }
                     }
                 )
+
+        # =============================================
+        # CONSOLIDATED RISK SCORING
+        # Computed after all analyzers complete.
+        # Policy severity used as the baseline —
+        # analyzer risk can escalate but not reduce it.
+        # =============================================
+
+        policy_severity = (
+            self.policy.spec.governance.severity.value
+            if self.policy.spec.governance
+            else "medium"
+        )
+
+        risk_summary = compute_risk_summary(
+            analyzer_results=analyzer_results,
+            policy_severity=policy_severity,
+        )
 
         # =============================================
         # DETERMINISTIC EVALUATION
@@ -199,6 +221,7 @@ class PolicyOrchestrator:
             analyzer_results=analyzer_results,
             recommendations=suggestions,
             runtime_context=runtime_context,
+            risk_summary=risk_summary,
         )
 
         # =============================================
@@ -207,11 +230,11 @@ class PolicyOrchestrator:
 
         result = {
 
-            "decision_id": decision_id,
+            "decision_id":  decision_id,
 
-            "timestamp": timestamp,
+            "timestamp":    timestamp,
 
-            "policy": self.policy.metadata.name,
+            "policy":       self.policy.metadata.name,
 
             # -----------------------------------------
             # GOVERNANCE DECISION
@@ -244,6 +267,19 @@ class PolicyOrchestrator:
             "trace": evaluation_result["trace"],
 
             # -----------------------------------------
+            # RISK SUMMARY
+            # Consolidated across all analyzers.
+            # Surfaces at top level for dashboard +
+            # governance routing consumption.
+            # -----------------------------------------
+
+            "risk_summary": risk_summary,
+
+            "effective_severity": risk_summary[
+                "effective_severity"
+            ],
+
+            # -----------------------------------------
             # ACTIONS
             # -----------------------------------------
 
@@ -258,17 +294,17 @@ class PolicyOrchestrator:
 
             "analyzer_results": analyzer_results,
 
-            "suggestions": suggestions,
+            "suggestions":      suggestions,
 
-            "explanation": explanation,
+            "explanation":      explanation,
 
             # -----------------------------------------
             # CONTEXT TRACEABILITY
             # -----------------------------------------
 
-            "input_context": context,
+            "input_context":    context,
 
-            "runtime_context": runtime_context,
+            "runtime_context":  runtime_context,
         }
 
         # =============================================
@@ -284,8 +320,11 @@ class PolicyOrchestrator:
                     "decision":             evaluation_result["decision"],
                     "conditions_passed":    evaluation_result["conditions_passed"],
                     "governance_severity":  evaluation_result["governance_severity"],
+                    "effective_severity":   risk_summary["effective_severity"],
+                    "overall_risk_score":   risk_summary["overall_risk_score"],
                     "requires_approval":    evaluation_result["requires_approval"],
                     "override_required":    evaluation_result["override_required"],
+                    "total_findings":       risk_summary["total_findings"],
                 }
             }
         )
