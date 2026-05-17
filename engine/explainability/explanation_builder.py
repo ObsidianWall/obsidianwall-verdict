@@ -1,14 +1,15 @@
 
 # engine/explainability/explanation_builder.py
 
-
 # Purpose:
 # Build top-level governance explainability artifacts.
 #
 # Responsibilities:
 # - Orchestrate explainability sub-modules
 # - Assemble the complete explanation artifact
-# - Summarize decisions, reasoning, findings, recommendations
+# - Surface consolidated risk summary
+# - Summarize decisions, reasoning, findings,
+#   recommendations
 #
 # IMPORTANT:
 # Explainability NEVER influences enforcement decisions.
@@ -38,15 +39,25 @@ def build_explanation_artifact(
     analyzer_results: dict,
     recommendations: list[dict],
     runtime_context: dict,
+    risk_summary: dict | None = None,
 ) -> dict:
     """
     Build the complete governance explainability artifact.
 
     Assembles:
+    - Consolidated risk summary (from risk_scorer)
     - Policy reasoning chain (why the decision was made)
     - Analyzer findings summary (what was detected)
     - Explained recommendations (what to do and why)
     - Evaluation trace graph (how the decision was reached)
+
+    Args:
+        evaluation_result:  Output from evaluate_policy()
+        analyzer_results:   Output from all analyzer executions
+        recommendations:    Output from generate_suggestions()
+        runtime_context:    Normalized runtime evaluation context
+        risk_summary:       Pre-computed from compute_risk_summary()
+                            If None, risk summary is omitted.
 
     Raises:
         TypeError:  if inputs are not expected types.
@@ -58,23 +69,37 @@ def build_explanation_artifact(
     # =================================================
 
     if not isinstance(evaluation_result, dict):
-        raise TypeError("evaluation_result must be a dict")
+        raise TypeError(
+            "evaluation_result must be a dict"
+        )
 
     if not isinstance(analyzer_results, dict):
-        raise TypeError("analyzer_results must be a dict")
+        raise TypeError(
+            "analyzer_results must be a dict"
+        )
 
     if not isinstance(recommendations, list):
-        raise TypeError("recommendations must be a list")
+        raise TypeError(
+            "recommendations must be a list"
+        )
 
     if not isinstance(runtime_context, dict):
-        raise TypeError("runtime_context must be a dict")
+        raise TypeError(
+            "runtime_context must be a dict"
+        )
 
-    required_keys = {"decision", "conditions_passed", "trace"}
+    required_keys = {
+        "decision",
+        "conditions_passed",
+        "trace"
+    }
+
     missing_keys = required_keys - evaluation_result.keys()
 
     if missing_keys:
         raise ValueError(
-            f"evaluation_result missing required keys: {missing_keys}"
+            f"evaluation_result missing required keys: "
+            f"{missing_keys}"
         )
 
     # =================================================
@@ -82,7 +107,9 @@ def build_explanation_artifact(
     # =================================================
 
     policy_reasoning = build_policy_reasoning(
-        decision=evaluation_result.get("decision", "UNKNOWN"),
+        decision=evaluation_result.get(
+            "decision", "UNKNOWN"
+        ),
         conditions_passed=evaluation_result.get(
             "conditions_passed", False
         ),
@@ -103,17 +130,22 @@ def build_explanation_artifact(
 
     explained_recommendations = explain_recommendations(
         recommendations=recommendations,
-        decision=evaluation_result.get("decision", "UNKNOWN"),
+        decision=evaluation_result.get(
+            "decision", "UNKNOWN"
+        ),
     )
 
     # =================================================
     # TRACE GRAPH
+    # Pre-computed risk_summary passed in to avoid
+    # duplicate computation inside trace_graph.
     # =================================================
 
     trace_graph = build_trace_graph(
         evaluation_result=evaluation_result,
         analyzer_results=analyzer_results,
         runtime_context=runtime_context,
+        risk_summary=risk_summary,
     )
 
     # =================================================
@@ -121,11 +153,23 @@ def build_explanation_artifact(
     # =================================================
 
     artifact = {
-        "decision":                     evaluation_result.get("decision"),
-        "conditions_passed":            evaluation_result.get("conditions_passed"),
+
+        "decision": evaluation_result.get("decision"),
+
+        "conditions_passed": evaluation_result.get(
+            "conditions_passed"
+        ),
+
+        # Risk summary surfaces at top level of
+        # explainability artifact for enterprise readability.
+        "risk_summary": risk_summary,
+
         "policy_reasoning":             policy_reasoning,
+
         "analyzer_findings":            analyzer_findings,
+
         "explained_recommendations":    explained_recommendations,
+
         "trace_graph":                  trace_graph,
     }
 
@@ -133,13 +177,31 @@ def build_explanation_artifact(
         "explanation_artifact_built",
         extra={
             "extra": {
-                "decision":                 artifact["decision"],
-                "reasoning_steps":          len(
-                    policy_reasoning.get("reasoning_chain", [])
+                "decision": artifact["decision"],
+                "reasoning_steps": len(
+                    policy_reasoning.get(
+                        "reasoning_chain", []
+                    )
                 ),
-                "analyzer_finding_count":   len(analyzer_findings),
-                "recommendation_count":     len(
-                    explained_recommendations
+                "analyzer_finding_count": len(
+                    analyzer_findings
+                ),
+                "recommendation_count": len(
+                    explained_recommendations.get(
+                        "all_recommendations", []
+                    )
+                ),
+                "overall_risk_score": (
+                    risk_summary.get(
+                        "overall_risk_score", 0
+                    )
+                    if risk_summary else 0
+                ),
+                "effective_severity": (
+                    risk_summary.get(
+                        "effective_severity", "unknown"
+                    )
+                    if risk_summary else "unknown"
                 ),
             }
         }
@@ -147,6 +209,10 @@ def build_explanation_artifact(
 
     return artifact
 
+
+# =====================================================
+# INTERNAL HELPERS
+# =====================================================
 
 def _summarize_analyzer_findings(
     analyzer_results: dict
