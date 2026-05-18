@@ -1,38 +1,75 @@
 
-# Use modern Python (not 3.11)
-FROM mcr.microsoft.com/devcontainers/python:3.13-bookworm
+# obsidianwall-verdict/.devcontainer/Dockerfile
+#
+# ObsidianWall Verdict — Development Container
+#
+# Inherits FROM the ObsidianWall golden CI/CD image.
+# Only adds verdict-specific Python dependencies.
+# All base setup (user, Docker CLI, Git LFS, core tools)
+# comes from the golden image — DRY by design.
+#
+# Prerequisites:
+# The golden image must be built and pushed to:
+# ghcr.io/obsidianwall/cicd-golden:latest
+#
+# Build golden image first:
+#   cd obsidianwall-cicd-pipeline
+#   docker build -t ghcr.io/obsidianwall/cicd-golden:latest \
+#     .devcontainer/
+#   docker push ghcr.io/obsidianwall/cicd-golden:latest
+
+FROM ghcr.io/obsidianwall/cicd-golden:latest
+
+# =====================================================
+# VERDICT-SPECIFIC SETUP
+# Everything below this line is verdict-only.
+# The golden image handles everything above.
+# =====================================================
 
 ARG USERNAME=obsidianwall
-ARG USER_UID=1001
-ARG USER_GID=$USER_UID
 
 USER root
 
-# Core dependencies (minimal but intentional)
-RUN apt-get update && apt-get install -y \
-    git curl jq \
-    && rm -rf /var/lib/apt/lists/*
+# ---------------------------------------------------
+# Verdict Python dependencies
+# Installed into the system path as root so they
+# are available to the obsidianwall user without
+# user-local install path complications.
+# ---------------------------------------------------
 
-# Create platform user (align with golden image)
-RUN groupadd --gid ${USER_GID} ${USERNAME} \
-    && useradd --uid ${USER_UID} --gid ${USERNAME} \
-    --shell /bin/bash --create-home ${USERNAME}
+COPY requirements.txt /tmp/verdict-requirements.txt
 
-WORKDIR /workspace
+RUN pip install --no-cache-dir \
+    -r /tmp/verdict-requirements.txt \
+    && rm /tmp/verdict-requirements.txt
 
-# Copy dependency files first (layer caching)
-COPY requirements.txt .
+# ---------------------------------------------------
+# Development-only dependencies
+# (testing, linting, coverage — not in runtime image)
+# ---------------------------------------------------
 
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    ruff \
+    bandit \
+    pydeps \
+    pylint
 
-# Copy application
-COPY . .
+# ---------------------------------------------------
+# Verdict environment
+# ---------------------------------------------------
 
-# Python path for module resolution
-ENV PYTHONPATH=/workspace
+ENV PYTHONPATH=/workspaces/obsidianwall-verdict \
+    OW_VERDICT_ENV=development \
+    OW_LOG_LEVEL=DEBUG \
+    OW_LOG_FORMAT=text \
+    OW_POLICY_DIR=/workspaces/obsidianwall-verdict/policies
 
-# Ownership
-RUN chown -R ${USERNAME}:${USERNAME} /workspace
+# ---------------------------------------------------
+# Working directory
+# ---------------------------------------------------
+
+WORKDIR /workspaces/obsidianwall-verdict
 
 USER ${USERNAME}
