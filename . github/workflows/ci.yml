@@ -3,12 +3,6 @@
 #
 # ObsidianWall Verdict — CI Pipeline
 #
-# Purpose: This enforces code quality + reliability automatically.
-# - Every push:
-# - installs dependencies
-# - runs tests
-# - fails if something breaks
-#
 # Triggers:
 # - Push to main or dev branches
 # - Pull requests targeting main
@@ -47,7 +41,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install lint dependencies
         run: |
@@ -78,7 +72,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -118,7 +112,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install build tools
         run: |
