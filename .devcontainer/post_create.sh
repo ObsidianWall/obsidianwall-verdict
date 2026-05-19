@@ -22,7 +22,7 @@ echo "→ Python version:"
 python --version
 
 echo "→ Pip version:"
-pip --version
+python -m pip --version
 
 echo "→ Verifying core dependencies..."
 python -c "import pydantic; print(f'  pydantic {pydantic.__version__} ✓')"
