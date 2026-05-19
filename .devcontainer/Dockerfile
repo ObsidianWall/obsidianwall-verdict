@@ -1,74 +1,45 @@
-
-# obsidianwall-verdict/.devcontainer/Dockerfile
-#
-# ObsidianWall Verdict — Development Container
-#
-# Inherits FROM the ObsidianWall golden CI/CD image.
-# Only adds verdict-specific Python dependencies.
-# All base setup (user, Docker CLI, Git LFS, core tools)
-# comes from the golden image — DRY by design.
-#
-# Prerequisites:
-# The golden image must be built and pushed to:
-# ghcr.io/obsidianwall/cicd-golden:latest
-#
-# Build golden image first:
-#   cd obsidianwall-cicd-pipeline
-#   docker build -t ghcr.io/obsidianwall/cicd-golden:latest \
-#     .devcontainer/
-#   docker push ghcr.io/obsidianwall/cicd-golden:latest
-
-FROM ghcr.io/obsidianwall/cicd-golden:latest
-
-# =====================================================
-# VERDICT-SPECIFIC SETUP
-# Everything below this line is verdict-only.
-# The golden image handles everything above.
-# =====================================================
+FROM mcr.microsoft.com/devcontainers/python:dev-3.13-bookworm
 
 ARG USERNAME=obsidianwall
+ARG USER_UID=1001
+ARG USER_GID=1001
 
 USER root
 
-# ---------------------------------------------------
-# Verdict Python dependencies
-# Installed into the system path as root so they
-# are available to the obsidianwall user without
-# user-local install path complications.
-# ---------------------------------------------------
+RUN apt-get update && apt-get install -y \
+        --no-install-recommends \
+        sudo git-lfs coreutils curl gnupg2 make jq \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+    && useradd \
+        --uid ${USER_UID} \
+        --gid ${USERNAME} \
+        --shell /bin/bash \
+        --create-home ${USERNAME} \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" \
+        > /etc/sudoers.d/90-${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/90-${USERNAME}
+
+RUN git lfs install --system
 
 COPY requirements.txt /tmp/verdict-requirements.txt
 
-RUN pip install --no-cache-dir \
-    -r /tmp/verdict-requirements.txt \
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /tmp/verdict-requirements.txt \
     && rm /tmp/verdict-requirements.txt
 
-# ---------------------------------------------------
-# Development-only dependencies
-# (testing, linting, coverage — not in runtime image)
-# ---------------------------------------------------
-
-RUN pip install --no-cache-dir \
-    pytest \
-    pytest-cov \
-    ruff \
-    bandit \
-    pydeps \
-    pylint
-
-# ---------------------------------------------------
-# Verdict environment
-# ---------------------------------------------------
+RUN pip install --no-cache-dir pytest pytest-cov ruff bandit
 
 ENV PYTHONPATH=/workspaces/obsidianwall-verdict \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     OW_VERDICT_ENV=development \
     OW_LOG_LEVEL=DEBUG \
     OW_LOG_FORMAT=text \
-    OW_POLICY_DIR=/workspaces/obsidianwall-verdict/policies
-
-# ---------------------------------------------------
-# Working directory
-# ---------------------------------------------------
+    OW_POLICY_DIR=/workspaces/obsidianwall-verdict/policies \
+    PATH="/home/${USERNAME}/.local/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
 WORKDIR /workspaces/obsidianwall-verdict
 
