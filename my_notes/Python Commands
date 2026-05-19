@@ -58,6 +58,13 @@ python -m pip install -r requirements.txt
 
 
 
+# to create env with specific version of python
+
+<Python_Version> -m venv <Name_of_environment>
+
+e.g: python3.13 -m venv verdict-env
+
+
 
 
 Run these:
