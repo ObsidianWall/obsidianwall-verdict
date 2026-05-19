@@ -4,7 +4,7 @@
   python -m venv <name_of_environment>
 
 
-# Activation Commands by Platform
+## Activation Commands by Platform
 
  
  ## Windows (Command Prompt):
@@ -24,9 +24,9 @@
 
 
 
-# Summary of Common Commands:
-```
+# Summary of Common Commands
 
+```
 | Action     | Windows Command 	        | macOS / Linux Command
 | Create	 | python -m venv .venv	    | python3 -m venv .venv
 | Activate	 | .venv\Scripts\activate	| source .venv/bin/activate
@@ -35,23 +35,24 @@
 ```
 
 
-# To install the packages listed in a requirements.txt file into your active virtual environment, use the following command:
+## To install the packages listed in a requirements.txt file into your active virtual environment, use the following command
 
 ```
 pip install -r requirements.txt
 ```
 
-# Verify the installation by listing the installed packages:
+# Verify the installation by listing the installed packages
 ```
 pip list
 ```
 
-# Upgrading Packages: To upgrade all packages listed in the file to their latest compatible versions, add the --upgrade flag: 
+# Upgrading Packages: To upgrade all packages listed in the file to their latest compatible versions, add the --upgrade flag
 ```  
 pip install --upgrade -r requirements.txt
 ```
 
-# Using python -m: If you have multiple Python versions installed, it is often safer to call pip through the Python module to ensure it installs to the correct environment:
+# Using python -m If you have multiple Python versions installed, it is often safer to call pip through the Python module to ensure it installs to the correct environment
+
 ```
 python -m pip install -r requirements.txt
 ```

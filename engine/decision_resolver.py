@@ -1,3 +1,4 @@
+
 # engine/decision_resolver.py
 
 # Purpose:
@@ -18,13 +19,13 @@
 # - Governance intelligence routes AFTER this layer
 
 
-from schemas.policy_schema import (
-    Policy,
-    GovernanceSeverity,
-    GovernanceDecision,
-)
-
 from audit.audit_logger import get_logger
+
+from schemas.policy_schema import (
+    GovernanceDecision,
+    GovernanceSeverity,
+    Policy,
+)
 
 
 logger = get_logger()
@@ -70,6 +71,9 @@ def resolve_decision(
     override_config     = policy.spec.override
     governance_config   = policy.spec.governance
 
+    # Compute once before the if/else branches
+    override_possible = len(override_config.roles) > 0
+
     # -------------------------------------------------
     # RESOLVE GOVERNANCE SEVERITY
     # -------------------------------------------------
@@ -107,18 +111,20 @@ def resolve_decision(
                 decision_block.warn
                 or GovernanceDecision.ALLOW_WITH_NOTIFICATION
             )
-
+             # conditions passed — high severity
             return _build_resolution(
                 decision=warn_decision,
                 override_required=False,
+                override_possible=override_possible,
                 requires_approval=False,
                 governance_severity=governance_severity,
                 reason="conditions_passed_high_severity_notification",
             )
-
+        # conditions passed — normal
         return _build_resolution(
             decision=decision_block.allow,
             override_required=False,
+            override_possible=override_possible,
             requires_approval=False,
             governance_severity=governance_severity,
             reason="conditions_passed",
@@ -126,16 +132,17 @@ def resolve_decision(
 
     # =================================================
     # CONDITIONS FAILED — CHECK OVERRIDE AUTHORITY
+    # conditions failed — override available
     # =================================================
 
     override_roles  = override_config.roles
     has_override    = user_role in override_roles
 
     if has_override:
-
         return _build_resolution(
             decision=GovernanceDecision.DENY_WITH_OVERRIDE,
             override_required=True,
+            override_possible=True,
             requires_approval=requires_approval,
             governance_severity=governance_severity,
             reason=(
@@ -152,6 +159,7 @@ def resolve_decision(
     return _build_resolution(
         decision=decision_block.deny,
         override_required=False,
+        override_possible=override_possible,
         requires_approval=False,
         governance_severity=governance_severity,
         reason="conditions_failed_hard_deny",
@@ -165,6 +173,7 @@ def resolve_decision(
 def _build_resolution(
     decision: str,
     override_required: bool,
+    override_possible: bool,
     requires_approval: bool,
     governance_severity: GovernanceSeverity,
     reason: str,
@@ -176,6 +185,7 @@ def _build_resolution(
     resolution = {
         "decision":             decision,
         "override_required":    override_required,
+        "override_possible":    override_possible,
         "requires_approval":    requires_approval,
         "governance_severity":  governance_severity.value,
         "resolution_reason":    reason,

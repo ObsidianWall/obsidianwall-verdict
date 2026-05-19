@@ -197,7 +197,8 @@ def test_over_budget_engineer_gets_deny_with_override(
         user_role="engineer"
     )
     assert resolution["decision"] == "DENY_WITH_OVERRIDE"
-    assert resolution["override_required"] is True
+    assert resolution["override_required"]  is False   # engineer has no authority
+    assert resolution["override_possible"]  is True    # but budget_owner can override
 
 
 def test_over_budget_budget_owner_gets_deny_with_override(

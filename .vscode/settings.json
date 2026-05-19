@@ -2,5 +2,24 @@
     "python.analysis.extraPaths": [
         "/home/codespace/.vscode-remote/extensions/ms-security.ms-sentinel-2.1.0/python",
         "/home/vscode/.vscode-remote/extensions/ms-security.ms-sentinel-2.1.0/python"
-    ]
+    ],
+    "cSpell.words": [
+        "Abstra",
+        "Connor",
+        "Marimo",
+        "mkdocs",
+        "mnesia",
+        "mypy",
+        "pycache",
+        "pyflow",
+        "ropeproject",
+        "Scrapy",
+        "Spyder",
+        "spyderproject",
+        "spyproject",
+        "Streamlit",
+        "venv",
+        "webassets"
+    ],
+    "python.analysis.typeCheckingMode": "strict"
 }

@@ -4,6 +4,10 @@
 vscode/
 
 
+# virtual environments
+.venv/
+verdict_venv/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -157,6 +161,9 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv/
+verdict_venv/
+verdict_venv
 env/
 venv/
 ENV/
