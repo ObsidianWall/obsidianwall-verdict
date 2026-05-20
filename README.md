@@ -109,6 +109,7 @@ obsidianwall-verdict/
 │
 ├── .github/
 |     └──workflows/
+|            ├── verdict-ci.yml
 │            └── ci.yml
 │
 ├── .dockerignore
