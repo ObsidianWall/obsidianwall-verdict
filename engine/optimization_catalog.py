@@ -61,6 +61,16 @@ RESOURCE_CLASSES = {
     "aws_ecs_cluster": "container",
     "azurerm_kubernetes_cluster": "container",
     "google_container_cluster": "container",
+
+
+    # -------------------------------------------------
+    # MONITORING
+    # -------------------------------------------------
+
+    "azurerm_sentinel_log_analytics_workspace": "monitoring",
+    "azurerm_log_analytics_workspace":          "monitoring",
+    "aws_cloudwatch_log_group":                 "monitoring",
+    "google_logging_sink":                      "monitoring",
 }
 
 

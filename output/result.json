@@ -1,9 +1,10 @@
 {
-  "decision_id": "abc3a13b-83d5-4fad-87d8-bbe77e4b8075",
-  "timestamp": "2026-05-20T04:05:28.914862+00:00",
+  "decision_id": "d96f7247-2537-4095-a116-c7ba1586b3dc",
+  "timestamp": "2026-05-20T07:50:15.914720+00:00",
   "policy": "basic_budget_verdict",
   "decision": "DENY_WITH_OVERRIDE",
   "override_required": false,
+  "override_possible": true,
   "requires_approval": false,
   "governance_severity": "medium",
   "effective_severity": "critical",
@@ -250,7 +251,7 @@
           "sequence": 1,
           "stage": "policy_intent",
           "outcome": "Policy 'basic_budget_verdict' applied",
-          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'GovernanceSeverity.MEDIUM'. Conditions will be evaluated deterministically against the normalized runtime context.",
+          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'medium'. Conditions will be evaluated deterministically against the normalized runtime context.",
           "severity": "medium",
           "governance_relevant": true,
           "contributing_factors": {
@@ -356,7 +357,7 @@
           "sequence": 1,
           "stage": "policy_intent",
           "outcome": "Policy 'basic_budget_verdict' applied",
-          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'GovernanceSeverity.MEDIUM'. Conditions will be evaluated deterministically against the normalized runtime context.",
+          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'medium'. Conditions will be evaluated deterministically against the normalized runtime context.",
           "severity": "medium",
           "governance_relevant": true,
           "contributing_factors": {
