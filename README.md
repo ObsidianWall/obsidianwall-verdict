@@ -84,6 +84,7 @@ obsidianwall-verdict/
 │   └── audit_logger.py   ← ✅ THIS is where your logging file goes
 │
 ├── policies/
+│   ├── cost_policy.yaml
 │   └── cost/
 │       ├── basic_budget.yaml
 │       └── strict_budget.yaml
