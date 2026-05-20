@@ -59,6 +59,9 @@ obsidianwall-verdict/
 │   ├── decision_resolver.py
 │   ├── lint_validator.py
 │   ├── optimiation_catalog.py
+│   ├── orchestrator.py
+│   ├── condition_evaluator.py
+│   ├── condition_evaluator.py
 │   └── recommender.py
 │
 ├── schemas/
