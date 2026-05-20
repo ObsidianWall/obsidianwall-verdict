@@ -1,9 +1,13 @@
 {
-  "decision_id": "8db3a54e-ba7e-4659-802f-e335caf3bc66",
-  "timestamp": "2026-05-14T04:41:20.347473+00:00",
+  "decision_id": "abc3a13b-83d5-4fad-87d8-bbe77e4b8075",
+  "timestamp": "2026-05-20T04:05:28.914862+00:00",
   "policy": "basic_budget_verdict",
-  "decision": "DENY",
+  "decision": "DENY_WITH_OVERRIDE",
   "override_required": false,
+  "requires_approval": false,
+  "governance_severity": "medium",
+  "effective_severity": "critical",
+  "resolution_reason": "conditions_failed_hard_deny",
   "conditions_passed": false,
   "trace": [
     {
@@ -13,25 +17,811 @@
       "description": "Monthly spend cap enforcement"
     }
   ],
+  "risk_summary": {
+    "overall_risk_score": 75,
+    "risk_severity": "critical",
+    "effective_severity": "critical",
+    "policy_severity": "medium",
+    "highest_risk_analyzer": "cost_analysis",
+    "highest_risk_score": 50,
+    "total_findings": 3,
+    "analyzer_scores": {
+      "cost_analysis": 50,
+      "topology_analysis": 25,
+      "architecture_analysis": 0,
+      "utilization_analysis": 0
+    },
+    "analyzer_finding_counts": {
+      "cost_analysis": 2,
+      "topology_analysis": 1,
+      "architecture_analysis": 0,
+      "utilization_analysis": 0
+    },
+    "failed_analyzers": [],
+    "risk_narrative": "Critical infrastructure risk detected. Multiple high-severity findings require immediate governance review."
+  },
+  "notification_manifest": {
+    "notifications_triggered": true,
+    "notification_count": 2,
+    "action_required_count": 0,
+    "notifications": [
+      {
+        "target_role": "budget_owner",
+        "channel": "email",
+        "priority": "urgent",
+        "subject": "[ObsidianWall] Governance Action Required \u2014 basic_budget_verdict \u2014 DENY_WITH_OVERRIDE",
+        "body": "Governance notification for policy 'basic_budget_verdict'.\n\nDecision: DENY_WITH_OVERRIDE\nRisk Score: 75/100\nSeverity: CRITICAL",
+        "requires_action": false,
+        "decision": "DENY_WITH_OVERRIDE",
+        "policy": "basic_budget_verdict",
+        "effective_severity": "critical",
+        "dispatch_status": "pending"
+      },
+      {
+        "target_role": "engineering_lead",
+        "channel": "slack",
+        "priority": "urgent",
+        "subject": "[ObsidianWall] Deployment Governance Update \u2014 basic_budget_verdict \u2014 DENY_WITH_OVERRIDE",
+        "body": "\ud83d\udd34 *[ObsidianWall]* Policy `basic_budget_verdict` \u2014 *DENY_WITH_OVERRIDE* | Risk: 75/100 | Severity: CRITICAL | Failed: budget_check",
+        "requires_action": false,
+        "decision": "DENY_WITH_OVERRIDE",
+        "policy": "basic_budget_verdict",
+        "effective_severity": "critical",
+        "dispatch_status": "pending"
+      }
+    ],
+    "dispatch_status": "pending"
+  },
+  "approval_request": {
+    "approval_required": false,
+    "approval_status": "NOT_REQUIRED",
+    "reason": "Governance decision does not require formal approval."
+  },
   "actions": [
     {
       "type": "notify",
-      "message": "Budget exceeded",
+      "message": "Budget threshold exceeded. Governance workflow triggered.",
       "severity": "high"
     },
     {
       "type": "log",
-      "message": "Decision recorded",
+      "message": "Decision recorded in audit trail.",
       "severity": "info"
     }
   ],
+  "analyzer_results": {
+    "cost_analysis": {
+      "analyzer": "cost_analyzer",
+      "risk_score": 50,
+      "findings": [
+        {
+          "type": "elevated_projected_cost",
+          "severity": "medium",
+          "message": "Projected infrastructure cost ($100) exceeds recommended threshold ($100)."
+        },
+        {
+          "type": "budget_exceeded",
+          "severity": "critical",
+          "message": "Projected total spend ($100.00) exceeds budget ($50.00). Utilization: 200.0%."
+        }
+      ],
+      "optimization_candidates": [
+        {
+          "type": "cost_optimization",
+          "message": "Review resource sizing and consider reserved capacity pricing models.",
+          "estimated_savings_percent": 25
+        }
+      ],
+      "metadata": {
+        "estimated_cost": 100,
+        "current_spend": 0,
+        "budget_amount": 50.0
+      }
+    },
+    "topology_analysis": {
+      "analyzer": "topology_analyzer",
+      "risk_score": 25,
+      "findings": [
+        {
+          "type": "missing_network_segmentation",
+          "severity": "medium",
+          "message": "No network segmentation controls detected. Consider adding security groups or firewall rules."
+        }
+      ],
+      "optimization_candidates": [
+        {
+          "type": "security_posture",
+          "message": "Implement network security groups or firewall rules to enforce network segmentation.",
+          "estimated_savings_percent": 0
+        }
+      ],
+      "metadata": {
+        "environment": "unknown",
+        "resource_count": 2,
+        "has_load_balancer": false,
+        "has_segmentation": false
+      }
+    },
+    "architecture_analysis": {
+      "analyzer": "architecture_analyzer",
+      "risk_score": 0,
+      "findings": [],
+      "optimization_candidates": [],
+      "metadata": {
+        "environment": "unknown",
+        "resource_count": 2,
+        "cloud_providers": [
+          "azure"
+        ],
+        "has_monitoring": true
+      }
+    },
+    "utilization_analysis": {
+      "analyzer": "utilization_analyzer",
+      "risk_score": 0,
+      "findings": [],
+      "optimization_candidates": [],
+      "metadata": {
+        "environment": "unknown",
+        "resource_count": 2,
+        "estimated_cost": 100
+      }
+    }
+  },
   "suggestions": [
+    {
+      "type": "elevated_projected_cost",
+      "message": "Projected infrastructure cost ($100) exceeds recommended threshold ($100).",
+      "severity": "medium",
+      "priority_score": 70,
+      "confidence": 0.85,
+      "estimated_savings_percent": 0
+    },
+    {
+      "type": "budget_exceeded",
+      "message": "Projected total spend ($100.00) exceeds budget ($50.00). Utilization: 200.0%.",
+      "severity": "critical",
+      "priority_score": 70,
+      "confidence": 0.85,
+      "estimated_savings_percent": 0
+    },
+    {
+      "type": "cost_optimization",
+      "message": "Review resource sizing and consider reserved capacity pricing models.",
+      "severity": "medium",
+      "estimated_savings_percent": 25,
+      "priority_score": 85,
+      "confidence": 0.9
+    },
+    {
+      "type": "missing_network_segmentation",
+      "message": "No network segmentation controls detected. Consider adding security groups or firewall rules.",
+      "severity": "medium",
+      "priority_score": 70,
+      "confidence": 0.85,
+      "estimated_savings_percent": 0
+    },
+    {
+      "type": "security_posture",
+      "message": "Implement network security groups or firewall rules to enforce network segmentation.",
+      "severity": "medium",
+      "estimated_savings_percent": 0,
+      "priority_score": 85,
+      "confidence": 0.9
+    },
     {
       "type": "enforcement",
       "message": "Deployment blocked by policy enforcement. Review evaluation trace for remediation guidance.",
+      "severity": "high",
+      "priority_score": 95,
+      "confidence": 1.0,
       "estimated_savings_percent": 0
     }
   ],
+  "explanation": {
+    "decision": "DENY_WITH_OVERRIDE",
+    "conditions_passed": false,
+    "risk_summary": {
+      "overall_risk_score": 75,
+      "risk_severity": "critical",
+      "effective_severity": "critical",
+      "policy_severity": "medium",
+      "highest_risk_analyzer": "cost_analysis",
+      "highest_risk_score": 50,
+      "total_findings": 3,
+      "analyzer_scores": {
+        "cost_analysis": 50,
+        "topology_analysis": 25,
+        "architecture_analysis": 0,
+        "utilization_analysis": 0
+      },
+      "analyzer_finding_counts": {
+        "cost_analysis": 2,
+        "topology_analysis": 1,
+        "architecture_analysis": 0,
+        "utilization_analysis": 0
+      },
+      "failed_analyzers": [],
+      "risk_narrative": "Critical infrastructure risk detected. Multiple high-severity findings require immediate governance review."
+    },
+    "governance_reasoning": {
+      "reasoning_chain": [
+        {
+          "sequence": 1,
+          "stage": "policy_intent",
+          "outcome": "Policy 'basic_budget_verdict' applied",
+          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'GovernanceSeverity.MEDIUM'. Conditions will be evaluated deterministically against the normalized runtime context.",
+          "severity": "medium",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "policy_name": "basic_budget_verdict",
+            "declared_severity": "medium"
+          }
+        },
+        {
+          "sequence": 2,
+          "stage": "runtime_normalization",
+          "outcome": "6 policy parameter(s) normalized",
+          "reason": "Policy parameters normalized into flat evaluation context via dot-notation keys. Resolved parameters: budget.amount=50.0, budget.period=monthly, budget.scope=project:default, budget.owner=team-alpha, budget.flexibility=soft. Infrastructure context keys: estimated_cost, current_spend.",
+          "severity": "informational",
+          "governance_relevant": false,
+          "contributing_factors": {
+            "policy_param_count": 6,
+            "infra_key_count": 2
+          }
+        },
+        {
+          "sequence": 3,
+          "stage": "condition_evaluation",
+          "outcome": "1 of 1 condition(s) failed",
+          "reason": "1 of 1 policy condition(s) failed. Failed condition(s): 'budget_check': (current_spend + estimated_cost) <= budget.amount. The infrastructure configuration does not satisfy the policy-defined governance boundaries.",
+          "severity": "high",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "total_conditions": 1,
+            "passed_conditions": 0,
+            "failed_conditions": 1,
+            "conditions_passed": false,
+            "budget_check": false
+          }
+        },
+        {
+          "sequence": 4,
+          "stage": "analyzer_intelligence",
+          "outcome": "3 finding(s) across 4 analyzer(s)",
+          "reason": "Infrastructure analyzers detected 3 finding(s). cost_analysis: 2 finding(s); topology_analysis: 1 finding(s). Highest risk contribution from 'cost_analysis' (score: 50).",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "total_findings": 3,
+            "analyzer_count": 4,
+            "failed_analyzers": [],
+            "analyzer_scores": {
+              "cost_analysis": 50,
+              "topology_analysis": 25,
+              "architecture_analysis": 0,
+              "utilization_analysis": 0
+            }
+          }
+        },
+        {
+          "sequence": 5,
+          "stage": "risk_scoring",
+          "outcome": "Overall risk score: 75/100 (critical)",
+          "reason": "Aggregated analyzer risk scores produced an overall risk score of 75/100. Risk severity classified as 'critical'. Policy declared severity 'medium' \u2014 escalated to 'critical' based on analyzer intelligence. The higher severity governs routing and notifications.",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "overall_risk_score": 75,
+            "risk_severity": "critical",
+            "policy_severity": "medium",
+            "effective_severity": "critical"
+          }
+        },
+        {
+          "sequence": 6,
+          "stage": "decision_resolution",
+          "outcome": "DENY_WITH_OVERRIDE",
+          "reason": "Deployment blocked. Override authority available \u2014 pending confirmation. Role 'engineer' does not have override authority for this policy. Remediation or escalation required.",
+          "severity": "medium",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "decision": "DENY_WITH_OVERRIDE",
+            "user_role": "engineer",
+            "override_required": false,
+            "requires_approval": false,
+            "resolution_reason": "conditions_failed_hard_deny"
+          }
+        },
+        {
+          "sequence": 7,
+          "stage": "governance_routing",
+          "outcome": "2 notification target(s)",
+          "reason": "Stakeholder notifications triggered: budget_owner via email, engineering_lead via slack. Deployment is blocked. Engineer should review evaluation trace and remediation guidance.",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "notification_targets": [
+              "budget_owner via email",
+              "engineering_lead via slack"
+            ],
+            "requires_approval": false,
+            "effective_severity": "critical",
+            "decision": "DENY_WITH_OVERRIDE"
+          }
+        }
+      ],
+      "governance_stages": [
+        {
+          "sequence": 1,
+          "stage": "policy_intent",
+          "outcome": "Policy 'basic_budget_verdict' applied",
+          "reason": "Policy 'basic_budget_verdict' defines governance constraints for this infrastructure change. Governance severity declared as 'GovernanceSeverity.MEDIUM'. Conditions will be evaluated deterministically against the normalized runtime context.",
+          "severity": "medium",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "policy_name": "basic_budget_verdict",
+            "declared_severity": "medium"
+          }
+        },
+        {
+          "sequence": 3,
+          "stage": "condition_evaluation",
+          "outcome": "1 of 1 condition(s) failed",
+          "reason": "1 of 1 policy condition(s) failed. Failed condition(s): 'budget_check': (current_spend + estimated_cost) <= budget.amount. The infrastructure configuration does not satisfy the policy-defined governance boundaries.",
+          "severity": "high",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "total_conditions": 1,
+            "passed_conditions": 0,
+            "failed_conditions": 1,
+            "conditions_passed": false,
+            "budget_check": false
+          }
+        },
+        {
+          "sequence": 4,
+          "stage": "analyzer_intelligence",
+          "outcome": "3 finding(s) across 4 analyzer(s)",
+          "reason": "Infrastructure analyzers detected 3 finding(s). cost_analysis: 2 finding(s); topology_analysis: 1 finding(s). Highest risk contribution from 'cost_analysis' (score: 50).",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "total_findings": 3,
+            "analyzer_count": 4,
+            "failed_analyzers": [],
+            "analyzer_scores": {
+              "cost_analysis": 50,
+              "topology_analysis": 25,
+              "architecture_analysis": 0,
+              "utilization_analysis": 0
+            }
+          }
+        },
+        {
+          "sequence": 5,
+          "stage": "risk_scoring",
+          "outcome": "Overall risk score: 75/100 (critical)",
+          "reason": "Aggregated analyzer risk scores produced an overall risk score of 75/100. Risk severity classified as 'critical'. Policy declared severity 'medium' \u2014 escalated to 'critical' based on analyzer intelligence. The higher severity governs routing and notifications.",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "overall_risk_score": 75,
+            "risk_severity": "critical",
+            "policy_severity": "medium",
+            "effective_severity": "critical"
+          }
+        },
+        {
+          "sequence": 6,
+          "stage": "decision_resolution",
+          "outcome": "DENY_WITH_OVERRIDE",
+          "reason": "Deployment blocked. Override authority available \u2014 pending confirmation. Role 'engineer' does not have override authority for this policy. Remediation or escalation required.",
+          "severity": "medium",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "decision": "DENY_WITH_OVERRIDE",
+            "user_role": "engineer",
+            "override_required": false,
+            "requires_approval": false,
+            "resolution_reason": "conditions_failed_hard_deny"
+          }
+        },
+        {
+          "sequence": 7,
+          "stage": "governance_routing",
+          "outcome": "2 notification target(s)",
+          "reason": "Stakeholder notifications triggered: budget_owner via email, engineering_lead via slack. Deployment is blocked. Engineer should review evaluation trace and remediation guidance.",
+          "severity": "critical",
+          "governance_relevant": true,
+          "contributing_factors": {
+            "notification_targets": [
+              "budget_owner via email",
+              "engineering_lead via slack"
+            ],
+            "requires_approval": false,
+            "effective_severity": "critical",
+            "decision": "DENY_WITH_OVERRIDE"
+          }
+        }
+      ],
+      "chain_summary": "One or more policy conditions failed. Infrastructure analysis identified 3 finding(s) with an overall risk score of 75/100. Effective governance severity: critical. Deployment blocked. Override authority available \u2014 pending confirmation.",
+      "total_stages": 7,
+      "governance_stage_count": 6
+    },
+    "policy_reasoning": {
+      "decision_narrative": "One or more policy conditions failed. An authorized override role is present. Deployment is blocked pending override confirmation or approval.",
+      "governance_summary": "1 of 1 policy condition(s) failed. Failed conditions: budget_check.",
+      "reasoning_chain": [
+        {
+          "condition_id": "budget_check",
+          "passed": false,
+          "explanation": "Condition 'budget_check' failed. Monthly spend cap enforcement. Expression evaluated to false: (current_spend + estimated_cost) <= budget.amount.",
+          "remediation": "Reduce the estimated infrastructure cost to satisfy the budget constraint, or contact your budget owner to request a budget adjustment or override authorization."
+        }
+      ],
+      "passed_conditions": [],
+      "failed_conditions": [
+        "budget_check"
+      ],
+      "remediation_steps": [
+        "Reduce the estimated infrastructure cost to satisfy the budget constraint, or contact your budget owner to request a budget adjustment or override authorization."
+      ]
+    },
+    "analyzer_findings": [
+      {
+        "analyzer": "cost_analysis",
+        "type": "elevated_projected_cost",
+        "severity": "medium",
+        "message": "Projected infrastructure cost ($100) exceeds recommended threshold ($100)."
+      },
+      {
+        "analyzer": "cost_analysis",
+        "type": "budget_exceeded",
+        "severity": "critical",
+        "message": "Projected total spend ($100.00) exceeds budget ($50.00). Utilization: 200.0%."
+      },
+      {
+        "analyzer": "topology_analysis",
+        "type": "missing_network_segmentation",
+        "severity": "medium",
+        "message": "No network segmentation controls detected. Consider adding security groups or firewall rules."
+      }
+    ],
+    "explained_recommendations": {
+      "advisory_summary": "Deployment blocked by governance policy. 6 recommendation(s) available to help resolve the governance violation and optimize infrastructure configuration.",
+      "total_recommendations": 6,
+      "max_estimated_savings_percent": 25,
+      "recommendations_by_priority": {
+        "critical": [
+          {
+            "type": "enforcement",
+            "message": "Deployment blocked by policy enforcement. Review evaluation trace for remediation guidance.",
+            "rationale": "This deployment was blocked by deterministic policy enforcement. The evaluation trace identifies the specific condition that failed and the values that triggered the governance decision.",
+            "severity": "high",
+            "priority_tier": "critical",
+            "priority_score": 95,
+            "confidence": 1.0,
+            "estimated_savings_percent": 0
+          }
+        ],
+        "high": [
+          {
+            "type": "cost_optimization",
+            "message": "Review resource sizing and consider reserved capacity pricing models.",
+            "rationale": "The projected infrastructure cost exceeds recommended thresholds. Review resource configurations for rightsizing, reserved pricing, or architecture optimization opportunities.",
+            "severity": "medium",
+            "priority_tier": "high",
+            "priority_score": 85,
+            "confidence": 0.9,
+            "estimated_savings_percent": 25,
+            "savings_narrative": "Estimated cost reduction of up to 25% if implemented."
+          },
+          {
+            "type": "security_posture",
+            "message": "Implement network security groups or firewall rules to enforce network segmentation.",
+            "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+            "severity": "medium",
+            "priority_tier": "high",
+            "priority_score": 85,
+            "confidence": 0.9,
+            "estimated_savings_percent": 0
+          }
+        ],
+        "medium": [
+          {
+            "type": "elevated_projected_cost",
+            "message": "Projected infrastructure cost ($100) exceeds recommended threshold ($100).",
+            "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+            "severity": "medium",
+            "priority_tier": "medium",
+            "priority_score": 70,
+            "confidence": 0.85,
+            "estimated_savings_percent": 0
+          },
+          {
+            "type": "budget_exceeded",
+            "message": "Projected total spend ($100.00) exceeds budget ($50.00). Utilization: 200.0%.",
+            "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+            "severity": "critical",
+            "priority_tier": "medium",
+            "priority_score": 70,
+            "confidence": 0.85,
+            "estimated_savings_percent": 0
+          },
+          {
+            "type": "missing_network_segmentation",
+            "message": "No network segmentation controls detected. Consider adding security groups or firewall rules.",
+            "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+            "severity": "medium",
+            "priority_tier": "medium",
+            "priority_score": 70,
+            "confidence": 0.85,
+            "estimated_savings_percent": 0
+          }
+        ],
+        "low": []
+      },
+      "all_recommendations": [
+        {
+          "type": "elevated_projected_cost",
+          "message": "Projected infrastructure cost ($100) exceeds recommended threshold ($100).",
+          "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+          "severity": "medium",
+          "priority_tier": "medium",
+          "priority_score": 70,
+          "confidence": 0.85,
+          "estimated_savings_percent": 0
+        },
+        {
+          "type": "budget_exceeded",
+          "message": "Projected total spend ($100.00) exceeds budget ($50.00). Utilization: 200.0%.",
+          "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+          "severity": "critical",
+          "priority_tier": "medium",
+          "priority_score": 70,
+          "confidence": 0.85,
+          "estimated_savings_percent": 0
+        },
+        {
+          "type": "cost_optimization",
+          "message": "Review resource sizing and consider reserved capacity pricing models.",
+          "rationale": "The projected infrastructure cost exceeds recommended thresholds. Review resource configurations for rightsizing, reserved pricing, or architecture optimization opportunities.",
+          "severity": "medium",
+          "priority_tier": "high",
+          "priority_score": 85,
+          "confidence": 0.9,
+          "estimated_savings_percent": 25,
+          "savings_narrative": "Estimated cost reduction of up to 25% if implemented."
+        },
+        {
+          "type": "missing_network_segmentation",
+          "message": "No network segmentation controls detected. Consider adding security groups or firewall rules.",
+          "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+          "severity": "medium",
+          "priority_tier": "medium",
+          "priority_score": 70,
+          "confidence": 0.85,
+          "estimated_savings_percent": 0
+        },
+        {
+          "type": "security_posture",
+          "message": "Implement network security groups or firewall rules to enforce network segmentation.",
+          "rationale": "This recommendation was generated based on infrastructure analysis patterns. Review the finding details for specific guidance.",
+          "severity": "medium",
+          "priority_tier": "high",
+          "priority_score": 85,
+          "confidence": 0.9,
+          "estimated_savings_percent": 0
+        },
+        {
+          "type": "enforcement",
+          "message": "Deployment blocked by policy enforcement. Review evaluation trace for remediation guidance.",
+          "rationale": "This deployment was blocked by deterministic policy enforcement. The evaluation trace identifies the specific condition that failed and the values that triggered the governance decision.",
+          "severity": "high",
+          "priority_tier": "critical",
+          "priority_score": 95,
+          "confidence": 1.0,
+          "estimated_savings_percent": 0
+        }
+      ]
+    },
+    "trace_graph": {
+      "nodes": [
+        {
+          "node_id": "input::estimated_cost",
+          "node_type": "input",
+          "label": "estimated_cost",
+          "value": 100
+        },
+        {
+          "node_id": "input::current_spend",
+          "node_type": "input",
+          "label": "current_spend",
+          "value": 0
+        },
+        {
+          "node_id": "input::budget.amount",
+          "node_type": "input",
+          "label": "budget.amount",
+          "value": 50.0
+        },
+        {
+          "node_id": "input::budget.period",
+          "node_type": "input",
+          "label": "budget.period",
+          "value": "monthly"
+        },
+        {
+          "node_id": "input::budget.scope",
+          "node_type": "input",
+          "label": "budget.scope",
+          "value": "project:default"
+        },
+        {
+          "node_id": "input::budget.owner",
+          "node_type": "input",
+          "label": "budget.owner",
+          "value": "team-alpha"
+        },
+        {
+          "node_id": "input::budget.flexibility",
+          "node_type": "input",
+          "label": "budget.flexibility",
+          "value": "soft"
+        },
+        {
+          "node_id": "input::budget.override_allowed",
+          "node_type": "input",
+          "label": "budget.override_allowed",
+          "value": true
+        },
+        {
+          "node_id": "condition::budget_check",
+          "node_type": "condition",
+          "label": "budget_check",
+          "expression": "(current_spend + estimated_cost) <= budget.amount",
+          "result": false,
+          "description": "Monthly spend cap enforcement"
+        },
+        {
+          "node_id": "analyzer::cost_analysis",
+          "node_type": "analyzer",
+          "label": "cost_analysis",
+          "status": "completed",
+          "risk_score": 50,
+          "finding_count": 2
+        },
+        {
+          "node_id": "analyzer::topology_analysis",
+          "node_type": "analyzer",
+          "label": "topology_analysis",
+          "status": "completed",
+          "risk_score": 25,
+          "finding_count": 1
+        },
+        {
+          "node_id": "analyzer::architecture_analysis",
+          "node_type": "analyzer",
+          "label": "architecture_analysis",
+          "status": "completed",
+          "risk_score": 0,
+          "finding_count": 0
+        },
+        {
+          "node_id": "analyzer::utilization_analysis",
+          "node_type": "analyzer",
+          "label": "utilization_analysis",
+          "status": "completed",
+          "risk_score": 0,
+          "finding_count": 0
+        },
+        {
+          "node_id": "decision::final",
+          "node_type": "decision",
+          "label": "governance_decision",
+          "decision": "DENY_WITH_OVERRIDE",
+          "conditions_passed": false,
+          "override_required": false,
+          "requires_approval": false,
+          "governance_severity": "medium"
+        }
+      ],
+      "edges": [
+        {
+          "edge_id": "input::estimated_cost\u2192condition::budget_check",
+          "edge_type": "provides",
+          "source": "input::estimated_cost",
+          "target": "condition::budget_check",
+          "label": "provides_value"
+        },
+        {
+          "edge_id": "input::current_spend\u2192condition::budget_check",
+          "edge_type": "provides",
+          "source": "input::current_spend",
+          "target": "condition::budget_check",
+          "label": "provides_value"
+        },
+        {
+          "edge_id": "input::budget.amount\u2192condition::budget_check",
+          "edge_type": "provides",
+          "source": "input::budget.amount",
+          "target": "condition::budget_check",
+          "label": "provides_value"
+        },
+        {
+          "edge_id": "condition::budget_check\u2192decision::final",
+          "edge_type": "evaluates",
+          "source": "condition::budget_check",
+          "target": "decision::final",
+          "label": "evaluates_to",
+          "result": false
+        },
+        {
+          "edge_id": "analyzer::cost_analysis\u2192decision::final",
+          "edge_type": "informs",
+          "source": "analyzer::cost_analysis",
+          "target": "decision::final",
+          "label": "informs_decision"
+        },
+        {
+          "edge_id": "analyzer::topology_analysis\u2192decision::final",
+          "edge_type": "informs",
+          "source": "analyzer::topology_analysis",
+          "target": "decision::final",
+          "label": "informs_decision"
+        },
+        {
+          "edge_id": "analyzer::architecture_analysis\u2192decision::final",
+          "edge_type": "informs",
+          "source": "analyzer::architecture_analysis",
+          "target": "decision::final",
+          "label": "informs_decision"
+        },
+        {
+          "edge_id": "analyzer::utilization_analysis\u2192decision::final",
+          "edge_type": "informs",
+          "source": "analyzer::utilization_analysis",
+          "target": "decision::final",
+          "label": "informs_decision"
+        }
+      ],
+      "risk_summary": {
+        "overall_risk_score": 75,
+        "risk_severity": "critical",
+        "effective_severity": "critical",
+        "policy_severity": "medium",
+        "highest_risk_analyzer": "cost_analysis",
+        "highest_risk_score": 50,
+        "total_findings": 3,
+        "analyzer_scores": {
+          "cost_analysis": 50,
+          "topology_analysis": 25,
+          "architecture_analysis": 0,
+          "utilization_analysis": 0
+        },
+        "analyzer_finding_counts": {
+          "cost_analysis": 2,
+          "topology_analysis": 1,
+          "architecture_analysis": 0,
+          "utilization_analysis": 0
+        },
+        "failed_analyzers": [],
+        "risk_narrative": "Critical infrastructure risk detected. Multiple high-severity findings require immediate governance review."
+      },
+      "execution_summary": {
+        "total_nodes": 14,
+        "total_edges": 8,
+        "input_count": 8,
+        "condition_count": 1,
+        "analyzer_count": 4,
+        "conditions_passed": false,
+        "final_decision": "DENY_WITH_OVERRIDE"
+      },
+      "replay_ready": true,
+      "simulation_ready": false
+    }
+  },
   "input_context": {
     "resources": [
       {
