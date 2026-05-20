@@ -224,7 +224,7 @@ class PolicyOrchestrator:
         # =============================================
 
         policy_governance = (
-            self.policy.spec.governance.model_dump()
+            self.policy.spec.governance.model_dump(mode="json")
             if self.policy.spec.governance
             else None
         )
