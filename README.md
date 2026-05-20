@@ -18,6 +18,7 @@ obsidianwall-verdict/
 │
 ├── .devcontainer/
 │   ├── devcontainer.json
+│   ├── post_create.sh
 │   ├── Dockerfile
 │   └── requirements.txt
 |
@@ -26,6 +27,28 @@ obsidianwall-verdict/
 │   └── main.py
 │
 ├── engine/
+│   ├── analyzers/
+|   │   ├── __init__.py
+|   │   ├── architecure_analyzer.py
+|   │   ├── cost_analyzer.py
+|   │   ├── topology_analyzer.py
+|   |   └── utilization_analyzer.py
+│   ├── explainability/
+|   │   ├── __init__.py
+|   │   ├── explaination_builder.py
+|   │   ├── governance_reasoning_chain.py
+|   │   ├── policy_reasoning.py
+|   │   ├── recommendation_explainer.py
+|   |   └── trace_graph.py
+│   ├── replay/
+|   │   ├── __init__.py
+|   │   ├── replay_engine.py
+|   │   ├── replay_schema.py
+|   |   └── simulation_engine.py
+│   ├── workflows/
+|   │   ├── __init__.py
+|   │   ├── approval_resolver.py
+|   |   └── notification_router.py
 │   ├── __init__.py
 │   ├── evaluator.py
 │   ├── policy_loader.py
