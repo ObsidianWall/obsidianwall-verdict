@@ -294,6 +294,10 @@ class PolicyOrchestrator:
             "override_required": evaluation_result[
                 "override_required"
             ],
+            
+            "override_possible": evaluation_result[
+                 "override_possible"
+            ],
 
             "requires_approval": evaluation_result[
                 "requires_approval"
