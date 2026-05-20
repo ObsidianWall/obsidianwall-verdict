@@ -1,3 +1,4 @@
+
 # engine/evaluator.py
 
 # Purpose:
@@ -16,17 +17,14 @@
 # - performs orchestration
 
 
-from schemas.policy_schema import Policy
-
-from engine.condition_evaluator import (
-    evaluate_conditions
-)
-
-from engine.decision_resolver import (
-    resolve_decision
-)
+from typing import Any
 
 from audit.audit_logger import get_logger
+from engine.condition_evaluator import (evaluate_conditions)
+from engine.decision_resolver import (resolve_decision)
+from schemas.policy_schema import Policy
+
+
 
 
 logger = get_logger()
@@ -34,9 +32,9 @@ logger = get_logger()
 
 def evaluate_policy(
     policy: Policy,
-    runtime_context: dict,
-    user_role: str = "engineer"
-) -> dict:
+    runtime_context: dict[str, Any],
+    user_role: str = "engineer",
+) -> dict[str, Any]:
     """
     Evaluate a validated policy against runtime context.
 
@@ -44,8 +42,10 @@ def evaluate_policy(
         dict containing:
         - decision:             5-level governance decision outcome
         - override_required:    whether an override was applied
+        - override_possible:    whether the policy allows any override
         - requires_approval:    whether formal approval is needed
         - governance_severity:  severity level for routing
+        - resolution_reason:    why this decision was reached
         - conditions_passed:    boolean outcome of condition evaluation
         - trace:                per-condition evaluation trace
     """
@@ -63,37 +63,29 @@ def evaluate_policy(
     # DECISION RESOLUTION
     # =================================================
 
-    resolution = resolve_decision(
+    resolution: dict[str, Any] = resolve_decision(
         policy,
         conditions_passed,
         user_role
     )
 
-    result = {
+    result: dict[str, Any] = {
 
-        "decision": resolution[
-            "decision"
-        ],
+        "decision":             resolution["decision"],
 
-        "override_required": resolution[
-            "override_required"
-        ],
+        "override_required":    resolution["override_required"],
 
-        "requires_approval": resolution[
-            "requires_approval"
-        ],
+        "override_possible":    resolution["override_possible"],
 
-        "governance_severity": resolution[
-            "governance_severity"
-        ],
+        "requires_approval":    resolution["requires_approval"],
 
-        "resolution_reason": resolution[
-            "resolution_reason"
-        ],
+        "governance_severity":  resolution["governance_severity"],
 
-        "conditions_passed": conditions_passed,
+        "resolution_reason":    resolution["resolution_reason"],
 
-        "trace": trace,
+        "conditions_passed":    conditions_passed,
+
+        "trace":                trace,
     }
 
     logger.info(
@@ -104,6 +96,7 @@ def evaluate_policy(
                 "conditions_passed":    result["conditions_passed"],
                 "governance_severity":  result["governance_severity"],
                 "override_required":    result["override_required"],
+                "override_possible":    result["override_possible"],
                 "requires_approval":    result["requires_approval"],
             }
         }

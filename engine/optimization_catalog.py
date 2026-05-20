@@ -2,7 +2,7 @@
 
 # Responsibilities: proprietary heuristics
 
-#purpose: Containing: 
+#purpose: Containing:
             # known resource patterns
             # pricing heuristics
             # optimization mappings
@@ -90,7 +90,7 @@ OPTIMIZATION_RULES = [
                     "Consider smaller burstable compute instances."
                 ),
                 "estimated_savings_percent": 30,
-                
+
                  "priority_score": 82,
 
                 "confidence": 0.91,
@@ -104,7 +104,7 @@ OPTIMIZATION_RULES = [
                     "Workload may be a candidate for serverless migration."
                 ),
                 "estimated_savings_percent": 45,
-                
+
                  "priority_score": 90,
 
                 "confidence": 0.87,
@@ -133,7 +133,7 @@ OPTIMIZATION_RULES = [
                     "for cold/archive optimization."
                 ),
                 "estimated_savings_percent": 20,
-                
+
                 "priority_score": 70,
 
                 "confidence": 0.93,
@@ -162,7 +162,7 @@ OPTIMIZATION_RULES = [
                     "Evaluate reserved capacity pricing models."
                 ),
                 "estimated_savings_percent": 35,
-                
+
                 "priority_score": 88,
 
                 "confidence": 0.95,
@@ -191,7 +191,7 @@ OPTIMIZATION_RULES = [
                     "Review autoscaling thresholds."
                 ),
                 "estimated_savings_percent": 15,
-                
+
                  "priority_score": 60,
 
                 "confidence": 0.84,

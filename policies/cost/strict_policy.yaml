@@ -1,3 +1,4 @@
+
 # policies/cost/strict_budget.yaml
 #
 # Purpose:
@@ -9,6 +10,7 @@
 # - Dual approval required for override
 # - Engineering lead notified for awareness
 # - DENY issued on breach — no unilateral override
+
 
 apiVersion: obsidianwall.io/v1
 kind: Policy
@@ -46,13 +48,13 @@ spec:
 
   # ---------------------------------------------------
   # GOVERNANCE WORKFLOW
-  # ---------------------------------------------------
   # Hard budget policy — DENY issued on breach.
   # Finance admin and budget owner must both approve
   # any override. Engineering lead notified for
   # awareness but holds no approval authority.
   # Severity is HIGH — routed to all stakeholders
   # simultaneously with audit traceability.
+  # ---------------------------------------------------
 
   governance:
     severity: high

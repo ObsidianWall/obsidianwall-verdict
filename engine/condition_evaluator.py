@@ -12,25 +12,30 @@
 # - Restricted expression grammar
 
 
-
 import operator
+from typing import Any
+
+from schemas.policy_schema import Policy
 
 
-SUPPORTED_OPERATORS = {
+SUPPORTED_OPERATORS: dict[str, Any] = {
     "<=": operator.le,
     ">=": operator.ge,
-    "<": operator.lt,
-    ">": operator.gt,
+    "<":  operator.lt,
+    ">":  operator.gt,
     "==": operator.eq,
 }
 
 
-def evaluate_expression(expression: str, evaluation_context: dict):
+def evaluate_expression(
+    expression: str,
+    evaluation_context: dict[str, Any],
+) -> bool:
     """
     Evaluate a restricted deterministic expression.
 
     Example:
-        (current_spend + estimated_cost) <= max_budget
+        (current_spend + estimated_cost) <= budget.amount
     """
 
     # ---------------------------------------------------
@@ -43,26 +48,28 @@ def evaluate_expression(expression: str, evaluation_context: dict):
         .replace(")", "")
     )
 
-    left_side = None
-    right_side = None
-    comparison_operator = None
+    left_side:          str | None = None
+    right_side:         str | None = None
+    comparison_operator: str | None = None
 
     # ---------------------------------------------------
     # Find supported operator
     # ---------------------------------------------------
 
-    for supported_operator in SUPPORTED_OPERATORS.keys():
+    for supported_operator in SUPPORTED_OPERATORS:
 
         if supported_operator in normalized_expression:
 
-            left_side, right_side = normalized_expression.split(
+            parts = normalized_expression.split(
                 supported_operator
             )
 
+            left_side           = parts[0]
+            right_side          = parts[1]
             comparison_operator = supported_operator
             break
 
-    if not comparison_operator:
+    if not comparison_operator or left_side is None or right_side is None:
         raise ValueError(
             f"Unsupported expression operator in: {expression}"
         )
@@ -85,17 +92,15 @@ def evaluate_expression(expression: str, evaluation_context: dict):
     # Deterministic comparison
     # ---------------------------------------------------
 
-    return SUPPORTED_OPERATORS[comparison_operator](
-        left_value,
-        right_value
-    )
+    op_fn = SUPPORTED_OPERATORS[comparison_operator]
 
+    return bool(op_fn(left_value, right_value))
 
 
 def evaluate_arithmetic_expression(
     arithmetic_expression: str,
-    evaluation_context: dict
-):
+    evaluation_context: dict[str, Any],
+) -> int | float:
     """
     Evaluate restricted arithmetic operations.
 
@@ -116,12 +121,12 @@ def evaluate_arithmetic_expression(
             for part in arithmetic_expression.split("+")
         ]
 
-        resolved_values = []
+        resolved_values: list[int | float] = []
 
         for expression_part in expression_parts:
 
             if expression_part in evaluation_context:
-                resolved_value = evaluation_context[
+                resolved_value: int | float = evaluation_context[
                     expression_part
                 ]
             else:
@@ -130,35 +135,34 @@ def evaluate_arithmetic_expression(
             resolved_values.append(resolved_value)
 
         return sum(resolved_values)
-    
-
 
     # ---------------------------------------------------
     # Single value resolution
     # ---------------------------------------------------
 
     if arithmetic_expression in evaluation_context:
-        return evaluation_context[arithmetic_expression]
+        return evaluation_context[arithmetic_expression]  # type: ignore[return-value]
 
     return float(arithmetic_expression)
 
 
-
-def evaluate_conditions(policy, evaluation_context):
+def evaluate_conditions(
+    policy: Policy,
+    evaluation_context: dict[str, Any],
+) -> tuple[bool, list[dict[str, Any]]]:
     """
     Evaluate all policy conditions.
 
     Returns:
-        tuple[bool, list]
+        tuple[bool, list[dict[str, Any]]]
         (
             all_conditions_passed,
             evaluation_trace
         )
     """
 
-    evaluation_results = []
-    evaluation_trace = []
-
+    evaluation_results: list[bool]          = []
+    evaluation_trace:   list[dict[str, Any]] = []
 
     # ---------------------------------------------------
     # Evaluate each condition
@@ -175,9 +179,9 @@ def evaluate_conditions(policy, evaluation_context):
 
         evaluation_trace.append({
             "condition_id": condition.id,
-            "expression": condition_expression,
-            "result": condition_result,
-            "description": condition.description
+            "expression":   condition_expression,
+            "result":       condition_result,
+            "description":  condition.description,
         })
 
         evaluation_results.append(condition_result)

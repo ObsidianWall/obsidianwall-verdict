@@ -19,6 +19,8 @@
 # - Governance intelligence routes AFTER this layer
 
 
+from typing import Any
+
 from audit.audit_logger import get_logger
 
 from schemas.policy_schema import (
@@ -51,7 +53,8 @@ def resolve_decision(
     policy: Policy,
     conditions_passed: bool,
     user_role: str,
-) -> dict:
+) -> dict[str, Any]:
+
     """
     Resolve a deterministic governance decision.
 
@@ -177,7 +180,7 @@ def _build_resolution(
     requires_approval: bool,
     governance_severity: GovernanceSeverity,
     reason: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Build and log a governance resolution artifact.
     """
