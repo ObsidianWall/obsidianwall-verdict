@@ -60,8 +60,7 @@ obsidianwall-verdict/
 │   ├── lint_validator.py
 │   ├── optimiation_catalog.py
 │   ├── orchestrator.py
-│   ├── condition_evaluator.py
-│   ├── condition_evaluator.py
+│   ├── risk_scorer.py
 │   └── recommender.py
 │
 ├── schemas/
