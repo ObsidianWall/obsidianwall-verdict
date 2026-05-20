@@ -26,6 +26,9 @@ obsidianwall-verdict/
 │   ├── __init__.py
 │   └── main.py
 │
+├── docs/
+│   └── github_actions_example.yml
+|
 ├── engine/
 │   ├── analyzers/
 |   │   ├── __init__.py
@@ -66,6 +69,10 @@ obsidianwall-verdict/
 ├── schemas/
 │   ├── __init__.py
 │   └── policy_schema.py
+|
+├── scripts/
+│   ├── __init__.py
+│   └── parse_verdict_output.py
 │
 ├── context/
 │   ├── __init__.py
@@ -90,8 +97,13 @@ obsidianwall-verdict/
 │   └── result.json
 │
 ├── tests/
-│   ├── integration/
 │   ├── unit/
+|   │   ├── test_condition_evaluator.py
+|   │   ├── test_policy_normalizer.py
+|   │   ├── test_recommender.py
+|   |   └── test_risk_scorer.py
+│   ├── integration/
+|   |   └── test_evaluator_pipeline.py
 │   ├── test_engine.py
 │   └── test_policy.py
 │
@@ -99,6 +111,11 @@ obsidianwall-verdict/
 |     └──workflows/
 │            └── ci.yml
 │
+├── .dockerignore
+├── .gitignore
+├── Dockerfile
+├── Makefile
+├── action.yml
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
