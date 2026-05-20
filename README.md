@@ -27,7 +27,7 @@ obsidianwall-verdict/
 │   └── main.py
 │
 ├── docs/
-│   └── github_actions_example.yml
+│   └── github-actions-example.yml
 |
 ├── engine/
 │   ├── analyzers/
