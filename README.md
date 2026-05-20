@@ -65,6 +65,8 @@ obsidianwall-verdict/
 │   └── result.json
 │
 ├── tests/
+│   ├── integration/
+│   ├── unit/
 │   ├── test_engine.py
 │   └── test_policy.py
 │
