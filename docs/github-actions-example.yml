@@ -1,0 +1,105 @@
+
+
+# docs/github-actions-example.yml
+#
+# ObsidianWall Verdict — Example Engineer Workflow
+#
+# Copy this file into your repo at:
+#   .github/workflows/infrastructure-governance.yml
+#
+# What this does:
+# 1. Generates a Terraform plan
+# 2. Runs ObsidianWall Verdict governance evaluation
+# 3. Blocks deployment if policy is violated
+# 4. Posts governance summary to the PR/workflow
+
+name: Infrastructure Governance
+
+on:
+  pull_request:
+    paths:
+      - "**.tf"
+      - "**.tfvars"
+  push:
+    branches:
+      - main
+
+jobs:
+
+  governance:
+    name: Governance Check
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # -------------------------------------------------
+      # 1. Checkout your infrastructure code
+      # -------------------------------------------------
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------
+      # 2. Set up Terraform
+      # -------------------------------------------------
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      # -------------------------------------------------
+      # 3. Generate Terraform plan
+      # -------------------------------------------------
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -out=tfplan
+          terraform show -json tfplan > terraform_plan.json
+        working-directory: infra/
+
+      # -------------------------------------------------
+      # 4. Run ObsidianWall Verdict
+      #
+      # Uses the action directly from the ObsidianWall repo.
+      # Replace @main with @v1 once a release is tagged.
+      # -------------------------------------------------
+
+      - name: ObsidianWall Verdict
+        id: verdict
+        uses: ObsidianWall/obsidianwall-verdict@main
+        with:
+          plan:           infra/terraform_plan.json
+          policy:         .obsidianwall/cost_policy.yaml
+          role:           engineer
+          fail_on_deny:   "true"
+
+      # -------------------------------------------------
+      # 5. Use decision outputs in subsequent steps
+      #    (only reached if fail_on_deny=false or ALLOW)
+      # -------------------------------------------------
+
+      - name: Log governance outcome
+        if: always()
+        run: |
+          echo "Decision:          ${{ steps.verdict.outputs.decision }}"
+          echo "Conditions Passed: ${{ steps.verdict.outputs.conditions_passed }}"
+          echo "Risk Score:        ${{ steps.verdict.outputs.risk_score }}/100"
+          echo "Severity:          ${{ steps.verdict.outputs.effective_severity }}"
+          echo "Decision ID:       ${{ steps.verdict.outputs.decision_id }}"
+
+      # -------------------------------------------------
+      # 6. Proceed with deployment only if ALLOWED
+      # -------------------------------------------------
+
+      - name: Deploy infrastructure
+        if: |
+          steps.verdict.outputs.decision == 'ALLOW' ||
+          steps.verdict.outputs.decision == 'ALLOW_WITH_NOTIFICATION'
+        run: |
+          echo "Governance authorized. Proceeding with deployment."
+          # terraform apply ...

@@ -1,0 +1,181 @@
+
+# .github/workflows/verdict-ci.yml
+#
+# ObsidianWall Verdict — CI Pipeline
+#
+# Triggers:
+# - Push to main or dev branches
+# - Pull requests targeting main
+#
+# Jobs:
+# - lint:        ruff + bandit static analysis
+# - test:        pytest with coverage enforcement
+# - action-test: tests the GitHub Action itself
+# - build:       package build verification
+
+name: ObsidianWall Verdict CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+
+jobs:
+
+  # ===================================================
+  # STATIC ANALYSIS
+  # ===================================================
+
+  lint:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install lint dependencies
+        run: |
+          pip install ruff bandit
+
+      - name: Ruff lint
+        run: |
+          ruff check engine/ schemas/ audit/ cli/
+
+      - name: Bandit security scan
+        run: |
+          bandit -r engine/ schemas/ audit/ -ll -f txt
+
+  # ===================================================
+  # TEST SUITE
+  # ===================================================
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v \
+            --cov=engine \
+            --cov=schemas \
+            --cov-report=term-missing \
+            --cov-fail-under=75
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v
+
+      - name: Run full test suite
+        run: |
+          pytest tests/ -v --tb=short
+
+  # ===================================================
+  # ACTION SELF-TEST
+  # Tests the GitHub Action using Verdict's own
+  # sample plan and policy files.
+  # ===================================================
+
+  action-test:
+    name: Action Self-Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Use the action from the current repo
+      - name: Run ObsidianWall Verdict (over budget — expect DENY)
+        id: verdict_deny
+        uses: ./
+        with:
+          plan:           samples/terraform_plan.json
+          policy:         policies/cost/basic_budget.yaml
+          role:           engineer
+          fail_on_deny:   "false"    # don't fail — we assert below
+
+      - name: Assert DENY decision
+        run: |
+          DECISION="${{ steps.verdict_deny.outputs.decision }}"
+          echo "Decision: $DECISION"
+          if [[ "$DECISION" != "DENY_WITH_OVERRIDE" && "$DECISION" != "DENY" ]]; then
+            echo "Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
+            exit 1
+          fi
+          echo "✅ Correct governance decision: $DECISION"
+
+      - name: Assert risk score computed
+        run: |
+          RISK="${{ steps.verdict_deny.outputs.risk_score }}"
+          echo "Risk score: $RISK"
+          if [[ -z "$RISK" || "$RISK" == "0" ]]; then
+            echo "Expected non-zero risk score"
+            exit 1
+          fi
+          echo "✅ Risk score: $RISK/100"
+
+      - name: Assert decision ID issued
+        run: |
+          ID="${{ steps.verdict_deny.outputs.decision_id }}"
+          echo "Decision ID: $ID"
+          if [[ -z "$ID" ]]; then
+            echo "Expected decision_id in output"
+            exit 1
+          fi
+          echo "✅ Decision ID: $ID"
+
+  # ===================================================
+  # BUILD VERIFICATION
+  # ===================================================
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: action-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build tools
+        run: |
+          pip install build
+
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Verify CLI entry point
+        run: |
+          pip install -e .
+          obsidianwall-verdict --help
