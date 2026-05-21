@@ -19,8 +19,7 @@ obsidianwall-verdict/
 ├── .devcontainer/
 │   ├── devcontainer.json
 │   ├── post_create.sh
-│   ├── Dockerfile
-│   └── requirements.txt
+│   └── Dockerfile
 |
 ├── cli/
 │   ├── __init__.py
@@ -32,7 +31,7 @@ obsidianwall-verdict/
 ├── engine/
 │   ├── analyzers/
 |   │   ├── __init__.py
-|   │   ├── architetcure_analyzer.py
+|   │   ├── architecture_analyzer.py
 |   │   ├── cost_analyzer.py
 |   │   ├── topology_analyzer.py
 |   |   └── utilization_analyzer.py
@@ -84,7 +83,6 @@ obsidianwall-verdict/
 │   └── audit_logger.py   ← ✅ THIS is where your logging file goes
 │
 ├── policies/
-│   ├── cost_policy.yaml
 │   └── cost/
 │       ├── basic_budget.yaml
 │       └── strict_budget.yaml
@@ -93,9 +91,6 @@ obsidianwall-verdict/
 │   ├── plan_over_budget.json
 │   ├── plan_under_budget.json
 │   └── terraform_plan.json
-│
-├── output/
-│   └── result.json
 │
 ├── tests/
 │   ├── unit/
@@ -110,8 +105,7 @@ obsidianwall-verdict/
 │
 ├── .github/
 |     └──workflows/
-|            ├── verdict-ci.yml
-│            └── ci.yml
+│            └── verdict-ci.yml
 │
 ├── .dockerignore
 ├── .gitignore
