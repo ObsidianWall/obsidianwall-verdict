@@ -32,13 +32,13 @@ obsidianwall-verdict/
 ├── engine/
 │   ├── analyzers/
 |   │   ├── __init__.py
-|   │   ├── architecure_analyzer.py
+|   │   ├── architetcure_analyzer.py
 |   │   ├── cost_analyzer.py
 |   │   ├── topology_analyzer.py
 |   |   └── utilization_analyzer.py
 │   ├── explainability/
 |   │   ├── __init__.py
-|   │   ├── explaination_builder.py
+|   │   ├── explanation_builder.py
 |   │   ├── governance_reasoning_chain.py
 |   │   ├── policy_reasoning.py
 |   │   ├── recommendation_explainer.py
@@ -61,7 +61,7 @@ obsidianwall-verdict/
 |   ├── cost_estimator.py
 │   ├── decision_resolver.py
 │   ├── lint_validator.py
-│   ├── optimiation_catalog.py
+│   ├── optimization_catalog.py
 │   ├── orchestrator.py
 │   ├── risk_scorer.py
 │   └── recommender.py
