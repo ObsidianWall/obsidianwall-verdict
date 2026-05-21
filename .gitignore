@@ -3,6 +3,10 @@
 .vscode/
 vscode/
 
+# my notes
+my_notes
+Dev_Docs
+
 
 # virtual environments
 .venv/
@@ -229,3 +233,41 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated outputs
+output/
+*.result.json
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Generated outputs
+output/
+*.result.json
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
