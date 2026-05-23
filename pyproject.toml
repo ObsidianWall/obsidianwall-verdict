@@ -7,7 +7,7 @@ name = "obsidianwall-verdict"
 version = "0.2.0"
 description = "A deterministic pre-deployment infrastructure governance engine"
 readme = "README.md"
-license = { text = "BSL-1.1" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.13"
 
 authors = [
@@ -26,6 +26,7 @@ keywords = [
 ]
 
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
@@ -40,8 +41,8 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "click>=8.0",
-    "python-json-logger>=2.0",
     "typer>=0.9",
+    "python-json-logger>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -54,13 +55,13 @@ dev = [
 ]
 
 [project.scripts]
-obsidianwall-verdict = "cli.main:cli"
+verdict = "cli.main:app"
 
 [project.urls]
-Homepage = "https://obsidianwall.com/verdict"
-Documentation = "https://obsidianwall.com/verdict/docs"
-Repository = "https://github.com/ObsidianWall/obsidianwall-verdict"
-"Bug Tracker" = "https://github.com/ObsidianWall/obsidianwall-verdict/issues"
+Homepage = "https://obsidianwall.com"
+Documentation = "https://obsidianwall.dev"
+Repository = "https://github.com/obsidianwall/obsidianwall-verdict"
+"Bug Tracker" = "https://github.com/obsidianwall/obsidianwall-verdict/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -69,9 +70,13 @@ include = [
     "schemas*",
     "audit*",
     "cli*",
+    "context*",
+    "scripts*",
 ]
 exclude = [
     "tests*",
+    "output*",
+    "samples*",
 ]
 
 [tool.pytest.ini_options]

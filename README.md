@@ -8,7 +8,7 @@ before they become incidents.
 
 [![CI](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml/badge.svg)](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![License: BSL-1.1](https://img.shields.io/badge/license-BSL--1.1-orange.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![obsidianwall.com](https://img.shields.io/badge/platform-obsidianwall.com-5ac4f0.svg)](https://obsidianwall.com)
 
 ---
@@ -435,21 +435,19 @@ resource names, organization identifiers, policy file contents.
 ## License
 
 Verdict is released under the
-[Business Source License 1.1](LICENSE).
+[Apache License 2.0](LICENSE).
 
-The core governance engine is free to use for individuals,
-open source projects, and organizations under the usage limits
-defined in the license. Commercial use beyond those limits
-requires a commercial license.
+Free to use, modify, and distribute for any purpose —
+commercial or non-commercial. Attribution required.
 
-Contact [hello@obsidianwall.com](mailto:hello@obsidianwall.com)
-for commercial licensing.
+Built on ObsidianWall — the programmable assurance platform.
+[obsidianwall.com](https://obsidianwall.com)
 
 ---
 
 ## Built by
 
-[YOUR NAME] — [obsidianwall.com](https://obsidianwall.com)
+Aisha I. — [obsidianwall.com](https://obsidianwall.com)
 
 > *"Organizations that design for programmable assurance now
 > will not need to retrofit later."*
