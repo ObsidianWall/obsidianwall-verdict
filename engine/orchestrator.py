@@ -1,16 +1,14 @@
-
 # engine/orchestrator.py
-
+#
 # Purpose:
 # Central execution orchestration layer.
 #
 # Responsibilities:
-# - Policy loading
-# - Policy validation
-# - Runtime normalization
+# - Policy loading and validation
+# - Runtime context normalization
 # - Analyzer execution with isolation
 # - Consolidated risk scoring
-# - Deterministic evaluation
+# - Deterministic policy evaluation
 # - Recommendation generation
 # - Governance workflow routing
 #   (notifications + approval requests)
@@ -21,44 +19,26 @@
 # This layer coordinates execution.
 # It does NOT perform enforcement logic itself.
 
-
 import uuid
-
 from datetime import datetime, timezone
-
-from schemas.policy_schema import Policy
-
-from engine.policy_loader import load_policy
-
-from engine.validator import validate_policy
-
-from engine.policy_normalizer import (
-    build_policy_runtime_context
-)
-
-from engine.risk_scorer import compute_risk_summary
-
-from engine.evaluator import evaluate_policy
-
-from engine.recommender import generate_suggestions
-
-from engine.analyzers import (
-    analyze_cost,
-    analyze_topology,
-    analyze_architecture,
-    analyze_utilization,
-)
-
-from engine.workflows import (
-    route_notifications,
-    build_approval_request,
-)
-
-from engine.explainability import (
-    build_explanation_artifact
-)
+from typing import Any
 
 from audit.audit_logger import get_logger
+from engine.analyzers import (
+    analyze_architecture,
+    analyze_cost,
+    analyze_topology,
+    analyze_utilization,
+)
+from engine.evaluator import evaluate_policy
+from engine.explainability import build_explanation_artifact
+from engine.policy_loader import load_policy
+from engine.policy_normalizer import build_policy_runtime_context
+from engine.recommender import generate_suggestions
+from engine.risk_scorer import compute_risk_summary
+from engine.validator import validate_policy
+from engine.workflows import build_approval_request, route_notifications
+from schemas.policy_schema import Policy
 
 
 logger = get_logger()
@@ -68,9 +48,8 @@ class PolicyOrchestrator:
 
     def __init__(
         self,
-        policy: Policy
+        policy: Policy,
     ) -> None:
-
         self.policy = policy
 
     # =================================================
@@ -80,16 +59,15 @@ class PolicyOrchestrator:
     @classmethod
     def from_policy_path(
         cls,
-        policy_path: str
+        policy_path: str,
     ) -> "PolicyOrchestrator":
         """
         Load, normalize, and validate a policy from
         a file path. Returns a ready orchestrator instance.
         """
 
-        raw_policy = load_policy(policy_path)
-
-        validated_policy = validate_policy(raw_policy)
+        raw_policy: dict[str, Any] = load_policy(policy_path)
+        validated_policy: Policy   = validate_policy(raw_policy)
 
         return cls(validated_policy)
 
@@ -99,9 +77,9 @@ class PolicyOrchestrator:
 
     def evaluate(
         self,
-        context: dict,
-        user_role: str = "engineer"
-    ) -> dict:
+        context: dict[str, Any],
+        user_role: str = "engineer",
+    ) -> dict[str, Any]:
         """
         Execute the full governance evaluation pipeline.
 
@@ -118,11 +96,9 @@ class PolicyOrchestrator:
         8.  Audit artifact construction + logging
         """
 
-        decision_id = str(uuid.uuid4())
+        decision_id: str = str(uuid.uuid4())
 
-        timestamp = datetime.now(
-            timezone.utc
-        ).isoformat()
+        timestamp: str = datetime.now(timezone.utc).isoformat()
 
         logger.info(
             "evaluation_started",
@@ -136,23 +112,25 @@ class PolicyOrchestrator:
         )
 
         # =============================================
-        # RUNTIME CONTEXT
+        # STEP 1 — RUNTIME CONTEXT
         # =============================================
 
-        runtime_context = build_policy_runtime_context(
-            self.policy,
-            context
+        runtime_context: dict[str, Any] = (
+            build_policy_runtime_context(
+                self.policy,
+                context,
+            )
         )
 
         # =============================================
-        # ANALYZER EXECUTION
+        # STEP 2 — ANALYZER EXECUTION
         # Isolated — analyzer failures NEVER break
         # deterministic governance execution.
         # =============================================
 
-        analyzer_results = {}
+        analyzer_results: dict[str, Any] = {}
 
-        analyzers = [
+        analyzers: list[tuple[str, Any]] = [
             ("cost_analysis",         analyze_cost),
             ("topology_analysis",     analyze_topology),
             ("architecture_analysis", analyze_architecture),
@@ -160,20 +138,15 @@ class PolicyOrchestrator:
         ]
 
         for analyzer_name, analyzer_fn in analyzers:
-
             try:
-
                 analyzer_results[analyzer_name] = (
                     analyzer_fn(runtime_context)
                 )
-
             except Exception as error:
-
                 analyzer_results[analyzer_name] = {
                     "status": "failed",
                     "error":  str(error),
                 }
-
                 logger.warning(
                     "analyzer_failed",
                     extra={
@@ -185,70 +158,66 @@ class PolicyOrchestrator:
                 )
 
         # =============================================
-        # CONSOLIDATED RISK SCORING
+        # STEP 3 — CONSOLIDATED RISK SCORING
         # =============================================
 
-        policy_severity = (
+        policy_severity: str = (
             self.policy.spec.governance.severity.value
             if self.policy.spec.governance
             else "medium"
         )
 
-        risk_summary = compute_risk_summary(
+        risk_summary: dict[str, Any] = compute_risk_summary(
             analyzer_results=analyzer_results,
             policy_severity=policy_severity,
         )
 
         # =============================================
-        # DETERMINISTIC EVALUATION
+        # STEP 4 — DETERMINISTIC EVALUATION
         # =============================================
 
-        evaluation_result = evaluate_policy(
+        evaluation_result: dict[str, Any] = evaluate_policy(
             policy=self.policy,
             runtime_context=runtime_context,
-            user_role=user_role
+            user_role=user_role,
         )
 
         # =============================================
-        # RECOMMENDATION ENGINE
+        # STEP 5 — RECOMMENDATION ENGINE
         # =============================================
 
-        suggestions = generate_suggestions(
+        suggestions: list[dict[str, Any]] = generate_suggestions(
             context=runtime_context,
-            decision=evaluation_result["decision"],
-            analyzer_results=analyzer_results
+            decision=str(evaluation_result["decision"]),
+            analyzer_results=analyzer_results,
         )
 
         # =============================================
         # GOVERNANCE CONFIG SERIALIZATION
         # =============================================
 
-        policy_governance = (
+        policy_governance: dict[str, Any] | None = (
             self.policy.spec.governance.model_dump(mode="json")
             if self.policy.spec.governance
             else None
         )
 
         # =============================================
-        # GOVERNANCE WORKFLOW ROUTING
+        # STEP 6 — GOVERNANCE WORKFLOW ROUTING
         # Runs AFTER deterministic enforcement.
         # Workflow routing NEVER influences enforcement.
         # =============================================
 
-        # 6a — Notification manifest
-        notification_manifest = route_notifications(
-            decision=evaluation_result["decision"],
-            effective_severity=risk_summary[
-                "effective_severity"
-            ],
+        notification_manifest: dict[str, Any] = route_notifications(
+            decision=str(evaluation_result["decision"]),
+            effective_severity=str(risk_summary["effective_severity"]),
             policy_name=self.policy.metadata.name,
             evaluation_result=evaluation_result,
             risk_summary=risk_summary,
             policy_governance=policy_governance,
         )
 
-        # 6b — Approval request (only if required)
-        approval_request = build_approval_request(
+        approval_request: dict[str, Any] = build_approval_request(
             decision_id=decision_id,
             policy_name=self.policy.metadata.name,
             evaluation_result=evaluation_result,
@@ -257,10 +226,10 @@ class PolicyOrchestrator:
         )
 
         # =============================================
-        # EXPLAINABILITY ARTIFACT
+        # STEP 7 — EXPLAINABILITY ARTIFACT
         # =============================================
 
-        explanation = build_explanation_artifact(
+        explanation: dict[str, Any] = build_explanation_artifact(
             evaluation_result=evaluation_result,
             analyzer_results=analyzer_results,
             recommendations=suggestions,
@@ -272,54 +241,28 @@ class PolicyOrchestrator:
         )
 
         # =============================================
-        # AUDIT ARTIFACT
+        # STEP 8 — AUDIT ARTIFACT
         # =============================================
 
-        result = {
+        result: dict[str, Any] = {
 
             "decision_id":  decision_id,
-
             "timestamp":    timestamp,
-
             "policy":       self.policy.metadata.name,
 
             # -----------------------------------------
             # GOVERNANCE DECISION
             # -----------------------------------------
 
-            "decision": evaluation_result[
-                "decision"
-            ],
-
-            "override_required": evaluation_result[
-                "override_required"
-            ],
-            
-            "override_possible": evaluation_result[
-                 "override_possible"
-            ],
-
-            "requires_approval": evaluation_result[
-                "requires_approval"
-            ],
-
-            "governance_severity": evaluation_result[
-                "governance_severity"
-            ],
-
-            "effective_severity": risk_summary[
-                "effective_severity"
-            ],
-
-            "resolution_reason": evaluation_result[
-                "resolution_reason"
-            ],
-
-            "conditions_passed": evaluation_result[
-                "conditions_passed"
-            ],
-
-            "trace": evaluation_result["trace"],
+            "decision":             evaluation_result["decision"],
+            "override_required":    evaluation_result["override_required"],
+            "override_possible":    evaluation_result["override_possible"],
+            "requires_approval":    evaluation_result["requires_approval"],
+            "governance_severity":  evaluation_result["governance_severity"],
+            "effective_severity":   risk_summary["effective_severity"],
+            "resolution_reason":    evaluation_result["resolution_reason"],
+            "conditions_passed":    evaluation_result["conditions_passed"],
+            "trace":                evaluation_result["trace"],
 
             # -----------------------------------------
             # RISK SUMMARY
@@ -332,7 +275,6 @@ class PolicyOrchestrator:
             # -----------------------------------------
 
             "notification_manifest": notification_manifest,
-
             "approval_request":      approval_request,
 
             # -----------------------------------------
@@ -349,9 +291,7 @@ class PolicyOrchestrator:
             # -----------------------------------------
 
             "analyzer_results": analyzer_results,
-
             "suggestions":      suggestions,
-
             "explanation":      explanation,
 
             # -----------------------------------------
@@ -359,8 +299,15 @@ class PolicyOrchestrator:
             # -----------------------------------------
 
             "input_context":    context,
-
             "runtime_context":  runtime_context,
+
+            # -----------------------------------------
+            # PRICING METADATA
+            # Captures which pricing mode was used
+            # for cost estimation auditability.
+            # -----------------------------------------
+
+            "pricing_mode": context.get("pricing_mode", "table"),
         }
 
         # =============================================
@@ -381,13 +328,14 @@ class PolicyOrchestrator:
                     "requires_approval":    evaluation_result["requires_approval"],
                     "override_required":    evaluation_result["override_required"],
                     "total_findings":       risk_summary["total_findings"],
-                    "notifications":        notification_manifest[
-                        "notification_count"
-                    ],
+                    "notifications":        notification_manifest.get(
+                        "notification_count", 0
+                    ),
                     "approval_status":      approval_request.get(
                         "approval_status"
                     ),
                     "user_role":            user_role,
+                    "pricing_mode":         context.get("pricing_mode", "table"),
                 }
             }
         )
