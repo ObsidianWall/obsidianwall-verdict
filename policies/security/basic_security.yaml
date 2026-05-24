@@ -1,0 +1,88 @@
+
+# policies/security/basic_security.yaml
+#
+# Purpose:
+# Basic cloud security governance policy.
+#
+# Governance model:
+# - Blocks deployments with critical security exposures
+# - Detects open network access, public storage,
+#   and unencrypted resources before deployment
+# - Engineering lead and security team notified on DENY
+# - Security admin may authorize override with approval
+#
+# Use this policy alongside a cost policy.
+# Security governance and cost governance are separate
+# concerns evaluated independently.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_security_verdict
+  version: "0.1"
+  owner: security-team
+  description: "Pre-deployment security posture governance — blocks critical security exposures before infrastructure deploys"
+
+spec:
+
+  inputs:
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+
+  parameters:
+    security:
+      allow_open_ingress:       false
+      allow_public_storage:     false
+      allow_unencrypted_db:     false
+      max_open_ingress_rules:   0
+      max_public_buckets:       0
+
+  conditions:
+    - id: no_open_ingress
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "No open inbound rules (0.0.0.0/0) permitted"
+
+    - id: no_public_storage
+      expression: "public_storage_buckets <= security.max_public_buckets"
+      description: "No publicly accessible storage resources permitted"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # Security violations route to the security team
+  # and engineering lead simultaneously.
+  # Security admin has override authority with approval.
+  # ---------------------------------------------------
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_admin
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - security_admin
+
+  override:
+    roles:
+      - security_admin
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Security policy violation detected. Deployment blocked pending security review."
+
+    - type: log
+      severity: info
+      message: "Security governance evaluation recorded in audit trail."

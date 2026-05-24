@@ -1,0 +1,90 @@
+
+# policies/compliance/tagging_compliance.yaml
+#
+# Purpose:
+# Resource tagging and naming compliance policy.
+#
+# Governance model:
+# - Enforces required tags on all deployed resources
+# - Blocks untagged infrastructure from deploying
+# - Compliance officer and engineering lead notified
+# - Soft enforcement — override available for exceptions
+#
+# Required tags enforce:
+# - Cost attribution (cost_center)
+# - Environment classification (environment)
+# - Ownership (owner)
+#
+# This policy works alongside cost and security policies.
+# Tagging compliance is a prerequisite for FinOps visibility.
+# Resources without tags cannot be attributed to teams or
+# projects — making cost governance impossible downstream.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: tagging_compliance_verdict
+  version: "0.1"
+  owner: platform-team
+  description: "Resource tagging compliance — enforces required tags for cost attribution, environment classification, and ownership"
+
+spec:
+
+  inputs:
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    compliance:
+      max_untagged_resources:   0
+      required_tags:
+        - cost_center
+        - environment
+        - owner
+      enforcement:              soft
+      scope:                    all_resources
+
+  conditions:
+    - id: tagging_check
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "All resources must carry required tags before deployment"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # Tagging violations are medium severity.
+  # Platform team and engineering lead notified.
+  # Platform lead can override for exceptional cases.
+  # ---------------------------------------------------
+
+  governance:
+    severity: medium
+
+    notifications:
+      - role: platform_lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - platform_lead
+
+  override:
+    roles:
+      - platform_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: medium
+      message: "Untagged resources detected. Deployment blocked pending tagging compliance review."
+
+    - type: log
+      severity: info
+      message: "Tagging compliance evaluation recorded in audit trail."
