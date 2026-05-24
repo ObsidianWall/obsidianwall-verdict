@@ -1,4 +1,3 @@
-
 # engine/cost_estimator.py
 #
 # Purpose:
@@ -11,6 +10,7 @@
 # Azure Retail Prices API:
 #   https://prices.azure.com/api/retail/prices
 #   Free, no authentication required.
+#   Always returns prices in USD.
 #
 # AWS pricing:
 #   Requires boto3 and AWS credentials.
@@ -25,9 +25,9 @@
 
 from __future__ import annotations
 
-import urllib.request
-import urllib.parse
 import json
+import urllib.parse
+import urllib.request
 from typing import Any
 
 from audit.audit_logger import get_logger
@@ -38,6 +38,7 @@ logger = get_logger()
 
 # =====================================================
 # PRICING TABLES — deterministic fallback
+# All prices are in USD per month.
 # =====================================================
 
 AWS_EC2_PRICING: dict[str, float] = {
@@ -56,17 +57,17 @@ AWS_EC2_PRICING: dict[str, float] = {
 }
 
 AZURE_VM_PRICING: dict[str, float] = {
-    "Standard_B1s":     12.0,
-    "Standard_B2s":     25.0,
-    "Standard_B4ms":    50.0,
-    "Standard_D2s_v3":  70.0,
-    "Standard_D4s_v3": 140.0,
-    "Standard_D8s_v3": 280.0,
-    "Standard_E2s_v3":  96.0,
-    "Standard_E4s_v3": 192.0,
+    "Standard_B1s":          12.0,
+    "Standard_B2s":          25.0,
+    "Standard_B4ms":         50.0,
+    "Standard_D2s_v3":       70.0,
+    "Standard_D4s_v3":      140.0,
+    "Standard_D8s_v3":      280.0,
+    "Standard_E2s_v3":       96.0,
+    "Standard_E4s_v3":      192.0,
     # GPU instances
-    "Standard_NC6":    657.0,
-    "Standard_NC12":  1314.0,
+    "Standard_NC6":         657.0,
+    "Standard_NC12":       1314.0,
     "Standard_ND96asr_v4": 21792.0,   # A100 x8
 }
 
@@ -90,8 +91,8 @@ FIXED_RESOURCE_PRICING: dict[str, float] = {
 
 DEFAULT_FALLBACK_COST: float = 10.0
 
-# Azure VM SKU name map for the Retail Prices API
-# Maps Terraform vm_size values to Azure API SKU names
+# Azure VM SKU name map for the Retail Prices API.
+# Maps Terraform vm_size values to Azure API SKU names.
 AZURE_SKU_MAP: dict[str, str] = {
     "Standard_B1s":    "B1s",
     "Standard_B2s":    "B2s",
@@ -104,8 +105,12 @@ AZURE_SKU_MAP: dict[str, str] = {
     "Standard_NC6":    "NC6",
 }
 
-# Monthly hours
+# Monthly hours — standard for cloud billing calculations
 HOURS_PER_MONTH: float = 730.0
+
+# All prices are in USD.
+# Azure Retail Prices API always returns USD.
+CURRENCY: str = "USD"
 
 
 # =====================================================
@@ -128,9 +133,10 @@ def estimate_cost(
 
     Returns:
         dict containing:
-        - estimated_cost:   total estimated monthly cost
+        - estimated_cost:   total estimated monthly cost (USD)
         - cost_breakdown:   per-resource cost breakdown
         - pricing_mode:     which mode was used
+        - currency:         always USD
     """
 
     resources: list[dict[str, Any]] = context.get("resources", [])
@@ -159,6 +165,7 @@ def estimate_cost(
             "type":             resource_type,
             "estimated_cost":   cost,
             "pricing_source":   source,
+            "currency":         CURRENCY,
         })
 
     logger.info(
@@ -168,6 +175,7 @@ def estimate_cost(
             "total_cost":       total_cost,
             "pricing_mode":     pricing_mode,
             "region":           region,
+            "currency":         CURRENCY,
         }}
     )
 
@@ -175,6 +183,7 @@ def estimate_cost(
         "estimated_cost":   total_cost,
         "cost_breakdown":   breakdown,
         "pricing_mode":     pricing_mode,
+        "currency":         CURRENCY,
     }
 
 
@@ -227,9 +236,9 @@ def _estimate_resource_cost(
             logger.warning(
                 "azure_live_pricing_unavailable",
                 extra={"extra": {
-                    "vm_size": vm_size,
-                    "region": region,
-                    "fallback": "table",
+                    "vm_size":   vm_size,
+                    "region":    region,
+                    "fallback":  "table",
                 }}
             )
 
@@ -238,7 +247,7 @@ def _estimate_resource_cost(
             logger.warning(
                 "unknown_azure_vm_size",
                 extra={"extra": {
-                    "vm_size": vm_size,
+                    "vm_size":      vm_size,
                     "fallback_cost": DEFAULT_FALLBACK_COST,
                 }}
             )
@@ -283,6 +292,7 @@ def _fetch_azure_vm_price(
     https://prices.azure.com/api/retail/prices
 
     Free, no authentication required.
+    Always returns prices in USD.
     Returns estimated monthly cost (hourly price × 730 hours).
     Returns None if the price cannot be fetched.
     """
@@ -290,7 +300,6 @@ def _fetch_azure_vm_price(
     sku_name = AZURE_SKU_MAP.get(vm_size)
 
     if sku_name is None:
-        # Try the vm_size directly — may work for newer SKUs
         sku_name = vm_size.replace("Standard_", "").replace("_", " ")
 
     filter_expr = (
@@ -323,13 +332,17 @@ def _fetch_azure_vm_price(
         if not items:
             return None
 
-        # Prefer Linux pricing, take the first result
+        # Prefer Linux pricing over Windows
         linux_items = [
             i for i in items
             if "Windows" not in i.get("productName", "")
         ]
 
         target = linux_items[0] if linux_items else items[0]
+
+        # Currency is captured here, inside the function,
+        # after target is defined — not as a default parameter.
+        currency_code: str = str(target.get("currencyCode", CURRENCY))
         hourly_price: float = float(target.get("retailPrice", 0))
 
         if hourly_price == 0:
@@ -343,6 +356,7 @@ def _fetch_azure_vm_price(
                 "vm_size":          vm_size,
                 "sku_name":         sku_name,
                 "region":           region,
+                "currency":         currency_code,
                 "hourly_price":     hourly_price,
                 "monthly_estimate": monthly_estimate,
             }}

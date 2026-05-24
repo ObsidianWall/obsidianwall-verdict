@@ -21,7 +21,6 @@ from typing import List, Optional
 from enum import Enum
 
 
-print("LOADED NEW POLICY SCHEMA")
 
 
 # =====================================================
