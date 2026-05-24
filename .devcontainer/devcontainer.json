@@ -1,0 +1,144 @@
+// obsidianwall-verdict/.devcontainer/devcontainer.json
+//
+// ObsidianWall Verdict — Development Container Configuration
+//
+// NOTE: The Dockerfile currently uses the base image directly
+// (temporary) until the golden image is built and pushed to GHCR.
+// Once ghcr.io/obsidianwall/cicd-golden:latest exists, the
+// Dockerfile FROM line switches to the golden image and this
+// devcontainer.json requires no changes.
+
+{
+  "name": "obsidianwall-verdict-dev",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "USERNAME":   "obsidianwall",
+      "USER_UID":   "1001",
+      "USER_GID":   "1001"
+    },
+    "cacheDisabled": false
+  },
+
+  // =====================================================
+  // ENVIRONMENT VARIABLES
+  // Available inside the container at all times.
+  // =====================================================
+
+  "containerEnv": {
+    "PYTHONPATH":       "/workspaces/obsidianwall-verdict",
+    "OW_VERDICT_ENV":   "development",
+    "OW_LOG_LEVEL":     "DEBUG",
+    "OW_LOG_FORMAT":    "text",
+    "OW_POLICY_DIR":    "/workspaces/obsidianwall-verdict/policies",
+    "PATH":             "/home/obsidianwall/.local/bin:/usr/local/bin:/usr/bin:/bin:${containerEnv:PATH}"
+  },
+
+  // =====================================================
+  // VS CODE EXTENSIONS
+  // Verdict-specific tooling.
+  // Infrastructure tools (Terraform, OPA, tfsec) come
+  // from the golden image once inheritance is active.
+  // =====================================================
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python development
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+
+        // Testing
+        "ms-python.python",
+        "littlefoxteam.vscode-python-test-adapter",
+
+        // Terraform and IaC (for testing Verdict against real plans)
+        "hashicorp.terraform",
+        "redhat.vscode-yaml",
+
+        // Docker
+        "ms-azuretools.vscode-docker",
+
+        // Git and GitHub
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+
+        // Utilities
+        "streetsidesoftware.code-spell-checker",
+        "davidanson.vscode-markdownlint",
+        "gruntfuggly.todo-tree",
+        "shakram02.vscode-dotenv",
+        "ms-vscode.makefile-tools"
+      ],
+
+      "settings": {
+        // Python
+        "python.defaultInterpreterPath":    "/usr/local/bin/python",
+        "python.testing.pytestEnabled":     true,
+        "python.testing.pytestArgs":        ["tests"],
+
+        // Ruff linting
+        "[python]": {
+          "editor.defaultFormatter":        "charliermarsh.ruff",
+          "editor.formatOnSave":            true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll.ruff":           "explicit",
+            "source.organizeImports.ruff":  "explicit"
+          }
+        },
+
+        // YAML
+        "yaml.validate": true,
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": "/.github/workflows/*.yml"
+        },
+
+        // Files
+        "files.associations": {
+          "*.hcl":    "terraform",
+          "*.toml":   "toml",
+          "*.rego":   "rego"
+        },
+
+        // Editor
+        "editor.rulers":          [88],
+        "editor.tabSize":         4,
+        "editor.insertSpaces":    true
+      }
+    }
+  },
+
+  // =====================================================
+  // DOCKER-IN-DOCKER
+  // Needed for make staging and Docker build targets.
+  // =====================================================
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version":              "latest",
+      "enableNonRootDocker":  "true"
+    }
+  },
+
+  // =====================================================
+  // POST-CREATE COMMAND
+  // Runs once after the container is created.
+  // Verifies the environment is healthy.
+  // =====================================================
+
+  "postCreateCommand": "bash .devcontainer/post_create.sh",
+
+  // =====================================================
+  // WORKSPACE AND USER
+  // =====================================================
+
+  "workspaceFolder": "/workspaces/obsidianwall-verdict",
+
+  "remoteUser": "obsidianwall",
+
+  "shutdownAction": "stopContainer"
+}

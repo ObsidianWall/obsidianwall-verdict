@@ -1,45 +1,80 @@
-
 # policies/cost/basic_budget.yaml
+#
+# Purpose:
+# Basic budget guardrail policy.
+#
+# Governance model:
+# - Soft budget enforcement
+# - Budget owner notified on breach
+# - Engineering lead notified simultaneously
+# - Override available without approval requirement
+# - Preserves engineering velocity
 
-# Basic Budget Guardrail Policy
+apiVersion: obsidianwall.io/v1
+kind: Policy
 
-policy:
-  name: basic_budget_guardrail
-  version: 0.2
-  description: "Prevents infrastructure deployment if projected cost exceeds defined budget"
+metadata:
+  name: basic_budget_verdict
+  version: "0.2"
+  owner: team-alpha
+  description: "Prevents infrastructure spend overruns with accountable governance routing"
 
-inputs:
-  - estimated_cost
-  - current_spend
+spec:
 
-parameters:
-  budget:
-    amount: 50
-    period: monthly
-    scope: project:default
-    owner: team-alpha
-    flexibility: soft   # soft | hard
-    override_allowed: true
+  inputs:
+    - estimated_cost
+    - current_spend
 
-conditions:
-  - id: budget_check
-    expression: "(current_spend + estimated_cost) <= budget.amount"
-    description: "Projected monthly spend must not exceed allocated monthly budget"
+  parameters:
+    budget:
+      amount: 50
+      period: monthly
+      scope: project:default
+      owner: team-alpha
+      flexibility: soft
+      override_allowed: true
 
-decision:
-  allow: "ALLOW"
-  deny: "DENY"
-  warn: "WARN"
+  conditions:
+    - id: budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Monthly spend cap enforcement"
 
-override:
-  roles:
-    - budget_owner
+  decision:
+    allow: ALLOW
+    deny: DENY_WITH_OVERRIDE
+    warn: ALLOW_WITH_NOTIFICATION
 
-actions:
-  - type: notify
-    severity: high
-    message: "Budget exceeded. Approval required before deployment."
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # ---------------------------------------------------
+  # Defines stakeholder routing and approval requirements.
+  # Notifications fire simultaneously to all targets.
+  # Budget owner holds override authority without
+  # formal approval for soft-budget policies.
 
-  - type: log
-    severity: info
-    message: "Decision recorded for audit trail"
+  governance:
+    severity: medium
+
+    notifications:
+      - role: budget_owner
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - budget_owner
+
+  override:
+    roles:
+      - budget_owner
+    requires_approval: false
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Budget threshold exceeded. Governance workflow triggered."
+
+    - type: log
+      severity: info
+      message: "Decision recorded in audit trail."

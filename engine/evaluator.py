@@ -1,67 +1,105 @@
+
 # engine/evaluator.py
 
-# purpose: Orchestrates full decision lifecycle
-# Pupose: produces auditable, immutable decision record
-# Purpose: Central orchestrator with full traceability + logging
+# Purpose:
+# Deterministic policy evaluation engine.
+#
+# Responsibilities:
+# - Evaluate policy conditions
+# - Resolve deterministic decisions
+# - Produce evaluation traces
+#
+# IMPORTANT:
+# This module NEVER:
+# - loads policies
+# - validates policies
+# - generates recommendations
+# - performs orchestration
 
-# Purpose: Main entry point for policy evaluation. Orchestrates the entire process.
 
-# Purpose: Ensure policy is valid before execution (audit + safety)
+from typing import Any
+
+from audit.audit_logger import get_logger
+from engine.condition_evaluator import (evaluate_conditions)
+from engine.decision_resolver import (resolve_decision)
+from schemas.policy_schema import Policy
 
 
-import uuid
-from datetime import datetime
 
-from engine.policy_loader import load_policy
-from engine.validator import validate_policy
-from engine.condition_evaluator import evaluate_conditions
-from engine.decision_resolver import resolve_decision
-from engine.recommender import generate_suggestions
-from logging.audit_logger import get_logger
 
 logger = get_logger()
 
 
-class DecisionEngine:
-    def __init__(self, policy_path: str):
-        raw_policy = load_policy(policy_path)
-        self.policy = validate_policy(raw_policy)
+def evaluate_policy(
+    policy: Policy,
+    runtime_context: dict[str, Any],
+    user_role: str = "engineer",
+) -> dict[str, Any]:
+    """
+    Evaluate a validated policy against runtime context.
 
-    def evaluate(self, context: dict, user_role: str = "engineer"):
-        decision_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+    Returns:
+        dict containing:
+        - decision:             5-level governance decision outcome
+        - override_required:    whether an override was applied
+        - override_possible:    whether the policy allows any override
+        - requires_approval:    whether formal approval is needed
+        - governance_severity:  severity level for routing
+        - resolution_reason:    why this decision was reached
+        - conditions_passed:    boolean outcome of condition evaluation
+        - trace:                per-condition evaluation trace
+    """
 
-        # 1. Evaluate conditions
-        conditions_passed, trace = evaluate_conditions(self.policy, context)
+    # =================================================
+    # CONDITION EVALUATION
+    # =================================================
 
-        # 2. Resolve decision
-        decision, override_required = resolve_decision(
-            self.policy,
-            conditions_passed,
-            user_role
-        )
+    conditions_passed, trace = evaluate_conditions(
+        policy,
+        runtime_context
+    )
 
-        # 3. Generate advisory suggestions (NON-authoritative)
-        suggestions = generate_suggestions(context, decision)
+    # =================================================
+    # DECISION RESOLUTION
+    # =================================================
 
-        # 4. Build result
-        result = {
-            "decision_id": decision_id,
-            "timestamp": timestamp,
-            "policy": self.policy.policy.name,
-            "decision": decision,
-            "override_required": override_required,
-            "conditions_passed": conditions_passed,
-            "trace": trace,
-            "actions": [a.dict() for a in self.policy.actions],
-            "suggestions": suggestions,
-            "context": context,
+    resolution: dict[str, Any] = resolve_decision(
+        policy,
+        conditions_passed,
+        user_role
+    )
+
+    result: dict[str, Any] = {
+
+        "decision":             resolution["decision"],
+
+        "override_required":    resolution["override_required"],
+
+        "override_possible":    resolution["override_possible"],
+
+        "requires_approval":    resolution["requires_approval"],
+
+        "governance_severity":  resolution["governance_severity"],
+
+        "resolution_reason":    resolution["resolution_reason"],
+
+        "conditions_passed":    conditions_passed,
+
+        "trace":                trace,
+    }
+
+    logger.info(
+        "policy_evaluated",
+        extra={
+            "extra": {
+                "decision":             result["decision"],
+                "conditions_passed":    result["conditions_passed"],
+                "governance_severity":  result["governance_severity"],
+                "override_required":    result["override_required"],
+                "override_possible":    result["override_possible"],
+                "requires_approval":    result["requires_approval"],
+            }
         }
+    )
 
-        # 5. Audit log (structured)
-        logger.info(
-            "decision_evaluated",
-            extra={"extra": result}
-        )
-
-        return result
+    return result

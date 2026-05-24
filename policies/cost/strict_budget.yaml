@@ -1,0 +1,88 @@
+
+# policies/cost/strict_budget.yaml
+#
+# Purpose:
+# Strict budget enforcement policy for controlled environments.
+#
+# Governance model:
+# - Hard budget enforcement
+# - Finance team and budget owner both notified
+# - Dual approval required for override
+# - Engineering lead notified for awareness
+# - DENY issued on breach — no unilateral override
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: strict_budget_verdict
+  version: "0.2"
+  owner: finance-team
+  description: "Strict enforcement of budget limits with dual-approval governance workflow"
+
+spec:
+
+  inputs:
+    - estimated_cost
+    - current_spend
+
+  parameters:
+    budget:
+      amount: 40
+      period: monthly
+      scope: project:production
+      owner: finance-team
+      flexibility: hard
+      override_allowed: true
+
+  conditions:
+    - id: strict_budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Projected spend must not exceed strict budget"
+
+  decision:
+    allow: ALLOW
+    deny: DENY
+    warn: ALLOW_WITH_APPROVAL_REQUIRED
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # Hard budget policy — DENY issued on breach.
+  # Finance admin and budget owner must both approve
+  # any override. Engineering lead notified for
+  # awareness but holds no approval authority.
+  # Severity is HIGH — routed to all stakeholders
+  # simultaneously with audit traceability.
+  # ---------------------------------------------------
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: budget_owner
+        channel: email
+      - role: finance_admin
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - budget_owner
+        - finance_admin
+
+  override:
+    roles:
+      - budget_owner
+      - finance_admin
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "Strict budget exceeded. Dual approval required before deployment."
+
+    - type: log
+      severity: info
+      message: "Strict policy evaluation recorded in governance audit trail."

@@ -1,0 +1,90 @@
+# obsidianwall-verdict/.dockerignore
+#
+# Files and directories excluded from the Docker
+# build context for the runtime image.
+#
+# Purpose:
+# - Prevents .env and secrets from entering the image
+# - Reduces image build context size
+# - Keeps dev-only files out of production images
+# - Speeds up docker build
+
+# =====================================================
+# SECRETS — NEVER in a Docker image
+# =====================================================
+
+.env
+.env.*
+!.env.example
+
+# =====================================================
+# DEVELOPMENT AND TEST FILES
+# Not needed in runtime image
+# =====================================================
+
+tests/
+docs/
+htmlcov/
+.coverage
+*.pytest_cache
+.pytest_cache/
+
+# =====================================================
+# BUILD ARTIFACTS
+# =====================================================
+
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =====================================================
+# VERSION CONTROL
+# =====================================================
+
+.git/
+.gitignore
+.gitattributes
+
+# =====================================================
+# EDITOR AND OS FILES
+# =====================================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# =====================================================
+# DEVCONTAINER
+# Not needed in runtime image
+# =====================================================
+
+.devcontainer/
+
+# =====================================================
+# CI/CD
+# =====================================================
+
+.github/
+Makefile
+
+# =====================================================
+# SAMPLE DATA
+# Samples are mounted as volumes at runtime,
+# not baked into the image.
+# =====================================================
+
+samples/
+
+# =====================================================
+# LOGS
+# =====================================================
+
+*.log
+logs/

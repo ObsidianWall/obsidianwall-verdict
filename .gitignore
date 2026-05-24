@@ -1,3 +1,19 @@
+
+# vscode
+.vscode/
+vscode/
+
+# my notes
+my_notes
+Dev_Docs
+
+# outputs
+output/
+
+# virtual environments
+.venv/
+verdict_venv/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -151,6 +167,9 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv/
+verdict_venv/
+verdict_venv
 env/
 venv/
 ENV/
@@ -216,3 +235,43 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated outputs
+output/
+*.result.json
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Generated outputs
+output/
+*.result.json
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+*.egg-info/
+.eggs/
