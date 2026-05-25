@@ -15,9 +15,8 @@
 name: "ObsidianWall Verdict"
 
 description: >
-  Deterministic pre-deployment infrastructure governance.
-  Evaluates Terraform plans against cost and governance
-  policies before deployment executes.
+  Pre-deployment infrastructure governance for Terraform.
+  Deterministic policy evaluation before deployment executes.
 
 author: "ObsidianWall"
 

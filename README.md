@@ -211,6 +211,22 @@ The condition evaluation alone determines the governance decision.
 
 ---
 
+## Enforcement modes
+
+| Mode | How | What it blocks |
+|------|-----|----------------|
+| **CI/CD pipeline** | GitHub Actions with `fail_on_deny: true` | `terraform apply` never runs on DENY |
+| **IAM access controls** | Azure Entra ID / AWS IAM restricts engineer credentials to read-only | Direct deployment from local machines impossible |
+| **Standalone manual** | Run `verdict evaluate` before `terraform apply` | Governance guidance, audit trail, budget owner notification |
+
+For hard technical enforcement, integrate Verdict into your CI/CD pipeline
+and restrict cloud credentials so only the pipeline's service principal
+can apply infrastructure. Engineers with read-only credentials cannot
+deploy directly even if they skip Verdict locally.
+
+
+---
+
 ## Governance decisions
 
 Verdict produces one of five decisions on every evaluation:

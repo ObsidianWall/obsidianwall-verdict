@@ -1,1 +1,55 @@
-#
+
+# policies/cost/strict_budget.yaml
+
+# Purpose: This simulates:
+               # tighter environments
+               # production constraints
+               # override-required scenarios
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: strict_budget_verdict
+  version: 0.2
+  owner: finance-team
+  description: "Strict enforcement of budget limits for controlled environments"
+
+spec:
+  inputs:
+    - estimated_cost
+    - current_spend
+
+  parameters:
+    budget:
+      amount: 40
+      period: monthly
+      scope: project:production
+      owner: finance-team
+      flexibility: hard
+      override_allowed: true
+
+  conditions:
+    - id: strict_budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Projected spend must not exceed strict budget"
+
+  decision:
+    allow: "ALLOW"
+    deny: "DENY"
+    warn: "WARN"
+
+  override:
+    roles:
+      - budget_owner
+      - finance_admin
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "Strict budget exceeded. Approval required."
+
+    - type: log
+      severity: info
+      message: "Strict policy evaluation logged"

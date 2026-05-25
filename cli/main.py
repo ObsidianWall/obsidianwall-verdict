@@ -75,6 +75,18 @@ def evaluate(
             "Examples: eastus, westeurope, eastasia."
         ),
     ),
+    current_spend: float = typer.Option(
+        0.0,
+        "--current-spend",
+        help=(
+            "Current period spend in USD already incurred this month. "
+            "Combined with estimated_cost to check total projected spend "
+            "against your budget limit. "
+            "Example: --current-spend 30.0 means $30 already spent this month. "
+            "Defaults to 0.0. Connect to Azure Cost Management API in future "
+            "versions for automatic current spend detection."
+        ),
+    ),
 ) -> None:
     """
     Evaluate a Terraform plan against an ObsidianWall policy.
@@ -85,6 +97,26 @@ def evaluate(
     Exit codes:
       0   ALLOW or ALLOW_WITH_NOTIFICATION
       1   DENY, DENY_WITH_OVERRIDE, or evaluation error
+
+    Examples:
+
+      Basic evaluation:
+        verdict evaluate --plan plan.json --policy budget.yaml
+
+      With current month spend:
+        verdict evaluate --plan plan.json --policy budget.yaml --current-spend 30.0
+
+      With live Azure pricing:
+        verdict evaluate --plan plan.json --policy budget.yaml --pricing live --region eastus
+
+      Full example:
+        verdict evaluate \\
+          --plan          terraform_plan.json \\
+          --policy        policies/cost/basic_budget.yaml \\
+          --role          engineer \\
+          --current-spend 30.0 \\
+          --pricing       live \\
+          --region        eastus
     """
 
     try:
@@ -93,11 +125,12 @@ def evaluate(
             "evaluation_started",
             extra={
                 "extra": {
-                    "plan":         plan,
-                    "policy":       policy,
-                    "role":         role,
-                    "pricing":      pricing,
-                    "region":       region,
+                    "plan":          plan,
+                    "policy":        policy,
+                    "role":          role,
+                    "pricing":       pricing,
+                    "region":        region,
+                    "current_spend": current_spend,
                 }
             }
         )
@@ -116,10 +149,14 @@ def evaluate(
         # STEP 2 — Build decision context
         # Parse Terraform plan and estimate costs.
         # Pricing mode and region are applied here.
+        # current_spend is passed through so the
+        # budget condition evaluates total projected
+        # spend, not just this deployment's cost.
         # ---------------------------------------------
 
         context: dict[str, Any] = build_context(
             plan_path=plan,
+            current_spend=current_spend,
             pricing_mode=pricing,
             region=region,
         )
