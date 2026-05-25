@@ -7,7 +7,7 @@ catching budget overruns, policy violations, and compliance failures
 before they become incidents.
 
 [![CI](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml/badge.svg)](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![obsidianwall.com](https://img.shields.io/badge/platform-obsidianwall.com-5ac4f0.svg)](https://obsidianwall.com)
 
