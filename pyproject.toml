@@ -7,7 +7,7 @@ name = "obsidianwall-verdict"
 version = "0.2.0"
 description = "A deterministic pre-deployment infrastructure governance engine"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license =  "Apache-2.0"
 requires-python = ">=3.11"
 
 authors = [
@@ -26,7 +26,6 @@ keywords = [
 ]
 
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",

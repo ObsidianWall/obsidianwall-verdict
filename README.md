@@ -209,6 +209,7 @@ Every stage is deterministic. Analyzers are advisory — they inform
 the risk score but never override the condition evaluation.
 The condition evaluation alone determines the governance decision.
 
+
 ---
 
 ## Enforcement modes
