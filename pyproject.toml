@@ -1,21 +1,102 @@
-# pyproject.toml
-
-# Purpose: Defines:
-             # project metadata
-             # dependencies (optional alternative to requirements.txt)
-             # packaging readiness
-
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "obsidianwall-verdict"
-version = "0.1.0"
-description = "Pre-deployment decision engine for cloud cost governance"
-authors = [{ name="ObsidianWall", email="founder@obsidianwall.com" }]
-requires-python = ">=3.10"
+version = "0.2.0"
+description = "A deterministic pre-deployment infrastructure governance engine"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+
+authors = [
+    { name = "ObsidianWall", email = "hello@obsidianwall.com" }
+]
+
+keywords = [
+    "governance",
+    "infrastructure",
+    "terraform",
+    "policy",
+    "devops",
+    "devsecops",
+    "programmable-assurance",
+    "pre-deployment",
+]
+
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Systems Administration",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "click>=8.0",
+    "typer>=0.9",
+    "python-json-logger>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "bandit>=1.7",
+    "build>=1.0",
+]
+
+[project.scripts]
+verdict = "cli.main:app"
+
+[project.urls]
+Homepage = "https://obsidianwall.com"
+Documentation = "https://obsidianwall.dev"
+Repository = "https://github.com/obsidianwall/obsidianwall-verdict"
+"Bug Tracker" = "https://github.com/obsidianwall/obsidianwall-verdict/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "engine*",
+    "schemas*",
+    "audit*",
+    "cli*",
+    "context*",
+    "scripts*",
+]
+exclude = [
+    "tests*",
+    "output*",
+    "samples*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
 
-[tool.flake8]
-max-line-length = 100
-exclude = [".git", "__pycache__", "venv", "verdict_venv"]
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+exclude = ["tests/", "*.yaml", "*.yml"]
+
+[tool.coverage.run]
+source = ["engine", "schemas", "audit"]
+omit = ["tests/*", "cli/*"]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true

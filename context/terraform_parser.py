@@ -1,61 +1,104 @@
 # context/terraform_parser.py
-
-# Purpose:Convert Terraform plan → normalized decision context
-
-# This module focuses on parsing Terraform plan JSON output to extract relevant resource information for cost estimation and guardrail evaluation. It handles the structure of Terraform plans, including nested modules, to ensure comprehensive data extraction.
-
-# The main function `parse_terraform_plan` reads a Terraform plan from a specified file path, processes the JSON structure to gather resource details, and returns a structured dictionary that can be used for further analysis in the guardrail evaluation process.
-
-# Note: This parser assumes a specific structure of the Terraform plan output. It may need adjustments if the Terraform version or output format changes. Always ensure that the plan is generated with the `-out` option and then converted to JSON using `terraform show -json` for compatibility with this parser.
-
-# 🎯 Purpose: Convert Terraform plan JSON → structured decision context
-
-
-# ✅ What it extracts
-    # resource types, resource counts, and basic configuration signals
-
-# Note: This parser is designed to be simple and focused on extracting key information relevant for cost estimation and guardrail evaluation. It does not attempt to capture every detail of the Terraform plan, but rather focuses on the most impactful data points for guardrail evaluation.
-
-# Note: 🧠 What i have just built, I now understand infrastructure BEFORE deployment - That’s step 1 of control.
-
+#
+# Purpose:
+# Convert Terraform plan JSON into a normalized
+# decision context for policy evaluation.
+#
+# What it extracts:
+# - Resource types, names, and configuration values
+# - Nested module resources (child_modules)
+#
+# Usage:
+#   Generate plan:  terraform plan -out=tfplan
+#   Export JSON:    terraform show -json tfplan > plan.json
+#   Parse:          parse_terraform_plan("plan.json")
+#
+# IMPORTANT:
+# This parser targets the standard Terraform plan JSON
+# structure produced by terraform show -json.
+# Adjust if using third-party plan formats.
 
 import json
+from pathlib import Path
+from typing import Any
 
 
-def parse_terraform_plan(plan_path: str) -> dict:
+def parse_terraform_plan(
+    plan_path: str,
+) -> dict[str, Any]:
     """
-    Parses Terraform plan JSON and extracts resource-level data.
-    
+    Parse a Terraform plan JSON file and extract
+    resource-level data for cost estimation and
+    policy evaluation.
+
+    Args:
+        plan_path:  path to the Terraform plan JSON file
+
     Returns:
-        dict with resource summary used for cost estimation.
+        dict containing:
+        - resources:    list of parsed resource dicts
+
+    Raises:
+        FileNotFoundError:  if plan_path does not exist
+        ValueError:         if plan format is invalid
     """
 
-    with open(plan_path, "r") as f:
-        plan = json.load(f)
+    path = Path(plan_path)
 
-    resources = []
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Terraform plan not found: {plan_path}"
+        )
 
-    # Terraform plan structure: planned_values.root_module.resources
+    with path.open("r", encoding="utf-8") as f:
+        try:
+            plan: dict[str, Any] = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Invalid JSON in Terraform plan: {plan_path}"
+            ) from e
+
+    raw_resources: list[dict[str, Any]] = []
+
     try:
-        root = plan.get("planned_values", {}).get("root_module", {})
-        resources.extend(root.get("resources", []))
+        root: dict[str, Any] = (
+            plan
+            .get("planned_values", {})
+            .get("root_module", {})
+        )
 
-        # Handle child modules if present
+        raw_resources.extend(
+            root.get("resources", [])
+        )
+
         for child in root.get("child_modules", []):
-            resources.extend(child.get("resources", []))
+            raw_resources.extend(
+                child.get("resources", [])
+            )
 
-    except Exception:
-        raise ValueError("Invalid Terraform plan format")
+    except (AttributeError, TypeError) as e:
+        raise ValueError(
+            "Invalid Terraform plan structure — "
+            "expected planned_values.root_module.resources"
+        ) from e
 
-    parsed_resources = []
+    parsed_resources: list[dict[str, Any]] = []
 
-    for r in resources:
+    for resource in raw_resources:
+
+        resource_type: str | None = resource.get("type")
+        resource_name: str | None = resource.get("name")
+        resource_values: dict[str, Any] = resource.get("values", {})
+
+        if resource_type is None or resource_name is None:
+            continue
+
         parsed_resources.append({
-            "type": r.get("type"),
-            "name": r.get("name"),
-            "values": r.get("values", {})
+            "type":     resource_type,
+            "name":     resource_name,
+            "values":   resource_values,
         })
 
     return {
-        "resources": parsed_resources
+        "resources": parsed_resources,
     }

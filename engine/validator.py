@@ -1,38 +1,90 @@
 # engine/validator.py
 
-# Purpose: Validates Terraform plans against defined policies.
+# Purpose:
+# Trusted policy validation gateway.
+#
+# Responsibilities:
+# - Policy normalization
+# - Policy lint validation
+# - Policy schema validation
+#
+# IMPORTANT:
+# This layer converts untrusted policy input
+# into trusted typed policy contracts.
 
 
-from schemas.policy_schema import PolicyModel
-from engine.policy_normalizer import normalize_policy
+from schemas.policy_schema import Policy
+
+from engine.policy_normalizer import (
+    normalize_policy
+)
+
 from engine.lint_validator import lint_policy
+
 from audit.audit_logger import get_logger
+
 
 logger = get_logger()
 
 
+def validate_policy(
+    policy_dict: dict
+) -> Policy:
 
-def validate_policy(policy_dict: dict) -> PolicyModel:
     try:
-        # 1. Normalize
-        normalized = normalize_policy(policy_dict)
 
-        # 2. Lint
-        lint_errors = lint_policy(normalized)
+        # =============================================
+        # NORMALIZATION
+        # =============================================
+
+        normalized_policy = normalize_policy(
+            policy_dict
+        )
+
+        # =============================================
+        # LINT VALIDATION
+        # =============================================
+
+        lint_errors = lint_policy(
+            normalized_policy
+        )
+
         if lint_errors:
-            raise ValueError(f"Lint errors: {lint_errors}")
 
-        # 3. Schema validation
-        policy = PolicyModel(**normalized)
+            raise ValueError(
+                f"Lint errors: {lint_errors}"
+            )
 
-        logger.info("policy_validation_success", extra={
-            "extra": {"policy": policy.metadata.name}
-        })
+        # =============================================
+        # SCHEMA VALIDATION
+        # =============================================
 
-        return policy
+        validated_policy = Policy(
+            **normalized_policy
+        )
 
-    except Exception as e:
-        logger.error("policy_validation_failed", extra={
-            "extra": {"error": str(e)}
-        })
-        raise   
+        logger.info(
+            "policy_validation_success",
+            extra={
+                "extra": {
+                    "policy": (
+                        validated_policy.metadata.name
+                    )
+                }
+            }
+        )
+
+        return validated_policy
+
+    except Exception as error:
+
+        logger.error(
+            "policy_validation_failed",
+            extra={
+                "extra": {
+                    "error": str(error)
+                }
+            }
+        )
+
+        raise

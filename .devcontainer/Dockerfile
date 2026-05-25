@@ -1,38 +1,46 @@
-
-# Use modern Python (not 3.11)
-FROM mcr.microsoft.com/devcontainers/python:3.13-bookworm
+FROM mcr.microsoft.com/devcontainers/python:dev-3.13-bookworm
 
 ARG USERNAME=obsidianwall
 ARG USER_UID=1001
-ARG USER_GID=$USER_UID
+ARG USER_GID=1001
 
 USER root
 
-# Core dependencies (minimal but intentional)
 RUN apt-get update && apt-get install -y \
-    git curl jq \
+        --no-install-recommends \
+        sudo git-lfs coreutils curl gnupg2 make jq \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create platform user (align with golden image)
 RUN groupadd --gid ${USER_GID} ${USERNAME} \
-    && useradd --uid ${USER_UID} --gid ${USERNAME} \
-    --shell /bin/bash --create-home ${USERNAME}
+    && useradd \
+        --uid ${USER_UID} \
+        --gid ${USERNAME} \
+        --shell /bin/bash \
+        --create-home ${USERNAME} \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" \
+        > /etc/sudoers.d/90-${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/90-${USERNAME}
 
-WORKDIR /workspace
+RUN git lfs install --system
 
-# Copy dependency files first (layer caching)
-COPY requirements.txt .
+COPY requirements.txt /tmp/verdict-requirements.txt
 
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /tmp/verdict-requirements.txt \
+    && rm /tmp/verdict-requirements.txt
 
-# Copy application
-COPY . .
+RUN pip install --no-cache-dir pytest pytest-cov ruff bandit
 
-# Python path for module resolution
-ENV PYTHONPATH=/workspace
+ENV PYTHONPATH=/workspaces/obsidianwall-verdict \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    OW_VERDICT_ENV=development \
+    OW_LOG_LEVEL=DEBUG \
+    OW_LOG_FORMAT=text \
+    OW_POLICY_DIR=/workspaces/obsidianwall-verdict/policies \
+    PATH="/home/${USERNAME}/.local/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
-# Ownership
-RUN chown -R ${USERNAME}:${USERNAME} /workspace
+WORKDIR /workspaces/obsidianwall-verdict
 
 USER ${USERNAME}

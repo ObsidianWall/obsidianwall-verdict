@@ -1,0 +1,97 @@
+
+# policies/resource_limits/basic_resource_limits.yaml
+#
+# Purpose:
+# Resource sizing and count governance policy.
+#
+# Governance model:
+# - Caps the number of instances deployable at once
+# - Prevents oversized compute in non-production environments
+# - Blocks GPU instance deployment without explicit approval
+# - Engineering lead notified on all violations
+#
+# This policy prevents:
+# - Accidental large-scale deployments
+# - Dev/staging environment over-provisioning
+# - GPU instance proliferation without governance
+#
+# Pair with strict_budget.yaml for environments where
+# both count limits AND cost limits apply.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_resource_limits_verdict
+  version: "0.1"
+  owner: platform-team
+  description: "Resource sizing and count governance — prevents over-provisioning and unapproved GPU deployments"
+
+spec:
+
+  inputs:
+    - compute_instance_count
+    - gpu_instance_count
+    - estimated_cost
+
+  parameters:
+    limits:
+      max_compute_instances:    5
+      max_gpu_instances:        0
+      max_single_deployment_cost: 500
+      environment:              development
+
+  conditions:
+    - id: compute_count_check
+      expression: "compute_instance_count <= limits.max_compute_instances"
+      description: "Compute instance count must not exceed deployment limit"
+
+    - id: gpu_count_check
+      expression: "gpu_instance_count <= limits.max_gpu_instances"
+      description: "GPU instances require explicit governance approval"
+
+    - id: deployment_cost_check
+      expression: "estimated_cost <= limits.max_single_deployment_cost"
+      description: "Single deployment cost must not exceed threshold"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # Resource limit violations are high severity.
+  # Engineering lead notified immediately.
+  # Platform lead and budget owner must both approve
+  # any override — prevents accidental large deployments.
+  # ---------------------------------------------------
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: engineering_lead
+        channel: slack
+      - role: budget_owner
+        channel: email
+
+    approvals:
+      required:
+        - platform_lead
+        - budget_owner
+
+  override:
+    roles:
+      - platform_lead
+      - budget_owner
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Resource limit exceeded. Deployment blocked pending platform review."
+
+    - type: log
+      severity: info
+      message: "Resource limits governance evaluation recorded in audit trail."
