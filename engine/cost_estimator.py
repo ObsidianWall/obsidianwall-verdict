@@ -337,11 +337,11 @@ def _fetch_azure_vm_price(
             headers={"Accept": "application/json"},
         )
 
-            # Validate URL scheme before opening.
-            # Only HTTPS is permitted — prevents file:// or
-            # custom scheme exploitation.
-            # The URL is constructed from a hardcoded HTTPS
-            # domain and URL-encoded parameters only.
+        # Validate URL scheme before opening.
+        # Only HTTPS is permitted — prevents file:// or
+        # custom scheme exploitation.
+        # The URL is constructed from a hardcoded HTTPS
+        # domain and URL-encoded parameters only.
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme != "https":
             raise ValueError(
