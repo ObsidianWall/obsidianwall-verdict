@@ -1,4 +1,3 @@
-
 # engine/evaluator.py
 
 # Purpose:
@@ -20,12 +19,9 @@
 from typing import Any
 
 from audit.audit_logger import get_logger
-from engine.condition_evaluator import (evaluate_conditions)
-from engine.decision_resolver import (resolve_decision)
+from engine.condition_evaluator import evaluate_conditions
+from engine.decision_resolver import resolve_decision
 from schemas.policy_schema import Policy
-
-
-
 
 logger = get_logger()
 
@@ -54,52 +50,37 @@ def evaluate_policy(
     # CONDITION EVALUATION
     # =================================================
 
-    conditions_passed, trace = evaluate_conditions(
-        policy,
-        runtime_context
-    )
+    conditions_passed, trace = evaluate_conditions(policy, runtime_context)
 
     # =================================================
     # DECISION RESOLUTION
     # =================================================
 
-    resolution: dict[str, Any] = resolve_decision(
-        policy,
-        conditions_passed,
-        user_role
-    )
+    resolution: dict[str, Any] = resolve_decision(policy, conditions_passed, user_role)
 
     result: dict[str, Any] = {
-
-        "decision":             resolution["decision"],
-
-        "override_required":    resolution["override_required"],
-
-        "override_possible":    resolution["override_possible"],
-
-        "requires_approval":    resolution["requires_approval"],
-
-        "governance_severity":  resolution["governance_severity"],
-
-        "resolution_reason":    resolution["resolution_reason"],
-
-        "conditions_passed":    conditions_passed,
-
-        "trace":                trace,
+        "decision": resolution["decision"],
+        "override_required": resolution["override_required"],
+        "override_possible": resolution["override_possible"],
+        "requires_approval": resolution["requires_approval"],
+        "governance_severity": resolution["governance_severity"],
+        "resolution_reason": resolution["resolution_reason"],
+        "conditions_passed": conditions_passed,
+        "trace": trace,
     }
 
     logger.info(
         "policy_evaluated",
         extra={
             "extra": {
-                "decision":             result["decision"],
-                "conditions_passed":    result["conditions_passed"],
-                "governance_severity":  result["governance_severity"],
-                "override_required":    result["override_required"],
-                "override_possible":    result["override_possible"],
-                "requires_approval":    result["requires_approval"],
+                "decision": result["decision"],
+                "conditions_passed": result["conditions_passed"],
+                "governance_severity": result["governance_severity"],
+                "override_required": result["override_required"],
+                "override_possible": result["override_possible"],
+                "requires_approval": result["requires_approval"],
             }
-        }
+        },
     )
 
     return result

@@ -40,12 +40,10 @@ from engine.validator import validate_policy
 from engine.workflows import build_approval_request, route_notifications
 from schemas.policy_schema import Policy
 
-
 logger = get_logger()
 
 
 class PolicyOrchestrator:
-
     def __init__(
         self,
         policy: Policy,
@@ -67,7 +65,7 @@ class PolicyOrchestrator:
         """
 
         raw_policy: dict[str, Any] = load_policy(policy_path)
-        validated_policy: Policy   = validate_policy(raw_policy)
+        validated_policy: Policy = validate_policy(raw_policy)
 
         return cls(validated_policy)
 
@@ -104,22 +102,20 @@ class PolicyOrchestrator:
             "evaluation_started",
             extra={
                 "extra": {
-                    "decision_id":  decision_id,
-                    "policy":       self.policy.metadata.name,
-                    "user_role":    user_role,
+                    "decision_id": decision_id,
+                    "policy": self.policy.metadata.name,
+                    "user_role": user_role,
                 }
-            }
+            },
         )
 
         # =============================================
         # STEP 1 — RUNTIME CONTEXT
         # =============================================
 
-        runtime_context: dict[str, Any] = (
-            build_policy_runtime_context(
-                self.policy,
-                context,
-            )
+        runtime_context: dict[str, Any] = build_policy_runtime_context(
+            self.policy,
+            context,
         )
 
         # =============================================
@@ -131,30 +127,28 @@ class PolicyOrchestrator:
         analyzer_results: dict[str, Any] = {}
 
         analyzers: list[tuple[str, Any]] = [
-            ("cost_analysis",         analyze_cost),
-            ("topology_analysis",     analyze_topology),
+            ("cost_analysis", analyze_cost),
+            ("topology_analysis", analyze_topology),
             ("architecture_analysis", analyze_architecture),
-            ("utilization_analysis",  analyze_utilization),
+            ("utilization_analysis", analyze_utilization),
         ]
 
         for analyzer_name, analyzer_fn in analyzers:
             try:
-                analyzer_results[analyzer_name] = (
-                    analyzer_fn(runtime_context)
-                )
+                analyzer_results[analyzer_name] = analyzer_fn(runtime_context)
             except Exception as error:
                 analyzer_results[analyzer_name] = {
                     "status": "failed",
-                    "error":  str(error),
+                    "error": str(error),
                 }
                 logger.warning(
                     "analyzer_failed",
                     extra={
                         "extra": {
                             "analyzer": analyzer_name,
-                            "error":    str(error),
+                            "error": str(error),
                         }
-                    }
+                    },
                 )
 
         # =============================================
@@ -245,68 +239,50 @@ class PolicyOrchestrator:
         # =============================================
 
         result: dict[str, Any] = {
-
-            "decision_id":  decision_id,
-            "timestamp":    timestamp,
-            "policy":       self.policy.metadata.name,
-
+            "decision_id": decision_id,
+            "timestamp": timestamp,
+            "policy": self.policy.metadata.name,
             # -----------------------------------------
             # GOVERNANCE DECISION
             # -----------------------------------------
-
-            "decision":             evaluation_result["decision"],
-            "override_required":    evaluation_result["override_required"],
-            "override_possible":    evaluation_result["override_possible"],
-            "requires_approval":    evaluation_result["requires_approval"],
-            "governance_severity":  evaluation_result["governance_severity"],
-            "effective_severity":   risk_summary["effective_severity"],
-            "resolution_reason":    evaluation_result["resolution_reason"],
-            "conditions_passed":    evaluation_result["conditions_passed"],
-            "trace":                evaluation_result["trace"],
-
+            "decision": evaluation_result["decision"],
+            "override_required": evaluation_result["override_required"],
+            "override_possible": evaluation_result["override_possible"],
+            "requires_approval": evaluation_result["requires_approval"],
+            "governance_severity": evaluation_result["governance_severity"],
+            "effective_severity": risk_summary["effective_severity"],
+            "resolution_reason": evaluation_result["resolution_reason"],
+            "conditions_passed": evaluation_result["conditions_passed"],
+            "trace": evaluation_result["trace"],
             # -----------------------------------------
             # RISK SUMMARY
             # -----------------------------------------
-
             "risk_summary": risk_summary,
-
             # -----------------------------------------
             # GOVERNANCE WORKFLOW
             # -----------------------------------------
-
             "notification_manifest": notification_manifest,
-            "approval_request":      approval_request,
-
+            "approval_request": approval_request,
             # -----------------------------------------
             # ACTIONS
             # -----------------------------------------
-
-            "actions": [
-                action.model_dump()
-                for action in self.policy.spec.actions
-            ],
-
+            "actions": [action.model_dump() for action in self.policy.spec.actions],
             # -----------------------------------------
             # INTELLIGENCE LAYERS
             # -----------------------------------------
-
             "analyzer_results": analyzer_results,
-            "suggestions":      suggestions,
-            "explanation":      explanation,
-
+            "suggestions": suggestions,
+            "explanation": explanation,
             # -----------------------------------------
             # CONTEXT TRACEABILITY
             # -----------------------------------------
-
-            "input_context":    context,
-            "runtime_context":  runtime_context,
-
+            "input_context": context,
+            "runtime_context": runtime_context,
             # -----------------------------------------
             # PRICING METADATA
             # Captures which pricing mode was used
             # for cost estimation auditability.
             # -----------------------------------------
-
             "pricing_mode": context.get("pricing_mode", "table"),
         }
 
@@ -318,26 +294,22 @@ class PolicyOrchestrator:
             "decision_evaluated",
             extra={
                 "extra": {
-                    "decision_id":          decision_id,
-                    "policy":               self.policy.metadata.name,
-                    "decision":             evaluation_result["decision"],
-                    "conditions_passed":    evaluation_result["conditions_passed"],
-                    "governance_severity":  evaluation_result["governance_severity"],
-                    "effective_severity":   risk_summary["effective_severity"],
-                    "overall_risk_score":   risk_summary["overall_risk_score"],
-                    "requires_approval":    evaluation_result["requires_approval"],
-                    "override_required":    evaluation_result["override_required"],
-                    "total_findings":       risk_summary["total_findings"],
-                    "notifications":        notification_manifest.get(
-                        "notification_count", 0
-                    ),
-                    "approval_status":      approval_request.get(
-                        "approval_status"
-                    ),
-                    "user_role":            user_role,
-                    "pricing_mode":         context.get("pricing_mode", "table"),
+                    "decision_id": decision_id,
+                    "policy": self.policy.metadata.name,
+                    "decision": evaluation_result["decision"],
+                    "conditions_passed": evaluation_result["conditions_passed"],
+                    "governance_severity": evaluation_result["governance_severity"],
+                    "effective_severity": risk_summary["effective_severity"],
+                    "overall_risk_score": risk_summary["overall_risk_score"],
+                    "requires_approval": evaluation_result["requires_approval"],
+                    "override_required": evaluation_result["override_required"],
+                    "total_findings": risk_summary["total_findings"],
+                    "notifications": notification_manifest.get("notification_count", 0),
+                    "approval_status": approval_request.get("approval_status"),
+                    "user_role": user_role,
+                    "pricing_mode": context.get("pricing_mode", "table"),
                 }
-            }
+            },
         )
 
         return result

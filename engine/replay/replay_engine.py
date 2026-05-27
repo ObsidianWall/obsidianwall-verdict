@@ -1,4 +1,3 @@
-
 # engine/replay/replay_engine.py
 
 # Purpose:
@@ -30,18 +29,14 @@
 
 
 import uuid
-
 from datetime import datetime, timezone
 
-from engine.orchestrator import PolicyOrchestrator
-
-from engine.replay.replay_schema import (
-    ReplayRequest,
-    ReplayOutcome,
-)
-
 from audit.audit_logger import get_logger
-
+from engine.orchestrator import PolicyOrchestrator
+from engine.replay.replay_schema import (
+    ReplayOutcome,
+    ReplayRequest,
+)
 
 logger = get_logger()
 
@@ -66,33 +61,30 @@ def execute_replay(
         full replayed evaluation artifact.
     """
 
-    replay_id       = str(uuid.uuid4())
+    replay_id = str(uuid.uuid4())
     replay_timestamp = datetime.now(timezone.utc).isoformat()
 
     logger.info(
         "replay_started",
         extra={
             "extra": {
-                "replay_id":                replay_id,
-                "original_decision_id":     request.original_decision_id,
-                "policy_path":              request.policy_path,
-                "replay_role":              request.replay_role,
-                "replay_label":             request.replay_label,
+                "replay_id": replay_id,
+                "original_decision_id": request.original_decision_id,
+                "policy_path": request.policy_path,
+                "replay_role": request.replay_role,
+                "replay_label": request.replay_label,
             }
-        }
+        },
     )
 
     try:
-
         # =============================================
         # RECONSTRUCT ORCHESTRATOR
         # Load policy from path and re-execute
         # with the stored input context.
         # =============================================
 
-        orchestrator = PolicyOrchestrator.from_policy_path(
-            request.policy_path
-        )
+        orchestrator = PolicyOrchestrator.from_policy_path(request.policy_path)
 
         replayed_result = orchestrator.evaluate(
             context=request.stored_input_context,
@@ -103,37 +95,22 @@ def execute_replay(
         # COMPARE RESULTS
         # =============================================
 
-        original_decision = _extract_original_decision(
-            request
-        )
+        original_decision = _extract_original_decision(request)
 
-        replayed_decision = replayed_result.get(
-            "decision", "UNKNOWN"
-        )
+        replayed_decision = replayed_result.get("decision", "UNKNOWN")
 
-        decision_matches = (
-            original_decision == replayed_decision
-        )
+        decision_matches = original_decision == replayed_decision
 
-        original_conditions = _extract_original_conditions(
-            request
-        )
+        original_conditions = _extract_original_conditions(request)
 
-        replayed_conditions = replayed_result.get(
-            "conditions_passed", False
-        )
+        replayed_conditions = replayed_result.get("conditions_passed", False)
 
-        conditions_match = (
-            original_conditions == replayed_conditions
-        )
+        conditions_match = original_conditions == replayed_conditions
 
-        original_risk = _extract_original_risk_score(
-            request
-        )
+        original_risk = _extract_original_risk_score(request)
 
-        replayed_risk = (
-            replayed_result.get("risk_summary", {})
-            .get("overall_risk_score", 0)
+        replayed_risk = replayed_result.get("risk_summary", {}).get(
+            "overall_risk_score", 0
         )
 
         risk_delta = replayed_risk - (original_risk or 0)
@@ -143,17 +120,16 @@ def execute_replay(
         # =============================================
 
         if not decision_matches:
-
             logger.warning(
                 "replay_decision_drift_detected",
                 extra={
                     "extra": {
-                        "replay_id":            replay_id,
+                        "replay_id": replay_id,
                         "original_decision_id": request.original_decision_id,
-                        "original_decision":    original_decision,
-                        "replayed_decision":    replayed_decision,
+                        "original_decision": original_decision,
+                        "replayed_decision": replayed_decision,
                     }
-                }
+                },
             )
 
         outcome = ReplayOutcome(
@@ -178,30 +154,29 @@ def execute_replay(
             "replay_completed",
             extra={
                 "extra": {
-                    "replay_id":            replay_id,
+                    "replay_id": replay_id,
                     "original_decision_id": request.original_decision_id,
-                    "original_decision":    original_decision,
-                    "replayed_decision":    replayed_decision,
-                    "decision_matches":     decision_matches,
-                    "conditions_match":     conditions_match,
-                    "risk_delta":           risk_delta,
+                    "original_decision": original_decision,
+                    "replayed_decision": replayed_decision,
+                    "decision_matches": decision_matches,
+                    "conditions_match": conditions_match,
+                    "risk_delta": risk_delta,
                 }
-            }
+            },
         )
 
         return outcome
 
     except Exception as error:
-
         logger.error(
             "replay_failed",
             extra={
                 "extra": {
-                    "replay_id":            replay_id,
+                    "replay_id": replay_id,
                     "original_decision_id": request.original_decision_id,
-                    "error":                str(error),
+                    "error": str(error),
                 }
-            }
+            },
         )
 
         return ReplayOutcome(
@@ -227,6 +202,7 @@ def execute_replay(
 # =====================================================
 # HELPERS — EXTRACT FROM STORED CONTEXT
 # =====================================================
+
 
 def _extract_original_decision(
     request: ReplayRequest,

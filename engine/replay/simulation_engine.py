@@ -1,4 +1,3 @@
-
 # engine/replay/simulation_engine.py
 
 # Purpose:
@@ -27,18 +26,14 @@
 
 
 import uuid
-
 from datetime import datetime, timezone
 
-from engine.orchestrator import PolicyOrchestrator
-
-from engine.replay.replay_schema import (
-    SimulationRequest,
-    SimulationOutcome,
-)
-
 from audit.audit_logger import get_logger
-
+from engine.orchestrator import PolicyOrchestrator
+from engine.replay.replay_schema import (
+    SimulationOutcome,
+    SimulationRequest,
+)
 
 logger = get_logger()
 
@@ -46,6 +41,7 @@ logger = get_logger()
 # =====================================================
 # SIMULATION NARRATIVE BUILDER
 # =====================================================
+
 
 def _build_simulation_narrative(
     parameter_overrides: dict,
@@ -60,13 +56,9 @@ def _build_simulation_narrative(
     the simulation changed and what the outcome was.
     """
 
-    override_summary = ", ".join(
-        f"{k}={v}"
-        for k, v in parameter_overrides.items()
-    )
+    override_summary = ", ".join(f"{k}={v}" for k, v in parameter_overrides.items())
 
     if not decision_changed:
-
         narrative = (
             f"Simulation applied parameter overrides "
             f"({override_summary}). "
@@ -77,11 +69,7 @@ def _build_simulation_narrative(
         )
 
     else:
-
-        direction = (
-            "improved" if simulated_conditions_passed
-            else "worsened"
-        )
+        direction = "improved" if simulated_conditions_passed else "worsened"
 
         narrative = (
             f"Simulation applied parameter overrides "
@@ -93,13 +81,9 @@ def _build_simulation_narrative(
         )
 
         if risk_delta > 0:
-            narrative += (
-                f"Risk score increased by {risk_delta:.1f} points."
-            )
+            narrative += f"Risk score increased by {risk_delta:.1f} points."
         elif risk_delta < 0:
-            narrative += (
-                f"Risk score decreased by {abs(risk_delta):.1f} points."
-            )
+            narrative += f"Risk score decreased by {abs(risk_delta):.1f} points."
 
     return narrative
 
@@ -107,6 +91,7 @@ def _build_simulation_narrative(
 # =====================================================
 # PARAMETER OVERRIDE APPLICATION
 # =====================================================
+
 
 def _apply_overrides(
     base_context: dict,
@@ -136,6 +121,7 @@ def _apply_overrides(
 # SIMULATION ENGINE
 # =====================================================
 
+
 def execute_simulation(
     request: SimulationRequest,
 ) -> SimulationOutcome:
@@ -155,25 +141,24 @@ def execute_simulation(
         and full simulated evaluation artifact.
     """
 
-    simulation_id       = str(uuid.uuid4())
+    simulation_id = str(uuid.uuid4())
     simulation_timestamp = datetime.now(timezone.utc).isoformat()
 
     logger.info(
         "simulation_started",
         extra={
             "extra": {
-                "simulation_id":            simulation_id,
-                "original_decision_id":     request.original_decision_id,
-                "policy_path":              request.policy_path,
-                "parameter_overrides":      request.parameter_overrides,
-                "simulation_role":          request.simulation_role,
-                "simulation_label":         request.simulation_label,
+                "simulation_id": simulation_id,
+                "original_decision_id": request.original_decision_id,
+                "policy_path": request.policy_path,
+                "parameter_overrides": request.parameter_overrides,
+                "simulation_role": request.simulation_role,
+                "simulation_label": request.simulation_label,
             }
-        }
+        },
     )
 
     try:
-
         # =============================================
         # APPLY PARAMETER OVERRIDES
         # =============================================
@@ -187,9 +172,7 @@ def execute_simulation(
         # EXECUTE SIMULATION
         # =============================================
 
-        orchestrator = PolicyOrchestrator.from_policy_path(
-            request.policy_path
-        )
+        orchestrator = PolicyOrchestrator.from_policy_path(request.policy_path)
 
         simulated_result = orchestrator.evaluate(
             context=simulated_context,
@@ -210,38 +193,24 @@ def execute_simulation(
             user_role=request.simulation_role,
         )
 
-        original_decision = baseline_result.get(
-            "decision", "UNKNOWN"
+        original_decision = baseline_result.get("decision", "UNKNOWN")
+
+        simulated_decision = simulated_result.get("decision", "UNKNOWN")
+
+        decision_changed = original_decision != simulated_decision
+
+        original_conditions = baseline_result.get("conditions_passed", False)
+
+        simulated_conditions = simulated_result.get("conditions_passed", False)
+
+        conditions_changed = original_conditions != simulated_conditions
+
+        original_risk = baseline_result.get("risk_summary", {}).get(
+            "overall_risk_score", 0
         )
 
-        simulated_decision = simulated_result.get(
-            "decision", "UNKNOWN"
-        )
-
-        decision_changed = (
-            original_decision != simulated_decision
-        )
-
-        original_conditions = baseline_result.get(
-            "conditions_passed", False
-        )
-
-        simulated_conditions = simulated_result.get(
-            "conditions_passed", False
-        )
-
-        conditions_changed = (
-            original_conditions != simulated_conditions
-        )
-
-        original_risk = (
-            baseline_result.get("risk_summary", {})
-            .get("overall_risk_score", 0)
-        )
-
-        simulated_risk = (
-            simulated_result.get("risk_summary", {})
-            .get("overall_risk_score", 0)
+        simulated_risk = simulated_result.get("risk_summary", {}).get(
+            "overall_risk_score", 0
         )
 
         risk_delta = simulated_risk - original_risk
@@ -287,31 +256,30 @@ def execute_simulation(
             "simulation_completed",
             extra={
                 "extra": {
-                    "simulation_id":            simulation_id,
-                    "original_decision_id":     request.original_decision_id,
-                    "original_decision":        original_decision,
-                    "simulated_decision":       simulated_decision,
-                    "decision_changed":         decision_changed,
-                    "conditions_changed":       conditions_changed,
-                    "risk_delta":               risk_delta,
-                    "parameter_overrides":      request.parameter_overrides,
+                    "simulation_id": simulation_id,
+                    "original_decision_id": request.original_decision_id,
+                    "original_decision": original_decision,
+                    "simulated_decision": simulated_decision,
+                    "decision_changed": decision_changed,
+                    "conditions_changed": conditions_changed,
+                    "risk_delta": risk_delta,
+                    "parameter_overrides": request.parameter_overrides,
                 }
-            }
+            },
         )
 
         return outcome
 
     except Exception as error:
-
         logger.error(
             "simulation_failed",
             extra={
                 "extra": {
-                    "simulation_id":            simulation_id,
-                    "original_decision_id":     request.original_decision_id,
-                    "error":                    str(error),
+                    "simulation_id": simulation_id,
+                    "original_decision_id": request.original_decision_id,
+                    "error": str(error),
                 }
-            }
+            },
         )
 
         return SimulationOutcome(

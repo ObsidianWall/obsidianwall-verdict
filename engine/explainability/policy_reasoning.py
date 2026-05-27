@@ -1,4 +1,3 @@
-
 # engine/explainability/policy_reasoning.py
 
 # Purpose:
@@ -19,7 +18,6 @@
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -28,30 +26,25 @@ logger = get_logger()
 # =====================================================
 
 DECISION_NARRATIVES = {
-
     "ALLOW": (
         "All policy conditions were satisfied. "
         "The infrastructure change is within governance boundaries."
     ),
-
     "ALLOW_WITH_NOTIFICATION": (
         "Policy conditions were satisfied. "
         "However, governance severity warrants stakeholder notification. "
         "Budget owners and engineering leads have been notified."
     ),
-
     "ALLOW_WITH_APPROVAL_REQUIRED": (
         "Policy conditions were satisfied. "
         "Governance policy requires formal approval before deployment proceeds. "
         "Pending approval from designated governance stakeholders."
     ),
-
     "DENY_WITH_OVERRIDE": (
         "One or more policy conditions failed. "
         "An authorized override role is present. "
         "Deployment is blocked pending override confirmation or approval."
     ),
-
     "DENY": (
         "One or more policy conditions failed. "
         "No override authority is available for this role. "
@@ -65,27 +58,17 @@ DECISION_NARRATIVES = {
 # =====================================================
 
 SEVERITY_NARRATIVES = {
-
     "informational": (
-        "This is an informational governance event. "
-        "No action is required."
+        "This is an informational governance event. No action is required."
     ),
-
-    "low": (
-        "Low governance severity. "
-        "Advisory awareness recommended."
-    ),
-
+    "low": ("Low governance severity. Advisory awareness recommended."),
     "medium": (
-        "Medium governance severity. "
-        "Budget owner notification has been triggered."
+        "Medium governance severity. Budget owner notification has been triggered."
     ),
-
     "high": (
         "High governance severity. "
         "Immediate stakeholder notification and review required."
     ),
-
     "critical": (
         "Critical governance severity. "
         "Escalation to senior governance stakeholders required immediately."
@@ -97,21 +80,19 @@ SEVERITY_NARRATIVES = {
 # CONDITION REASONING
 # =====================================================
 
-def _explain_condition(
-    trace_item: dict
-) -> dict:
+
+def _explain_condition(trace_item: dict) -> dict:
     """
     Translate a single condition trace item into
     a plain-English reasoning step.
     """
 
-    condition_id    = trace_item.get("condition_id", "unknown")
-    expression      = trace_item.get("expression", "")
-    result          = trace_item.get("result", False)
-    description     = trace_item.get("description", "")
+    condition_id = trace_item.get("condition_id", "unknown")
+    expression = trace_item.get("expression", "")
+    result = trace_item.get("result", False)
+    description = trace_item.get("description", "")
 
     if result:
-
         explanation = (
             f"Condition '{condition_id}' passed. "
             f"{description}. "
@@ -121,7 +102,6 @@ def _explain_condition(
         remediation = None
 
     else:
-
         explanation = (
             f"Condition '{condition_id}' failed. "
             f"{description}. "
@@ -134,10 +114,10 @@ def _explain_condition(
         )
 
     return {
-        "condition_id":     condition_id,
-        "passed":           result,
-        "explanation":      explanation,
-        "remediation":      remediation,
+        "condition_id": condition_id,
+        "passed": result,
+        "explanation": explanation,
+        "remediation": remediation,
     }
 
 
@@ -177,6 +157,7 @@ def _build_remediation_guidance(
 # POLICY REASONING BUILDER
 # =====================================================
 
+
 def build_policy_reasoning(
     decision: str,
     conditions_passed: bool,
@@ -204,9 +185,7 @@ def build_policy_reasoning(
         raise TypeError("trace must be a list")
 
     if not isinstance(decision, str) or not decision:
-        raise ValueError(
-            "decision must be a non-empty string"
-        )
+        raise ValueError("decision must be a non-empty string")
 
     # =================================================
     # DECISION NARRATIVE
@@ -217,7 +196,7 @@ def build_policy_reasoning(
         (
             f"Governance decision '{decision}' was reached. "
             f"Review the evaluation trace for details."
-        )
+        ),
     )
 
     # =================================================
@@ -229,38 +208,29 @@ def build_policy_reasoning(
     passed_conditions = []
 
     for trace_item in trace:
-
         if not isinstance(trace_item, dict):
             continue
 
-        condition_reasoning = _explain_condition(
-            trace_item
-        )
+        condition_reasoning = _explain_condition(trace_item)
 
         reasoning_chain.append(condition_reasoning)
 
         if condition_reasoning["passed"]:
-            passed_conditions.append(
-                condition_reasoning["condition_id"]
-            )
+            passed_conditions.append(condition_reasoning["condition_id"])
         else:
-            failed_conditions.append(
-                condition_reasoning["condition_id"]
-            )
+            failed_conditions.append(condition_reasoning["condition_id"])
 
     # =================================================
     # GOVERNANCE SUMMARY
     # =================================================
 
     if conditions_passed:
-
         governance_summary = (
             f"All {len(passed_conditions)} policy condition(s) "
             f"passed. Governance boundaries satisfied."
         )
 
     else:
-
         governance_summary = (
             f"{len(failed_conditions)} of "
             f"{len(trace)} policy condition(s) failed. "
@@ -273,30 +243,28 @@ def build_policy_reasoning(
     # =================================================
 
     remediations = [
-        step["remediation"]
-        for step in reasoning_chain
-        if step.get("remediation")
+        step["remediation"] for step in reasoning_chain if step.get("remediation")
     ]
 
     artifact = {
-        "decision_narrative":   decision_narrative,
-        "governance_summary":   governance_summary,
-        "reasoning_chain":      reasoning_chain,
-        "passed_conditions":    passed_conditions,
-        "failed_conditions":    failed_conditions,
-        "remediation_steps":    remediations,
+        "decision_narrative": decision_narrative,
+        "governance_summary": governance_summary,
+        "reasoning_chain": reasoning_chain,
+        "passed_conditions": passed_conditions,
+        "failed_conditions": failed_conditions,
+        "remediation_steps": remediations,
     }
 
     logger.info(
         "policy_reasoning_built",
         extra={
             "extra": {
-                "decision":             decision,
-                "conditions_passed":    conditions_passed,
-                "passed_count":         len(passed_conditions),
-                "failed_count":         len(failed_conditions),
+                "decision": decision,
+                "conditions_passed": conditions_passed,
+                "passed_count": len(passed_conditions),
+                "failed_count": len(failed_conditions),
             }
-        }
+        },
     )
 
     return artifact

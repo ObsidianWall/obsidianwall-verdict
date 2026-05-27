@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 # scripts/parse_verdict_output.py
@@ -74,13 +73,9 @@ def extract_fields(
     """
 
     decision = str(artifact.get("decision", "UNKNOWN"))
-    conditions_passed = str(
-        artifact.get("conditions_passed", False)
-    ).lower()
+    conditions_passed = str(artifact.get("conditions_passed", False)).lower()
     decision_id = str(artifact.get("decision_id", ""))
-    effective_severity = str(
-        artifact.get("effective_severity", "unknown")
-    )
+    effective_severity = str(artifact.get("effective_severity", "unknown"))
 
     risk_summary = artifact.get("risk_summary", {})
     risk_score = str(
@@ -90,11 +85,11 @@ def extract_fields(
     )
 
     return {
-        "decision":             decision,
-        "conditions_passed":    conditions_passed,
-        "risk_score":           risk_score,
-        "effective_severity":   effective_severity,
-        "decision_id":          decision_id,
+        "decision": decision,
+        "conditions_passed": conditions_passed,
+        "risk_score": risk_score,
+        "effective_severity": effective_severity,
+        "decision_id": decision_id,
     }
 
 
@@ -119,7 +114,7 @@ def main() -> None:
     content = output_file.read_text(encoding="utf-8")
 
     artifact = parse_verdict_output(content)
-    fields   = extract_fields(artifact)
+    fields = extract_fields(artifact)
 
     # Write to stdout in GITHUB_OUTPUT format
     # (caller appends to $GITHUB_OUTPUT)

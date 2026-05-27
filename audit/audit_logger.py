@@ -5,8 +5,8 @@
 # Audit Logger for ObsidianWall-Guardrails
 
 
-import logging
 import json
+import logging
 import sys
 import uuid
 from datetime import datetime, timezone

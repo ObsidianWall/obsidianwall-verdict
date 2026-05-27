@@ -1,4 +1,3 @@
-
 # engine/risk_scorer.py
 
 # Purpose:
@@ -18,9 +17,8 @@
 # Risk scoring informs governance routing only.
 
 
-from schemas.policy_schema import GovernanceSeverity
 from audit.audit_logger import get_logger
-
+from schemas.policy_schema import GovernanceSeverity
 
 logger = get_logger()
 
@@ -35,19 +33,19 @@ logger = get_logger()
 # TODO: Replace with configurable scoring engine.
 
 RISK_SEVERITY_THRESHOLDS = {
-    "critical":     70,
-    "high":         40,
-    "medium":       15,
-    "low":          1,
+    "critical": 70,
+    "high": 40,
+    "medium": 15,
+    "low": 1,
 }
 
 # Severity ordering for escalation comparison.
 SEVERITY_ORDER = {
-    GovernanceSeverity.INFORMATIONAL:   0,
-    GovernanceSeverity.LOW:             1,
-    GovernanceSeverity.MEDIUM:          2,
-    GovernanceSeverity.HIGH:            3,
-    GovernanceSeverity.CRITICAL:        4,
+    GovernanceSeverity.INFORMATIONAL: 0,
+    GovernanceSeverity.LOW: 1,
+    GovernanceSeverity.MEDIUM: 2,
+    GovernanceSeverity.HIGH: 3,
+    GovernanceSeverity.CRITICAL: 4,
 }
 
 
@@ -56,29 +54,23 @@ SEVERITY_ORDER = {
 # =====================================================
 
 RISK_SEVERITY_NARRATIVES = {
-
     "critical": (
         "Critical infrastructure risk detected. "
         "Multiple high-severity findings require "
         "immediate governance review."
     ),
-
     "high": (
         "Elevated infrastructure risk detected. "
         "Significant findings identified across "
         "one or more analyzers."
     ),
-
     "medium": (
         "Moderate infrastructure risk detected. "
         "Advisory findings identified that warrant review."
     ),
-
     "low": (
-        "Low infrastructure risk detected. "
-        "Minor findings identified for awareness."
+        "Low infrastructure risk detected. Minor findings identified for awareness."
     ),
-
     "informational": (
         "No significant infrastructure risk detected. "
         "Infrastructure configuration is within "
@@ -91,9 +83,8 @@ RISK_SEVERITY_NARRATIVES = {
 # SEVERITY RESOLUTION
 # =====================================================
 
-def _score_to_severity(
-    overall_score: int
-) -> str:
+
+def _score_to_severity(overall_score: int) -> str:
     """
     Map an aggregated risk score to a severity level.
     """
@@ -131,30 +122,25 @@ def compute_effective_severity(
     """
 
     try:
-        policy_level = SEVERITY_ORDER.get(
-            GovernanceSeverity(policy_severity), 2
-        )
+        policy_level = SEVERITY_ORDER.get(GovernanceSeverity(policy_severity), 2)
     except ValueError:
-        policy_level = 2    # default to medium
+        policy_level = 2  # default to medium
 
     try:
-        risk_level = SEVERITY_ORDER.get(
-            GovernanceSeverity(risk_severity), 2
-        )
+        risk_level = SEVERITY_ORDER.get(GovernanceSeverity(risk_severity), 2)
     except ValueError:
-        risk_level = 2      # default to medium
+        risk_level = 2  # default to medium
 
     if risk_level > policy_level:
-
         logger.info(
             "severity_escalated",
             extra={
                 "extra": {
-                    "policy_severity":  policy_severity,
-                    "risk_severity":    risk_severity,
-                    "effective":        risk_severity,
+                    "policy_severity": policy_severity,
+                    "risk_severity": risk_severity,
+                    "effective": risk_severity,
                 }
-            }
+            },
         )
 
         return risk_severity
@@ -165,6 +151,7 @@ def compute_effective_severity(
 # =====================================================
 # RISK SCORER
 # =====================================================
+
 
 def compute_risk_summary(
     analyzer_results: dict,
@@ -191,25 +178,22 @@ def compute_risk_summary(
     # =================================================
 
     if not isinstance(analyzer_results, dict):
-        raise TypeError(
-            "analyzer_results must be a dict"
-        )
+        raise TypeError("analyzer_results must be a dict")
 
     # =================================================
     # AGGREGATE SCORES
     # =================================================
 
-    total_risk_score        = 0
-    highest_risk_analyzer   = None
-    highest_risk_score      = 0
-    total_findings          = 0
+    total_risk_score = 0
+    highest_risk_analyzer = None
+    highest_risk_score = 0
+    total_findings = 0
 
-    analyzer_scores         = {}
+    analyzer_scores = {}
     analyzer_finding_counts = {}
-    failed_analyzers        = []
+    failed_analyzers = []
 
     for analyzer_name, analyzer_data in analyzer_results.items():
-
         # -------------------------------------------------
         # GUARD: failed or malformed analyzer
         # -------------------------------------------------
@@ -226,19 +210,19 @@ def compute_risk_summary(
             analyzer_finding_counts[analyzer_name] = 0
             continue
 
-        score       = analyzer_data.get("risk_score", 0)
-        findings    = analyzer_data.get("findings", [])
-        count       = len(findings)
+        score = analyzer_data.get("risk_score", 0)
+        findings = analyzer_data.get("findings", [])
+        count = len(findings)
 
-        analyzer_scores[analyzer_name]          = score
-        analyzer_finding_counts[analyzer_name]  = count
+        analyzer_scores[analyzer_name] = score
+        analyzer_finding_counts[analyzer_name] = count
 
-        total_risk_score    += score
-        total_findings      += count
+        total_risk_score += score
+        total_findings += count
 
         if score > highest_risk_score:
-            highest_risk_score      = score
-            highest_risk_analyzer   = analyzer_name
+            highest_risk_score = score
+            highest_risk_analyzer = analyzer_name
 
     # =================================================
     # NORMALIZE SCORE
@@ -264,8 +248,7 @@ def compute_risk_summary(
     # =================================================
 
     risk_narrative = RISK_SEVERITY_NARRATIVES.get(
-        effective_severity,
-        RISK_SEVERITY_NARRATIVES["informational"]
+        effective_severity, RISK_SEVERITY_NARRATIVES["informational"]
     )
 
     if failed_analyzers:
@@ -280,43 +263,32 @@ def compute_risk_summary(
     # =================================================
 
     summary = {
-
-        "overall_risk_score":       overall_risk_score,
-
-        "risk_severity":            risk_severity,
-
-        "effective_severity":       effective_severity,
-
-        "policy_severity":          policy_severity,
-
-        "highest_risk_analyzer":    highest_risk_analyzer,
-
-        "highest_risk_score":       highest_risk_score,
-
-        "total_findings":           total_findings,
-
-        "analyzer_scores":          analyzer_scores,
-
-        "analyzer_finding_counts":  analyzer_finding_counts,
-
-        "failed_analyzers":         failed_analyzers,
-
-        "risk_narrative":           risk_narrative,
+        "overall_risk_score": overall_risk_score,
+        "risk_severity": risk_severity,
+        "effective_severity": effective_severity,
+        "policy_severity": policy_severity,
+        "highest_risk_analyzer": highest_risk_analyzer,
+        "highest_risk_score": highest_risk_score,
+        "total_findings": total_findings,
+        "analyzer_scores": analyzer_scores,
+        "analyzer_finding_counts": analyzer_finding_counts,
+        "failed_analyzers": failed_analyzers,
+        "risk_narrative": risk_narrative,
     }
 
     logger.info(
         "risk_summary_computed",
         extra={
             "extra": {
-                "overall_risk_score":   overall_risk_score,
-                "risk_severity":        risk_severity,
-                "effective_severity":   effective_severity,
-                "policy_severity":      policy_severity,
+                "overall_risk_score": overall_risk_score,
+                "risk_severity": risk_severity,
+                "effective_severity": effective_severity,
+                "policy_severity": policy_severity,
                 "highest_risk_analyzer": highest_risk_analyzer,
-                "total_findings":       total_findings,
-                "failed_analyzers":     failed_analyzers,
+                "total_findings": total_findings,
+                "failed_analyzers": failed_analyzers,
             }
-        }
+        },
     )
 
     return summary

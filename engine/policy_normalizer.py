@@ -1,4 +1,3 @@
-
 # engine/policy_normalizer.py
 
 # Purpose:
@@ -15,14 +14,12 @@
 # Evaluators operate ONLY against normalized runtime context.
 
 
-
-
 from schemas.policy_schema import Policy
-
 
 # =====================================================
 # INCOMING POLICY NORMALIZATION
 # =====================================================
+
 
 def normalize_policy(raw: dict) -> dict:
     """
@@ -38,9 +35,7 @@ def normalize_policy(raw: dict) -> dict:
     # ---------------------------------------------------
 
     if not isinstance(raw, dict) or not raw:
-        raise ValueError(
-            "Policy input must be a non-empty dict"
-        )
+        raise ValueError("Policy input must be a non-empty dict")
 
     # ---------------------------------------------------
     # Already canonical DSL
@@ -50,83 +45,49 @@ def normalize_policy(raw: dict) -> dict:
     if "apiVersion" in raw and "spec" in raw:
         return raw
 
-    
     # ---------------------------------------------------
     # Legacy policy conversion
     # if data is in Legacy format → transform into DSL format
     # ---------------------------------------------------
 
     if "policy" in raw:
-
         legacy_policy = raw["policy"]
 
         return {
             "apiVersion": "obsidianwall.io/v1",
             "kind": "Policy",
-
             "metadata": {
                 "name": legacy_policy.get("name"),
-
                 "version": legacy_policy.get("version"),
-
                 # NOTE:
                 # Legacy policies stored owner under:
                 # parameters.budget.owner
                 # Preserved for backward compatibility.
                 "owner": (
-                    raw.get("parameters", {})
-                    .get("budget", {})
-                    .get("owner", "unknown")
+                    raw.get("parameters", {}).get("budget", {}).get("owner", "unknown")
                 ),
-
-                "description": legacy_policy.get(
-                    "description"
-                ),
+                "description": legacy_policy.get("description"),
             },
-
             "spec": {
                 "inputs": raw.get("inputs", []),
-
-                "parameters": raw.get(
-                    "parameters",
-                    {}
-                ),
-
-                "conditions": raw.get(
-                    "conditions",
-                    []
-                ),
-
-                "decision": raw.get(
-                    "decision",
-                    {}
-                ),
-
-                "override": raw.get(
-                    "override",
-                    {}
-                ),
-
-                "actions": raw.get(
-                    "actions",
-                    []
-                ),
+                "parameters": raw.get("parameters", {}),
+                "conditions": raw.get("conditions", []),
+                "decision": raw.get("decision", {}),
+                "override": raw.get("override", {}),
+                "actions": raw.get("actions", []),
             },
         }
 
-    raise ValueError(
-        "Invalid policy format: unsupported structure"
-    )
+    raise ValueError("Invalid policy format: unsupported structure")
 
 
 # =====================================================
 # RUNTIME NORMALIZATION
 # =====================================================
 
+
 def flatten_policy_parameters(
-    parameters: dict,
-    parent_key: str = "",
-    flattened: dict | None = None
+    parameters: dict, parent_key: str = "", flattened: dict | None = None
 ) -> dict:
     """
     Flatten nested policy parameters.
@@ -150,21 +111,11 @@ def flatten_policy_parameters(
         flattened = {}
 
     for key, value in parameters.items():
-
-        full_key = (
-            f"{parent_key}.{key}"
-            if parent_key
-            else key
-        )
+        full_key = f"{parent_key}.{key}" if parent_key else key
 
         # Recursive flattening
         if isinstance(value, dict):
-
-            flatten_policy_parameters(
-                value,
-                full_key,
-                flattened
-            )
+            flatten_policy_parameters(value, full_key, flattened)
 
         else:
             flattened[full_key] = value
@@ -172,10 +123,7 @@ def flatten_policy_parameters(
     return flattened
 
 
-def build_policy_runtime_context(
-    policy: Policy,
-    base_context: dict
-) -> dict:
+def build_policy_runtime_context(policy: Policy, base_context: dict) -> dict:
     """
     Build fully normalized runtime evaluation context.
 
@@ -188,33 +136,25 @@ def build_policy_runtime_context(
 
     runtime_context = dict(base_context)
 
-    flattened_parameters = (
-        flatten_policy_parameters(
-            policy.spec.parameters.model_dump()
-        )
+    flattened_parameters = flatten_policy_parameters(
+        policy.spec.parameters.model_dump()
     )
 
     # ---------------------------------------------------
     # Collision detection
     # ---------------------------------------------------
 
-    conflicts = (
-        set(flattened_parameters.keys())
-        & set(runtime_context.keys())
-    )
+    conflicts = set(flattened_parameters.keys()) & set(runtime_context.keys())
 
     if conflicts:
         raise ValueError(
-            f"Policy parameters conflict "
-            f"with runtime context keys: {conflicts}"
+            f"Policy parameters conflict with runtime context keys: {conflicts}"
         )
 
     # ---------------------------------------------------
     # Merge normalized parameters
     # ---------------------------------------------------
 
-    runtime_context.update(
-        flattened_parameters
-    )
+    runtime_context.update(flattened_parameters)
 
     return runtime_context

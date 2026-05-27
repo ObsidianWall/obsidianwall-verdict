@@ -38,9 +38,9 @@ def build_context(
     )
 
     return {
-        "resources":        parsed["resources"],
-        "estimated_cost":   cost_data["estimated_cost"],
-        "cost_breakdown":   cost_data["cost_breakdown"],
-        "current_spend":    current_spend,
-        "pricing_mode":     pricing_mode,
+        "resources": parsed["resources"],
+        "estimated_cost": cost_data["estimated_cost"],
+        "cost_breakdown": cost_data["cost_breakdown"],
+        "current_spend": current_spend,
+        "pricing_mode": pricing_mode,
     }

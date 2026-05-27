@@ -1,4 +1,3 @@
-
 # engine/recommender.py
 
 # Purpose:
@@ -15,13 +14,8 @@
 # Advisory systems are isolated from governance authority.
 
 
-from engine.optimization_catalog import (
-    RESOURCE_CLASSES,
-    OPTIMIZATION_RULES
-)
-
 from audit.audit_logger import get_logger
-
+from engine.optimization_catalog import OPTIMIZATION_RULES, RESOURCE_CLASSES
 
 logger = get_logger()
 
@@ -30,9 +24,8 @@ logger = get_logger()
 # RESOURCE CLASSIFICATION
 # =====================================================
 
-def classify_resource(
-    resource_type: str
-) -> str:
+
+def classify_resource(resource_type: str) -> str:
     """
     Resolve semantic resource classification.
 
@@ -40,19 +33,12 @@ def classify_resource(
     and emits a warning for observability.
     """
 
-    classification = RESOURCE_CLASSES.get(
-        resource_type
-    )
+    classification = RESOURCE_CLASSES.get(resource_type)
 
     if classification is None:
-
         logger.warning(
             "unclassified_resource_type",
-            extra={
-                "extra": {
-                    "resource_type": resource_type
-                }
-            }
+            extra={"extra": {"resource_type": resource_type}},
         )
 
         return "unknown"
@@ -64,10 +50,8 @@ def classify_resource(
 # RULE MATCHING
 # =====================================================
 
-def match_rule_conditions(
-    rule_conditions: dict,
-    context: dict
-) -> bool:
+
+def match_rule_conditions(rule_conditions: dict, context: dict) -> bool:
     """
     Evaluate optimization rule applicability.
 
@@ -79,7 +63,6 @@ def match_rule_conditions(
         return False
 
     for key, expected_value in rule_conditions.items():
-
         actual_value = context.get(key)
 
         if actual_value != expected_value:
@@ -92,10 +75,8 @@ def match_rule_conditions(
 # SEMANTIC RECOMMENDATIONS
 # =====================================================
 
-def generate_semantic_recommendations(
-    resource_class: str,
-    context: dict
-) -> list[dict]:
+
+def generate_semantic_recommendations(resource_class: str, context: dict) -> list[dict]:
     """
     Generate semantic optimization recommendations
     from the optimization catalog.
@@ -104,19 +85,13 @@ def generate_semantic_recommendations(
     recommendations = []
 
     for rule in OPTIMIZATION_RULES:
-
         if rule["resource_class"] != resource_class:
             continue
 
-        if not match_rule_conditions(
-            rule["conditions"],
-            context
-        ):
+        if not match_rule_conditions(rule["conditions"], context):
             continue
 
-        recommendations.extend(
-            rule["recommendations"]
-        )
+        recommendations.extend(rule["recommendations"])
 
     return recommendations
 
@@ -125,9 +100,8 @@ def generate_semantic_recommendations(
 # ANALYZER ENRICHMENT
 # =====================================================
 
-def enrich_from_analyzers(
-    analyzer_results: dict
-) -> list[dict]:
+
+def enrich_from_analyzers(analyzer_results: dict) -> list[dict]:
     """
     Convert analyzer findings and optimization candidates
     into structured recommendation objects.
@@ -138,103 +112,66 @@ def enrich_from_analyzers(
     enriched_recommendations = []
 
     for analyzer_name, analyzer_data in analyzer_results.items():
-
         # -----------------------------------------
         # GUARD: malformed analyzer output
         # -----------------------------------------
 
         if not isinstance(analyzer_data, dict):
-
             logger.warning(
                 "malformed_analyzer_output",
                 extra={
                     "extra": {
                         "analyzer": analyzer_name,
-                        "received_type": type(
-                            analyzer_data
-                        ).__name__
+                        "received_type": type(analyzer_data).__name__,
                     }
-                }
+                },
             )
 
             continue
 
-        findings = analyzer_data.get(
-            "findings",
-            []
-        )
+        findings = analyzer_data.get("findings", [])
 
-        optimization_candidates = analyzer_data.get(
-            "optimization_candidates",
-            []
-        )
+        optimization_candidates = analyzer_data.get("optimization_candidates", [])
 
         # -----------------------------------------
         # FINDINGS
         # -----------------------------------------
 
         for finding in findings:
-
-            enriched_recommendations.append({
-
-                "type": finding.get(
-                    "type",
-                    "analyzer_finding"
-                ),
-
-                "message": finding.get(
-                    "message",
-                    "Analyzer finding detected."
-                ),
-
-                "severity": finding.get(
-                    "severity",
-                    "medium"
-                ),
-
-                # TODO: Replace with scoring engine output.
-                "priority_score": 70,
-
-                # TODO: Derive from analyzer confidence signal.
-                "confidence": 0.85,
-
-                "estimated_savings_percent": 0,
-            })
+            enriched_recommendations.append(
+                {
+                    "type": finding.get("type", "analyzer_finding"),
+                    "message": finding.get("message", "Analyzer finding detected."),
+                    "severity": finding.get("severity", "medium"),
+                    # TODO: Replace with scoring engine output.
+                    "priority_score": 70,
+                    # TODO: Derive from analyzer confidence signal.
+                    "confidence": 0.85,
+                    "estimated_savings_percent": 0,
+                }
+            )
 
         # -----------------------------------------
         # OPTIMIZATION CANDIDATES
         # -----------------------------------------
 
         for candidate in optimization_candidates:
-
-            enriched_recommendations.append({
-
-                "type": candidate.get(
-                    "type",
-                    "optimization_candidate"
-                ),
-
-                "message": candidate.get(
-                    "message",
-                    "Optimization opportunity identified."
-                ),
-
-                "severity": candidate.get(
-                    "severity",
-                    "medium"
-                ),
-
-                "estimated_savings_percent": candidate.get(
-                    "estimated_savings_percent",
-                    0
-                ),
-
-                # TODO: Replace with scoring engine output.
-                "priority_score": 85,
-
-                # TODO: Derive from analyzer confidence signal.
-                "confidence": 0.90,
-            })
+            enriched_recommendations.append(
+                {
+                    "type": candidate.get("type", "optimization_candidate"),
+                    "message": candidate.get(
+                        "message", "Optimization opportunity identified."
+                    ),
+                    "severity": candidate.get("severity", "medium"),
+                    "estimated_savings_percent": candidate.get(
+                        "estimated_savings_percent", 0
+                    ),
+                    # TODO: Replace with scoring engine output.
+                    "priority_score": 85,
+                    # TODO: Derive from analyzer confidence signal.
+                    "confidence": 0.90,
+                }
+            )
 
     return enriched_recommendations
 
@@ -243,9 +180,8 @@ def enrich_from_analyzers(
 # DEDUPLICATION
 # =====================================================
 
-def deduplicate_recommendations(
-    recommendations: list[dict]
-) -> list[dict]:
+
+def deduplicate_recommendations(recommendations: list[dict]) -> list[dict]:
     """
     Remove duplicate recommendations by message.
     Preserves original ordering.
@@ -257,7 +193,6 @@ def deduplicate_recommendations(
     deduped = []
 
     for recommendation in recommendations:
-
         # -----------------------------------------
         # GUARD: missing message key
         # -----------------------------------------
@@ -265,14 +200,9 @@ def deduplicate_recommendations(
         message = recommendation.get("message")
 
         if not message:
-
             logger.warning(
                 "recommendation_missing_message",
-                extra={
-                    "extra": {
-                        "recommendation": recommendation
-                    }
-                }
+                extra={"extra": {"recommendation": recommendation}},
             )
 
             continue
@@ -291,10 +221,9 @@ def deduplicate_recommendations(
 # MAIN RECOMMENDATION PIPELINE
 # =====================================================
 
+
 def generate_suggestions(
-    context: dict,
-    decision: str,
-    analyzer_results: dict
+    context: dict, decision: str, analyzer_results: dict
 ) -> list[dict]:
     """
     Generate deterministic infrastructure recommendations.
@@ -316,26 +245,17 @@ def generate_suggestions(
     # =================================================
 
     if not isinstance(context, dict):
-        raise TypeError(
-            "context must be a dict"
-        )
+        raise TypeError("context must be a dict")
 
     if not isinstance(decision, str) or not decision:
-        raise ValueError(
-            "decision must be a non-empty string"
-        )
+        raise ValueError("decision must be a non-empty string")
 
     if not isinstance(analyzer_results, dict):
-        raise TypeError(
-            "analyzer_results must be a dict"
-        )
+        raise TypeError("analyzer_results must be a dict")
 
     suggestions = []
 
-    resources = context.get(
-        "resources",
-        []
-    )
+    resources = context.get("resources", [])
 
     # =================================================
     # SEMANTIC RESOURCE RECOMMENDATIONS
@@ -344,79 +264,53 @@ def generate_suggestions(
     seen_resource_classes = set()
 
     for resource in resources:
+        resource_type = resource.get("type", "")
 
-        resource_type = resource.get(
-            "type",
-            ""
-        )
-
-        resource_class = classify_resource(
-            resource_type
-        )
+        resource_class = classify_resource(resource_type)
 
         if resource_class in seen_resource_classes:
             continue
 
-        seen_resource_classes.add(
-            resource_class
+        seen_resource_classes.add(resource_class)
+
+        semantic_recommendations = generate_semantic_recommendations(
+            resource_class, context
         )
 
-        semantic_recommendations = (
-            generate_semantic_recommendations(
-                resource_class,
-                context
-            )
-        )
-
-        suggestions.extend(
-            semantic_recommendations
-        )
+        suggestions.extend(semantic_recommendations)
 
     # =================================================
     # ANALYZER ENRICHMENT
     # =================================================
 
-    analyzer_recommendations = (
-        enrich_from_analyzers(
-            analyzer_results
-        )
-    )
+    analyzer_recommendations = enrich_from_analyzers(analyzer_results)
 
-    suggestions.extend(
-        analyzer_recommendations
-    )
+    suggestions.extend(analyzer_recommendations)
 
     # =================================================
     # ENFORCEMENT GUIDANCE
     # =================================================
 
     if decision.startswith("DENY"):
-
-        suggestions.append({
-
-            "type": "enforcement",
-
-            "message": (
-                "Deployment blocked by policy enforcement. "
-                "Review evaluation trace for remediation guidance."
-            ),
-
-            "severity": "high",
-
-            "priority_score": 95,
-
-            "confidence": 1.0,
-
-            "estimated_savings_percent": 0,
-        })
+        suggestions.append(
+            {
+                "type": "enforcement",
+                "message": (
+                    "Deployment blocked by policy enforcement. "
+                    "Review evaluation trace for remediation guidance."
+                ),
+                "severity": "high",
+                "priority_score": 95,
+                "confidence": 1.0,
+                "estimated_savings_percent": 0,
+            }
+        )
 
     # =================================================
     # FINAL DEDUPLICATION
     # =================================================
 
-    deduped = deduplicate_recommendations(
-        suggestions
-    )
+    deduped = deduplicate_recommendations(suggestions)
 
     # =================================================
     # AUDIT OBSERVABILITY
@@ -428,11 +322,9 @@ def generate_suggestions(
             "extra": {
                 "decision": decision,
                 "recommendation_count": len(deduped),
-                "resource_classes": list(
-                    seen_resource_classes
-                ),
+                "resource_classes": list(seen_resource_classes),
             }
-        }
+        },
     )
 
     return deduped
