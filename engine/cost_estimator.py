@@ -337,6 +337,18 @@ def _fetch_azure_vm_price(
             headers={"Accept": "application/json"},
         )
 
+            # Validate URL scheme before opening.
+            # Only HTTPS is permitted — prevents file:// or
+            # custom scheme exploitation.
+            # The URL is constructed from a hardcoded HTTPS
+            # domain and URL-encoded parameters only.
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != "https":
+            raise ValueError(
+                f"Security violation: only HTTPS URLs permitted. "
+                f"Got scheme: {parsed.scheme!r}"
+            )
+
         with urllib.request.urlopen(req, timeout=5) as response:
             data: dict[str, Any] = json.loads(response.read().decode("utf-8"))
 
