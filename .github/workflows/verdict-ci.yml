@@ -13,7 +13,6 @@
 # - action-test: tests the GitHub Action itself
 # - build:       package build verification
 
-
 name: ObsidianWall Verdict CI
 
 on:
