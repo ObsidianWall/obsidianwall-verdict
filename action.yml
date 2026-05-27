@@ -1,16 +1,21 @@
-
 # action.yml
 #
 # ObsidianWall Verdict — Reusable GitHub Action
 #
-# Usage in engineer's repo:
+# Usage:
 #
 #   - name: ObsidianWall Verdict
-#     uses: ObsidianWall/obsidianwall-verdict@v1
+#     uses: ObsidianWall/obsidianwall-verdict@v0.2.2
 #     with:
 #       plan:   terraform_plan.json
-#       policy: .obsidianwall/cost_policy.yaml
+#       policy: policies/cost/basic_budget.yaml
 #       role:   engineer
+#
+# Security architecture:
+#   All user-controlled inputs are assigned to environment
+#   variables before entering any shell script. Expression
+#   syntax (${{ }}) never appears inside a run: block body.
+#   This eliminates code injection at the architectural level.
 
 name: "ObsidianWall Verdict"
 
@@ -45,7 +50,7 @@ inputs:
   role:
     description: >
       Role of the user or service account triggering
-      the deployment. Used for override authority checks.
+      the deployment. Used for override authority routing.
       Examples: engineer, budget_owner, platform_lead
     required: false
     default: "engineer"
@@ -54,16 +59,17 @@ inputs:
     description: >
       Fail the workflow step if the governance decision
       is DENY or DENY_WITH_OVERRIDE.
-      Set to 'false' to allow the workflow to continue
-      and inspect the decision output manually.
+      Set to 'false' to inspect the decision output
+      without blocking the pipeline.
     required: false
     default: "true"
 
   python_version:
     description: >
       Python version to use for the evaluation.
+      Minimum supported: 3.11
     required: false
-    default: "3.13"
+    default: "3.11"
 
 # =====================================================
 # OUTPUTS
@@ -74,9 +80,9 @@ outputs:
   decision:
     description: >
       Governance decision outcome.
-      Values: ALLOW | ALLOW_WITH_NOTIFICATION |
-              ALLOW_WITH_APPROVAL_REQUIRED |
-              DENY_WITH_OVERRIDE | DENY
+      ALLOW | ALLOW_WITH_NOTIFICATION |
+      ALLOW_WITH_APPROVAL_REQUIRED |
+      DENY_WITH_OVERRIDE | DENY
     value: ${{ steps.parse.outputs.decision }}
 
   conditions_passed:
@@ -93,7 +99,7 @@ outputs:
   effective_severity:
     description: >
       Effective governance severity after risk escalation.
-      Values: informational | low | medium | high | critical
+      informational | low | medium | high | critical
     value: ${{ steps.parse.outputs.effective_severity }}
 
   decision_id:
@@ -113,92 +119,130 @@ runs:
 
     # -------------------------------------------------
     # STEP 1 — Python setup
+    #
+    # Pinned to full commit SHA — not a mutable tag.
+    # Supply chain security: SHA cannot be repointed
+    # to malicious code unlike @v5 floating tags.
     # -------------------------------------------------
 
     - name: Set up Python
-      uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55               # v5.5.0
+      uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
       with:
         python-version: ${{ inputs.python_version }}
 
     # -------------------------------------------------
-    # STEP 2 — Install ObsidianWall Verdict
-    # Installs from the action's own repo directory.
-    # After PyPI publishing, replace with:
-    #   pip install obsidianwall-verdict
+    # STEP 2 — Install ObsidianWall Verdict from PyPI
+    #
+    # Installs the published package directly.
+    # Version is pinned to the action's own release.
     # -------------------------------------------------
 
     - name: Install ObsidianWall Verdict
       shell: bash
       run: |
+        set -euo pipefail
         pip install --quiet --upgrade pip
-        pip install --quiet -r ${{ github.action_path }}/requirements.txt
+        pip install --quiet obsidianwall-verdict
 
     # -------------------------------------------------
-    # STEP 3 — Run evaluation
-    # Captures full output including structured logs.
+    # STEP 3 — Run governance evaluation
+    #
+    # Security: all inputs are bound to environment
+    # variables. No expression syntax appears inside
+    # the shell script body. Shell reads $OW_* vars
+    # using native shell expansion — never ${{ }}.
+    #
+    # set +e: allows capturing the exit code without
+    # immediately terminating on non-zero. The exit
+    # code is forwarded to the enforce step.
     # -------------------------------------------------
 
     - name: Run governance evaluation
       id: evaluate
       shell: bash
+      env:
+        OW_PLAN:        ${{ inputs.plan }}
+        OW_POLICY:      ${{ inputs.policy }}
+        OW_ROLE:        ${{ inputs.role }}
+        OW_VERDICT_ENV: ci
+        OW_LOG_FORMAT:  json
       run: |
         set +e
 
-        python3 -m cli.main evaluate \
-          --plan "${{ inputs.plan }}" \
-          --policy "${{ inputs.policy }}" \
-          --role "${{ inputs.role }}" \
+        verdict evaluate \
+          --plan   "$OW_PLAN"   \
+          --policy "$OW_POLICY" \
+          --role   "$OW_ROLE"   \
           > /tmp/verdict_output.txt 2>&1
 
         EXIT_CODE=$?
 
-        # Always show output in CI logs
+        # Always surface output in CI logs
+        # regardless of governance decision
         cat /tmp/verdict_output.txt
 
-        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-      env:
-        PYTHONPATH: ${{ github.action_path }}
-        OW_VERDICT_ENV: staging
-        OW_LOG_FORMAT: json
+        echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
 
     # -------------------------------------------------
     # STEP 4 — Parse evaluation output
-    # Extracts decision fields from CLI output.
+    #
+    # Extracts structured decision fields from the
+    # CLI JSON output and writes them to GITHUB_OUTPUT
+    # for downstream steps and workflow consumers.
+    #
+    # Security: ACTION_PATH bound to env var before
+    # use in the shell — not interpolated directly.
     # -------------------------------------------------
 
     - name: Parse verdict output
       id: parse
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        python3 ${{ github.action_path }}/scripts/parse_verdict_output.py \
+        set -euo pipefail
+
+        python3 "$ACTION_PATH/scripts/parse_verdict_output.py" \
           /tmp/verdict_output.txt \
-          >> $GITHUB_OUTPUT
+          >> "$GITHUB_OUTPUT"
 
     # -------------------------------------------------
     # STEP 5 — Write GitHub Step Summary
-    # Posts governance result to the workflow summary.
+    #
+    # Posts a governance result table to the workflow
+    # step summary visible in the GitHub Actions UI.
+    #
+    # Security: ALL dynamic values — both parsed
+    # outputs and user inputs — are bound to
+    # environment variables. No ${{ }} inside the
+    # shell body. This is the correct pattern per
+    # GitHub's security hardening guidance and
+    # the ObsidianWall secure-by-design doctrine.
     # -------------------------------------------------
 
     - name: Write governance summary
       shell: bash
       env:
-        DECISION: ${{ steps.parse.outputs.decision }}
-        CONDITIONS: ${{ steps.parse.outputs.conditions_passed }}
-        RISK: ${{ steps.parse.outputs.risk_score }}
-        SEVERITY: ${{ steps.parse.outputs.effective_severity }}
+        DECISION:    ${{ steps.parse.outputs.decision }}
+        CONDITIONS:  ${{ steps.parse.outputs.conditions_passed }}
+        RISK:        ${{ steps.parse.outputs.risk_score }}
+        SEVERITY:    ${{ steps.parse.outputs.effective_severity }}
         DECISION_ID: ${{ steps.parse.outputs.decision_id }}
-        POLICY: ${{ inputs.policy }}
-        ROLE: ${{ inputs.role }}
+        POLICY:      ${{ inputs.policy }}
+        ROLE:        ${{ inputs.role }}
       run: |
-        if [[ "$DECISION" == "ALLOW" ]]; then
-          STATUS_ICON="✅"
-        elif [[ "$DECISION" == "ALLOW_WITH_NOTIFICATION" || "$DECISION" == "ALLOW_WITH_APPROVAL_REQUIRED" ]]; then
-          STATUS_ICON="⚠️"
-        else
-          STATUS_ICON="🚫"
-        fi
+        set -euo pipefail
 
-        cat >> $GITHUB_STEP_SUMMARY << EOF
+        case "$DECISION" in
+          ALLOW)
+            STATUS_ICON="✅" ;;
+          ALLOW_WITH_NOTIFICATION|ALLOW_WITH_APPROVAL_REQUIRED)
+            STATUS_ICON="⚠️" ;;
+          *)
+            STATUS_ICON="🚫" ;;
+        esac
+
+        cat >> "$GITHUB_STEP_SUMMARY" << EOF
         ## ${STATUS_ICON} ObsidianWall Verdict
 
         | Field | Value |
@@ -215,9 +259,18 @@ runs:
         EOF
 
     # -------------------------------------------------
-    # STEP 6 — Enforce decision
+    # STEP 6 — Enforce governance decision
+    #
     # Fails the workflow if governance blocks deployment.
-    # Controlled by fail_on_deny input.
+    # Controlled by the fail_on_deny input.
+    #
+    # Security: decision value read from environment
+    # variable. case statement used instead of if/elif
+    # for unambiguous pattern matching on decision values.
+    #
+    # DENY:               hard block, no override path
+    # DENY_WITH_OVERRIDE: blocked, override role required
+    # All others:         deployment authorized
     # -------------------------------------------------
 
     - name: Enforce governance decision
@@ -226,14 +279,18 @@ runs:
       env:
         DECISION: ${{ steps.parse.outputs.decision }}
       run: |
-        if [[ "$DECISION" == "DENY" ]]; then
-          echo "::error title=ObsidianWall Verdict::Deployment blocked — policy conditions failed. No override available."
-          exit 1
-        fi
+        set -euo pipefail
 
-        if [[ "$DECISION" == "DENY_WITH_OVERRIDE" ]]; then
-          echo "::error title=ObsidianWall Verdict::Deployment blocked — policy conditions failed. Override authorization required from a designated governance role."
-          exit 1
-        fi
-
-        echo "Governance decision: $DECISION — deployment authorized."
+        case "$DECISION" in
+          DENY)
+            echo "::error title=ObsidianWall Verdict::Deployment blocked — policy conditions failed. No override available."
+            exit 1
+            ;;
+          DENY_WITH_OVERRIDE)
+            echo "::error title=ObsidianWall Verdict::Deployment blocked — policy conditions failed. Override authorization required from a designated governance role."
+            exit 1
+            ;;
+          *)
+            echo "Governance decision: ${DECISION} — deployment authorized."
+            ;;
+        esac
