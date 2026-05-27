@@ -28,6 +28,9 @@ on:
       - staging
       - testing
 
+permissions:
+  contents: read
+
 jobs:
 
   test:

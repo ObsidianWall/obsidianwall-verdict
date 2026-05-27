@@ -17,6 +17,7 @@
 name: ObsidianWall Verdict CI
 
 on:
+  
   push:
     branches:
       - main
@@ -24,6 +25,9 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
 
 jobs:
 
