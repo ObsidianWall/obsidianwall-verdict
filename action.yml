@@ -181,13 +181,15 @@ runs:
 
     - name: Write governance summary
       shell: bash
+      env:
+        DECISION: ${{ steps.parse.outputs.decision }}
+        CONDITIONS: ${{ steps.parse.outputs.conditions_passed }}
+        RISK: ${{ steps.parse.outputs.risk_score }}
+        SEVERITY: ${{ steps.parse.outputs.effective_severity }}
+        DECISION_ID: ${{ steps.parse.outputs.decision_id }}
+        POLICY: ${{ inputs.policy }}
+        ROLE: ${{ inputs.role }}
       run: |
-        DECISION="${{ steps.parse.outputs.decision }}"
-        CONDITIONS="${{ steps.parse.outputs.conditions_passed }}"
-        RISK="${{ steps.parse.outputs.risk_score }}"
-        SEVERITY="${{ steps.parse.outputs.effective_severity }}"
-        DECISION_ID="${{ steps.parse.outputs.decision_id }}"
-
         if [[ "$DECISION" == "ALLOW" ]]; then
           STATUS_ICON="✅"
         elif [[ "$DECISION" == "ALLOW_WITH_NOTIFICATION" || "$DECISION" == "ALLOW_WITH_APPROVAL_REQUIRED" ]]; then
@@ -206,8 +208,8 @@ runs:
         | **Risk Score** | ${RISK}/100 |
         | **Effective Severity** | ${SEVERITY} |
         | **Decision ID** | \`${DECISION_ID}\` |
-        | **Policy** | \`${{ inputs.policy }}\` |
-        | **Role** | \`${{ inputs.role }}\` |
+        | **Policy** | \`${POLICY}\` |
+        | **Role** | \`${ROLE}\` |
 
         > Governance evaluated by [ObsidianWall Verdict](https://obsidianwall.com/verdict)
         EOF
@@ -221,9 +223,9 @@ runs:
     - name: Enforce governance decision
       if: inputs.fail_on_deny == 'true'
       shell: bash
+      env:
+        DECISION: ${{ steps.parse.outputs.decision }}
       run: |
-        DECISION="${{ steps.parse.outputs.decision }}"
-
         if [[ "$DECISION" == "DENY" ]]; then
           echo "::error title=ObsidianWall Verdict::Deployment blocked — policy conditions failed. No override available."
           exit 1
