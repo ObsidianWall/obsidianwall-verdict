@@ -13,6 +13,7 @@
 # - action-test: tests the GitHub Action itself
 # - build:       package build verification
 
+
 name: ObsidianWall Verdict CI
 
 on:
@@ -36,10 +37,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683       # v4.2.2 with fetch-depth: 0 to get full history for version parsing
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55   # v5.5.0
         with:
           python-version: "3.13"
 
@@ -66,10 +67,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683      # v4.2.2 with fetch-depth: 0 to get full history for version parsing
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55      # v5.5.0
         with:
           python-version: "3.13"
 
@@ -107,7 +108,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683      # v4.2.2 with fetch-depth: 0 to get full history for version parsing
 
       # Use the action from the current repo
       - name: Run ObsidianWall Verdict (over budget — expect DENY)
@@ -160,10 +161,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683           # v4.2.2 with fetch-depth: 0 to get full history for version parsing
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55       # v5.5.0
         with:
           python-version: "3.13"
 
