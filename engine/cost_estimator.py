@@ -349,7 +349,7 @@ def _fetch_azure_vm_price(
                 f"Got scheme: {parsed.scheme!r}"
             )
 
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:  # nosec B310
             data: dict[str, Any] = json.loads(response.read().decode("utf-8"))
 
         items: list[dict[str, Any]] = data.get("Items", [])
