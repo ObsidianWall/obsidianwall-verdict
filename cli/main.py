@@ -13,9 +13,11 @@
 #   Deterministic execution  ← core architecture
 #   Command separation       ← platform scalability
 
+import importlib.metadata
 import json
 from pathlib import Path
 from typing import Any
+
 
 import typer
 
@@ -26,11 +28,33 @@ from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 
 
+
 app = typer.Typer(
     name="verdict",
     help="ObsidianWall Verdict — pre-deployment infrastructure governance.",
     add_completion=False,
 )
+
+def _version_callback(value: bool) -> None:
+    if value:
+        version = importlib.metadata.version("obsidianwall-verdict")
+        typer.echo(f"ObsidianWall Verdict v{version}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-v",
+        help="Show version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """ObsidianWall Verdict — pre-deployment infrastructure governance."""
+
 
 logger = get_logger()
 
