@@ -1,4 +1,3 @@
-
 # .github/workflows/staging-promote.yml
 #
 # Purpose:
@@ -16,7 +15,11 @@
 #
 # This keeps a human in the loop while automating
 # the mechanical parts of the promotion workflow.
-
+#
+# Permissions:
+# validate job  — contents: read only
+# promote job   — contents: read + pull-requests: write
+#                 (needs to open the staging → main PR)
 
 name: Staging Validation and Promote
 
@@ -25,27 +28,33 @@ on:
     branches:
       - staging
 
+# Deny everything by default.
+# Jobs override only what they actually need.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
 
   # =================================================
   # JOB 1 — VALIDATE
   # Full test suite + build validation
+  # Reads code only — no write permissions needed.
   # =================================================
 
   validate:
     name: Staging Validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683                 # v4.2.2 
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55             # v5.5.0 
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
           python-version: "3.11"
 
@@ -84,18 +93,22 @@ jobs:
 
   # =================================================
   # JOB 2 — PROMOTE
-  # Opens PR staging → main automatically
-  # Runs only after validate passes
+  # Opens PR staging → main automatically.
+  # Needs pull-requests: write to create the PR.
+  # Runs only after validate passes.
   # =================================================
 
   promote:
     name: Open PR to Main
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: validate
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683                 # v4.2.2 
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 0
 
