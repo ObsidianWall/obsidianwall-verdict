@@ -55,7 +55,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          python -m pytest tests/unit/ -v \
+          python -m pytest tests/ -v \
             --cov=engine \
             --cov=schemas \
             --cov-report=term-missing \

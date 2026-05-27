@@ -80,7 +80,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v \
+          pytest tests/ -v \
             --cov=engine \
             --cov=schemas \
             --cov-report=term-missing \
