@@ -1,4 +1,3 @@
-
 # engine/explainability/governance_reasoning_chain.py
 
 # Purpose:
@@ -26,7 +25,6 @@
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -34,14 +32,15 @@ logger = get_logger()
 # STAGE DEFINITIONS
 # =====================================================
 
+
 class ReasoningStage:
-    POLICY_INTENT           = "policy_intent"
-    RUNTIME_NORMALIZATION   = "runtime_normalization"
-    CONDITION_EVALUATION    = "condition_evaluation"
-    ANALYZER_INTELLIGENCE   = "analyzer_intelligence"
-    RISK_SCORING            = "risk_scoring"
-    DECISION_RESOLUTION     = "decision_resolution"
-    GOVERNANCE_ROUTING      = "governance_routing"
+    POLICY_INTENT = "policy_intent"
+    RUNTIME_NORMALIZATION = "runtime_normalization"
+    CONDITION_EVALUATION = "condition_evaluation"
+    ANALYZER_INTELLIGENCE = "analyzer_intelligence"
+    RISK_SCORING = "risk_scoring"
+    DECISION_RESOLUTION = "decision_resolution"
+    GOVERNANCE_ROUTING = "governance_routing"
 
 
 # =====================================================
@@ -49,36 +48,26 @@ class ReasoningStage:
 # =====================================================
 
 DECISION_OUTCOME_LABELS = {
-
-    "ALLOW": (
-        "Deployment authorized within governance boundaries."
-    ),
-
+    "ALLOW": ("Deployment authorized within governance boundaries."),
     "ALLOW_WITH_NOTIFICATION": (
         "Deployment authorized. "
         "Governance stakeholders notified due to elevated severity."
     ),
-
     "ALLOW_WITH_APPROVAL_REQUIRED": (
         "Deployment conditionally authorized. "
         "Formal approval required before proceeding."
     ),
-
     "DENY_WITH_OVERRIDE": (
-        "Deployment blocked. "
-        "Override authority available — pending confirmation."
+        "Deployment blocked. Override authority available — pending confirmation."
     ),
-
-    "DENY": (
-        "Deployment blocked. "
-        "No override authority available for this role."
-    ),
+    "DENY": ("Deployment blocked. No override authority available for this role."),
 }
 
 
 # =====================================================
 # STAGE BUILDERS
 # =====================================================
+
 
 def _build_policy_intent_stage(
     policy_name: str,
@@ -92,9 +81,7 @@ def _build_policy_intent_stage(
     severity = (
         policy_governance.get("severity", "medium")
         if policy_governance
-        else evaluation_result.get(
-            "governance_severity", "medium"
-        )
+        else evaluation_result.get("governance_severity", "medium")
     )
 
     reason = (
@@ -113,9 +100,9 @@ def _build_policy_intent_stage(
         severity=severity,
         governance_relevant=True,
         contributing_factors={
-            "policy_name":          policy_name,
-            "declared_severity":    severity,
-        }
+            "policy_name": policy_name,
+            "declared_severity": severity,
+        },
     )
 
 
@@ -130,17 +117,18 @@ def _build_normalization_stage(
     # Identify flattened policy parameters
     # (dot-notation keys indicate normalized params)
     policy_params = {
-        k: v for k, v in runtime_context.items()
+        k: v
+        for k, v in runtime_context.items()
         if "." in k and not isinstance(v, (dict, list))
     }
 
     infra_keys = {
-        k: v for k, v in runtime_context.items()
+        k: v
+        for k, v in runtime_context.items()
         if "." not in k and not isinstance(v, (dict, list))
     }
 
     if policy_params:
-
         param_summary = ", ".join(
             f"{k}={v}" for k, v in list(policy_params.items())[:5]
         )
@@ -154,7 +142,6 @@ def _build_normalization_stage(
         )
 
     else:
-
         reason = (
             "Runtime context built from infrastructure "
             "context only. No nested policy parameters "
@@ -169,9 +156,9 @@ def _build_normalization_stage(
         severity="informational",
         governance_relevant=False,
         contributing_factors={
-            "policy_param_count":   len(policy_params),
-            "infra_key_count":      len(infra_keys),
-        }
+            "policy_param_count": len(policy_params),
+            "infra_key_count": len(infra_keys),
+        },
     )
 
 
@@ -183,17 +170,14 @@ def _build_condition_evaluation_stage(
     what the outcome was.
     """
 
-    trace               = evaluation_result.get("trace", [])
-    conditions_passed   = evaluation_result.get(
-        "conditions_passed", False
-    )
+    trace = evaluation_result.get("trace", [])
+    conditions_passed = evaluation_result.get("conditions_passed", False)
 
-    total       = len(trace)
-    passed      = sum(1 for t in trace if t.get("result"))
-    failed      = total - passed
+    total = len(trace)
+    passed = sum(1 for t in trace if t.get("result"))
+    failed = total - passed
 
     if conditions_passed:
-
         outcome = f"All {total} condition(s) passed"
 
         reason = (
@@ -205,7 +189,6 @@ def _build_condition_evaluation_stage(
         severity = "informational"
 
     else:
-
         outcome = f"{failed} of {total} condition(s) failed"
 
         # Build specific failure reasons from trace
@@ -232,16 +215,16 @@ def _build_condition_evaluation_stage(
     # Extract contributing context values referenced
     # in condition expressions
     contributing_factors = {
-        "total_conditions":     total,
-        "passed_conditions":    passed,
-        "failed_conditions":    failed,
-        "conditions_passed":    conditions_passed,
+        "total_conditions": total,
+        "passed_conditions": passed,
+        "failed_conditions": failed,
+        "conditions_passed": conditions_passed,
     }
 
     for trace_item in trace:
-        contributing_factors[trace_item.get(
-            "condition_id", "unknown"
-        )] = trace_item.get("result")
+        contributing_factors[trace_item.get("condition_id", "unknown")] = (
+            trace_item.get("result")
+        )
 
     return _build_stage(
         sequence=3,
@@ -263,15 +246,12 @@ def _build_analyzer_intelligence_stage(
     the combined intelligence picture.
     """
 
-    total_findings      = risk_summary.get("total_findings", 0)
-    highest_analyzer    = risk_summary.get(
-        "highest_risk_analyzer"
-    )
-    failed_analyzers    = risk_summary.get("failed_analyzers", [])
-    analyzer_scores     = risk_summary.get("analyzer_scores", {})
+    total_findings = risk_summary.get("total_findings", 0)
+    highest_analyzer = risk_summary.get("highest_risk_analyzer")
+    failed_analyzers = risk_summary.get("failed_analyzers", [])
+    analyzer_scores = risk_summary.get("analyzer_scores", {})
 
     if total_findings == 0:
-
         outcome = "No significant findings detected"
 
         reason = (
@@ -282,27 +262,20 @@ def _build_analyzer_intelligence_stage(
         severity = "informational"
 
     else:
-
         # Build per-analyzer finding summaries
         finding_summaries = []
 
         for analyzer_name, analyzer_data in analyzer_results.items():
-
             if not isinstance(analyzer_data, dict):
                 continue
 
             findings = analyzer_data.get("findings", [])
 
             if findings:
-
-                finding_summaries.append(
-                    f"{analyzer_name}: "
-                    f"{len(findings)} finding(s)"
-                )
+                finding_summaries.append(f"{analyzer_name}: {len(findings)} finding(s)")
 
         outcome = (
-            f"{total_findings} finding(s) across "
-            f"{len(analyzer_results)} analyzer(s)"
+            f"{total_findings} finding(s) across {len(analyzer_results)} analyzer(s)"
         )
 
         reason = (
@@ -335,11 +308,11 @@ def _build_analyzer_intelligence_stage(
         severity=severity,
         governance_relevant=total_findings > 0,
         contributing_factors={
-            "total_findings":       total_findings,
-            "analyzer_count":       len(analyzer_results),
-            "failed_analyzers":     failed_analyzers,
-            "analyzer_scores":      analyzer_scores,
-        }
+            "total_findings": total_findings,
+            "analyzer_count": len(analyzer_results),
+            "failed_analyzers": failed_analyzers,
+            "analyzer_scores": analyzer_scores,
+        },
     )
 
 
@@ -351,26 +324,14 @@ def _build_risk_scoring_stage(
     and severity escalation outcome.
     """
 
-    overall_score       = risk_summary.get(
-        "overall_risk_score", 0
-    )
-    risk_severity       = risk_summary.get(
-        "risk_severity", "informational"
-    )
-    policy_severity     = risk_summary.get(
-        "policy_severity", "medium"
-    )
-    effective_severity  = risk_summary.get(
-        "effective_severity", "medium"
-    )
+    overall_score = risk_summary.get("overall_risk_score", 0)
+    risk_severity = risk_summary.get("risk_severity", "informational")
+    policy_severity = risk_summary.get("policy_severity", "medium")
+    effective_severity = risk_summary.get("effective_severity", "medium")
 
-    outcome = (
-        f"Overall risk score: {overall_score}/100 "
-        f"({risk_severity})"
-    )
+    outcome = f"Overall risk score: {overall_score}/100 ({risk_severity})"
 
     if effective_severity != policy_severity:
-
         reason = (
             f"Aggregated analyzer risk scores produced "
             f"an overall risk score of {overall_score}/100. "
@@ -382,7 +343,6 @@ def _build_risk_scoring_stage(
         )
 
     else:
-
         reason = (
             f"Aggregated analyzer risk scores produced "
             f"an overall risk score of {overall_score}/100. "
@@ -399,11 +359,11 @@ def _build_risk_scoring_stage(
         severity=effective_severity,
         governance_relevant=True,
         contributing_factors={
-            "overall_risk_score":   overall_score,
-            "risk_severity":        risk_severity,
-            "policy_severity":      policy_severity,
-            "effective_severity":   effective_severity,
-        }
+            "overall_risk_score": overall_score,
+            "risk_severity": risk_severity,
+            "policy_severity": policy_severity,
+            "effective_severity": effective_severity,
+        },
     )
 
 
@@ -416,22 +376,13 @@ def _build_decision_resolution_stage(
     was reached and why.
     """
 
-    decision            = evaluation_result.get(
-        "decision", "UNKNOWN"
-    )
-    override_required   = evaluation_result.get(
-        "override_required", False
-    )
-    requires_approval   = evaluation_result.get(
-        "requires_approval", False
-    )
-    resolution_reason   = evaluation_result.get(
-        "resolution_reason", ""
-    )
+    decision = evaluation_result.get("decision", "UNKNOWN")
+    override_required = evaluation_result.get("override_required", False)
+    requires_approval = evaluation_result.get("requires_approval", False)
+    resolution_reason = evaluation_result.get("resolution_reason", "")
 
     outcome_label = DECISION_OUTCOME_LABELS.get(
-        decision,
-        f"Governance decision '{decision}' reached."
+        decision, f"Governance decision '{decision}' reached."
     )
 
     reason = outcome_label
@@ -461,17 +412,15 @@ def _build_decision_resolution_stage(
         stage=ReasoningStage.DECISION_RESOLUTION,
         outcome=decision,
         reason=reason,
-        severity=evaluation_result.get(
-            "governance_severity", "medium"
-        ),
+        severity=evaluation_result.get("governance_severity", "medium"),
         governance_relevant=True,
         contributing_factors={
-            "decision":             decision,
-            "user_role":            user_role,
-            "override_required":    override_required,
-            "requires_approval":    requires_approval,
-            "resolution_reason":    resolution_reason,
-        }
+            "decision": decision,
+            "user_role": user_role,
+            "override_required": override_required,
+            "requires_approval": requires_approval,
+            "resolution_reason": resolution_reason,
+        },
     )
 
 
@@ -486,50 +435,34 @@ def _build_governance_routing_stage(
     governance workflow state is.
     """
 
-    decision            = evaluation_result.get(
-        "decision", "UNKNOWN"
-    )
-    requires_approval   = evaluation_result.get(
-        "requires_approval", False
-    )
-    effective_severity  = risk_summary.get(
-        "effective_severity", "medium"
-    )
+    decision = evaluation_result.get("decision", "UNKNOWN")
+    requires_approval = evaluation_result.get("requires_approval", False)
+    effective_severity = risk_summary.get("effective_severity", "medium")
 
     # Extract notification targets from governance config
     notifications = []
 
     if policy_governance:
-        for target in policy_governance.get(
-            "notifications", []
-        ):
-            role    = target.get("role", "unknown")
+        for target in policy_governance.get("notifications", []):
+            role = target.get("role", "unknown")
             channel = target.get("channel", "email")
-            notifications.append(
-                f"{role} via {channel}"
-            )
+            notifications.append(f"{role} via {channel}")
 
     # Build routing narrative
     routing_parts = []
 
     if notifications:
         routing_parts.append(
-            f"Stakeholder notifications triggered: "
-            f"{', '.join(notifications)}."
+            f"Stakeholder notifications triggered: {', '.join(notifications)}."
         )
     else:
-        routing_parts.append(
-            "No stakeholder notification targets configured."
-        )
+        routing_parts.append("No stakeholder notification targets configured.")
 
     if requires_approval:
-
         approval_roles = []
 
         if policy_governance:
-            approvals = policy_governance.get(
-                "approvals", {}
-            )
+            approvals = policy_governance.get("approvals", {})
             approval_roles = approvals.get("required", [])
 
         if approval_roles:
@@ -546,10 +479,7 @@ def _build_governance_routing_stage(
             )
 
     if decision == "ALLOW":
-        routing_parts.append(
-            "Deployment may proceed. "
-            "Audit record created."
-        )
+        routing_parts.append("Deployment may proceed. Audit record created.")
 
     elif decision in ("DENY", "DENY_WITH_OVERRIDE"):
         routing_parts.append(
@@ -575,16 +505,17 @@ def _build_governance_routing_stage(
         governance_relevant=True,
         contributing_factors={
             "notification_targets": notifications,
-            "requires_approval":    requires_approval,
-            "effective_severity":   effective_severity,
-            "decision":             decision,
-        }
+            "requires_approval": requires_approval,
+            "effective_severity": effective_severity,
+            "decision": decision,
+        },
     )
 
 
 # =====================================================
 # STAGE FACTORY
 # =====================================================
+
 
 def _build_stage(
     sequence: int,
@@ -600,12 +531,12 @@ def _build_stage(
     """
 
     return {
-        "sequence":             sequence,
-        "stage":                stage,
-        "outcome":              outcome,
-        "reason":               reason,
-        "severity":             severity,
-        "governance_relevant":  governance_relevant,
+        "sequence": sequence,
+        "stage": stage,
+        "outcome": outcome,
+        "reason": reason,
+        "severity": severity,
+        "governance_relevant": governance_relevant,
         "contributing_factors": contributing_factors,
     }
 
@@ -613,6 +544,7 @@ def _build_stage(
 # =====================================================
 # CHAIN SUMMARY
 # =====================================================
+
 
 def _build_chain_summary(
     chain: list[dict],
@@ -624,24 +556,12 @@ def _build_chain_summary(
     summary of the complete reasoning chain.
     """
 
-    decision            = evaluation_result.get(
-        "decision", "UNKNOWN"
-    )
-    conditions_passed   = evaluation_result.get(
-        "conditions_passed", False
-    )
-    total_findings      = risk_summary.get(
-        "total_findings", 0
-    )
-    overall_risk        = risk_summary.get(
-        "overall_risk_score", 0
-    )
-    effective_severity  = risk_summary.get(
-        "effective_severity", "medium"
-    )
-    requires_approval   = evaluation_result.get(
-        "requires_approval", False
-    )
+    decision = evaluation_result.get("decision", "UNKNOWN")
+    conditions_passed = evaluation_result.get("conditions_passed", False)
+    total_findings = risk_summary.get("total_findings", 0)
+    overall_risk = risk_summary.get("overall_risk_score", 0)
+    effective_severity = risk_summary.get("effective_severity", "medium")
+    requires_approval = evaluation_result.get("requires_approval", False)
 
     condition_summary = (
         "All policy conditions were satisfied."
@@ -658,8 +578,7 @@ def _build_chain_summary(
     )
 
     decision_summary = DECISION_OUTCOME_LABELS.get(
-        decision,
-        f"Governance decision: {decision}."
+        decision, f"Governance decision: {decision}."
     )
 
     approval_summary = (
@@ -684,6 +603,7 @@ def _build_chain_summary(
 # =====================================================
 # MAIN REASONING CHAIN BUILDER
 # =====================================================
+
 
 def build_governance_reasoning_chain(
     evaluation_result: dict,
@@ -749,35 +669,28 @@ def build_governance_reasoning_chain(
     # =================================================
 
     chain = [
-
         _build_policy_intent_stage(
             policy_name=policy_name,
             evaluation_result=evaluation_result,
             policy_governance=policy_governance,
         ),
-
         _build_normalization_stage(
             runtime_context=runtime_context,
         ),
-
         _build_condition_evaluation_stage(
             evaluation_result=evaluation_result,
         ),
-
         _build_analyzer_intelligence_stage(
             analyzer_results=analyzer_results,
             risk_summary=risk_summary,
         ),
-
         _build_risk_scoring_stage(
             risk_summary=risk_summary,
         ),
-
         _build_decision_resolution_stage(
             evaluation_result=evaluation_result,
             user_role=user_role,
         ),
-
         _build_governance_routing_stage(
             evaluation_result=evaluation_result,
             policy_governance=policy_governance,
@@ -801,34 +714,27 @@ def build_governance_reasoning_chain(
     # directly influenced the governance decision.
     # =================================================
 
-    governance_stages = [
-        stage for stage in chain
-        if stage.get("governance_relevant")
-    ]
+    governance_stages = [stage for stage in chain if stage.get("governance_relevant")]
 
     artifact = {
-        "reasoning_chain":          chain,
-        "governance_stages":        governance_stages,
-        "chain_summary":            chain_summary,
-        "total_stages":             len(chain),
-        "governance_stage_count":   len(governance_stages),
+        "reasoning_chain": chain,
+        "governance_stages": governance_stages,
+        "chain_summary": chain_summary,
+        "total_stages": len(chain),
+        "governance_stage_count": len(governance_stages),
     }
 
     logger.info(
         "governance_reasoning_chain_built",
         extra={
             "extra": {
-                "policy_name":          policy_name,
-                "total_stages":         len(chain),
-                "governance_stages":    len(governance_stages),
-                "decision":             evaluation_result.get(
-                    "decision"
-                ),
-                "effective_severity":   risk_summary.get(
-                    "effective_severity"
-                ),
+                "policy_name": policy_name,
+                "total_stages": len(chain),
+                "governance_stages": len(governance_stages),
+                "decision": evaluation_result.get("decision"),
+                "effective_severity": risk_summary.get("effective_severity"),
             }
-        }
+        },
     )
 
     return artifact

@@ -17,7 +17,6 @@
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -26,8 +25,8 @@ logger = get_logger()
 # =====================================================
 
 # TODO: Replace with centralized scoring engine.
-RISK_WEIGHT_OVERPROVISIONED     = 25
-RISK_WEIGHT_WRONG_ENV_SIZING    = 20
+RISK_WEIGHT_OVERPROVISIONED = 25
+RISK_WEIGHT_WRONG_ENV_SIZING = 20
 RISK_WEIGHT_BURSTABLE_CANDIDATE = 10
 
 # Azure VM sizes considered oversized for development
@@ -99,9 +98,7 @@ def _extract_vm_size(resource: dict) -> str | None:
 
 
 def _is_oversized_for_environment(
-    resource_type: str,
-    vm_size: str,
-    environment: str
+    resource_type: str, vm_size: str, environment: str
 ) -> bool:
     """
     Determine if a resource is oversized for its environment.
@@ -118,11 +115,7 @@ def _is_oversized_for_environment(
     return False
 
 
-def _is_burstable_candidate(
-    resource_type: str,
-    vm_size: str,
-    environment: str
-) -> bool:
+def _is_burstable_candidate(resource_type: str, vm_size: str, environment: str) -> bool:
     """
     Determine if a compute resource is a candidate
     for burstable/smaller instance sizing.
@@ -140,9 +133,8 @@ def _is_burstable_candidate(
 # UTILIZATION ANALYZER
 # =====================================================
 
-def analyze_utilization(
-    runtime_context: dict
-) -> dict:
+
+def analyze_utilization(runtime_context: dict) -> dict:
     """
     Analyze infrastructure utilization posture.
 
@@ -153,30 +145,26 @@ def analyze_utilization(
     - Environment-inappropriate sizing patterns
     """
 
-    resources       = runtime_context.get("resources", [])
-    environment     = runtime_context.get("environment", "unknown")
-    cost_breakdown  = runtime_context.get("cost_breakdown", [])
-    estimated_cost  = runtime_context.get("estimated_cost", 0)
+    resources = runtime_context.get("resources", [])
+    environment = runtime_context.get("environment", "unknown")
+    cost_breakdown = runtime_context.get("cost_breakdown", [])
+    estimated_cost = runtime_context.get("estimated_cost", 0)
 
-    findings                = []
+    findings = []
     optimization_candidates = []
-    risk_score              = 0
+    risk_score = 0
 
     # Build cost lookup by resource name
-    cost_by_resource = {
-        item.get("resource"): item.get("estimated_cost", 0)
-        for item in cost_breakdown
-    }
+    {item.get("resource"): item.get("estimated_cost", 0) for item in cost_breakdown}
 
     # =================================================
     # PER-RESOURCE UTILIZATION ANALYSIS
     # =================================================
 
     for resource in resources:
-
-        resource_type   = resource.get("type", "")
-        resource_name   = resource.get("name", "unknown")
-        vm_size         = _extract_vm_size(resource)
+        resource_type = resource.get("type", "")
+        resource_name = resource.get("name", "unknown")
+        vm_size = _extract_vm_size(resource)
 
         if not vm_size:
             continue
@@ -185,60 +173,62 @@ def analyze_utilization(
         # ENVIRONMENT-INAPPROPRIATE SIZING
         # -------------------------------------------------
 
-        if _is_oversized_for_environment(
-            resource_type, vm_size, environment
-        ):
-
+        if _is_oversized_for_environment(resource_type, vm_size, environment):
             risk_score += RISK_WEIGHT_WRONG_ENV_SIZING
 
-            findings.append({
-                "type":     "oversized_for_environment",
-                "severity": "medium",
-                "message": (
-                    f"Resource '{resource_name}' ({vm_size}) "
-                    f"appears oversized for {environment} environment. "
-                    f"Consider a smaller instance size."
-                )
-            })
+            findings.append(
+                {
+                    "type": "oversized_for_environment",
+                    "severity": "medium",
+                    "message": (
+                        f"Resource '{resource_name}' ({vm_size}) "
+                        f"appears oversized for {environment} environment. "
+                        f"Consider a smaller instance size."
+                    ),
+                }
+            )
 
-            optimization_candidates.append({
-                "type": "rightsizing",
-                "message": (
-                    f"Downsize '{resource_name}' from {vm_size} "
-                    f"to a {environment}-appropriate instance size."
-                ),
-                "estimated_savings_percent": 35
-            })
+            optimization_candidates.append(
+                {
+                    "type": "rightsizing",
+                    "message": (
+                        f"Downsize '{resource_name}' from {vm_size} "
+                        f"to a {environment}-appropriate instance size."
+                    ),
+                    "estimated_savings_percent": 35,
+                }
+            )
 
         # -------------------------------------------------
         # BURSTABLE INSTANCE CANDIDATE
         # -------------------------------------------------
 
-        elif _is_burstable_candidate(
-            resource_type, vm_size, environment
-        ):
-
+        elif _is_burstable_candidate(resource_type, vm_size, environment):
             risk_score += RISK_WEIGHT_BURSTABLE_CANDIDATE
 
-            findings.append({
-                "type":     "burstable_candidate",
-                "severity": "low",
-                "message": (
-                    f"Resource '{resource_name}' ({vm_size}) "
-                    f"may be a candidate for a burstable instance "
-                    f"type in {environment} environment."
-                )
-            })
+            findings.append(
+                {
+                    "type": "burstable_candidate",
+                    "severity": "low",
+                    "message": (
+                        f"Resource '{resource_name}' ({vm_size}) "
+                        f"may be a candidate for a burstable instance "
+                        f"type in {environment} environment."
+                    ),
+                }
+            )
 
-            optimization_candidates.append({
-                "type": "burstable_migration",
-                "message": (
-                    f"Consider migrating '{resource_name}' to a "
-                    f"burstable instance type (e.g. t3.medium) "
-                    f"for {environment} workloads."
-                ),
-                "estimated_savings_percent": 30
-            })
+            optimization_candidates.append(
+                {
+                    "type": "burstable_migration",
+                    "message": (
+                        f"Consider migrating '{resource_name}' to a "
+                        f"burstable instance type (e.g. t3.medium) "
+                        f"for {environment} workloads."
+                    ),
+                    "estimated_savings_percent": 30,
+                }
+            )
 
     # =================================================
     # COST-PER-RESOURCE ANOMALY
@@ -247,60 +237,61 @@ def analyze_utilization(
     # Flag resources with disproportionately high cost
     # relative to the total estimated cost
     if estimated_cost > 0 and len(resources) > 1:
-
         average_cost = estimated_cost / len(resources)
 
         for item in cost_breakdown:
-
             resource_cost = item.get("estimated_cost", 0)
             resource_name = item.get("resource", "unknown")
 
             # Flag if a resource costs more than 3x average
             if resource_cost > (average_cost * 3):
-
                 risk_score += RISK_WEIGHT_OVERPROVISIONED
 
-                findings.append({
-                    "type":     "cost_anomaly",
-                    "severity": "medium",
-                    "message": (
-                        f"Resource '{resource_name}' "
-                        f"(${resource_cost}) costs significantly "
-                        f"more than the deployment average "
-                        f"(${average_cost:.2f}). "
-                        f"Potential overprovisioning."
-                    )
-                })
+                findings.append(
+                    {
+                        "type": "cost_anomaly",
+                        "severity": "medium",
+                        "message": (
+                            f"Resource '{resource_name}' "
+                            f"(${resource_cost}) costs significantly "
+                            f"more than the deployment average "
+                            f"(${average_cost:.2f}). "
+                            f"Potential overprovisioning."
+                        ),
+                    }
+                )
 
-                optimization_candidates.append({
-                    "type": "cost_anomaly_review",
-                    "message": (
-                        f"Review '{resource_name}' configuration "
-                        f"for overprovisioning or unexpected cost."
-                    ),
-                    "estimated_savings_percent": 20
-                })
+                optimization_candidates.append(
+                    {
+                        "type": "cost_anomaly_review",
+                        "message": (
+                            f"Review '{resource_name}' configuration "
+                            f"for overprovisioning or unexpected cost."
+                        ),
+                        "estimated_savings_percent": 20,
+                    }
+                )
 
     logger.info(
         "utilization_analysis_complete",
         extra={
             "extra": {
-                "resource_count":   len(resources),
-                "risk_score":       risk_score,
-                "finding_count":    len(findings),
-                "environment":      environment,
+                "resource_count": len(resources),
+                "risk_score": risk_score,
+                "finding_count": len(findings),
+                "environment": environment,
             }
-        }
+        },
     )
 
     return {
-        "analyzer":                 "utilization_analyzer",
-        "risk_score":               risk_score,
-        "findings":                 findings,
-        "optimization_candidates":  optimization_candidates,
+        "analyzer": "utilization_analyzer",
+        "risk_score": risk_score,
+        "findings": findings,
+        "optimization_candidates": optimization_candidates,
         "metadata": {
-            "environment":          environment,
-            "resource_count":       len(resources),
-            "estimated_cost":       estimated_cost,
-        }
+            "environment": environment,
+            "resource_count": len(resources),
+            "estimated_cost": estimated_cost,
+        },
     }

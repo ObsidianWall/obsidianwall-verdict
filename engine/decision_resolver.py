@@ -1,4 +1,3 @@
-
 # engine/decision_resolver.py
 
 # Purpose:
@@ -22,13 +21,11 @@
 from typing import Any
 
 from audit.audit_logger import get_logger
-
 from schemas.policy_schema import (
     GovernanceDecision,
     GovernanceSeverity,
     Policy,
 )
-
 
 logger = get_logger()
 
@@ -49,12 +46,12 @@ NOTIFICATION_SEVERITY_LEVELS = {
 # DECISION RESOLVER
 # =====================================================
 
+
 def resolve_decision(
     policy: Policy,
     conditions_passed: bool,
     user_role: str,
 ) -> dict[str, Any]:
-
     """
     Resolve a deterministic governance decision.
 
@@ -70,9 +67,9 @@ def resolve_decision(
         Callers must unpack via resolution["decision"].
     """
 
-    decision_block      = policy.spec.decision
-    override_config     = policy.spec.override
-    governance_config   = policy.spec.governance
+    decision_block = policy.spec.decision
+    override_config = policy.spec.override
+    governance_config = policy.spec.governance
 
     # Compute once before the if/else branches
     override_possible = len(override_config.roles) > 0
@@ -82,9 +79,7 @@ def resolve_decision(
     # -------------------------------------------------
 
     governance_severity = (
-        governance_config.severity
-        if governance_config
-        else GovernanceSeverity.MEDIUM
+        governance_config.severity if governance_config else GovernanceSeverity.MEDIUM
     )
 
     # -------------------------------------------------
@@ -102,19 +97,16 @@ def resolve_decision(
     # =================================================
 
     if conditions_passed:
-
         # High/critical severity policies notify
         # stakeholders even when conditions pass.
         # Budget owners must remain aware of
         # high-stakes deployments within budget.
 
         if governance_severity in NOTIFICATION_SEVERITY_LEVELS:
-
             warn_decision = (
-                decision_block.warn
-                or GovernanceDecision.ALLOW_WITH_NOTIFICATION
+                decision_block.warn or GovernanceDecision.ALLOW_WITH_NOTIFICATION
             )
-             # conditions passed — high severity
+            # conditions passed — high severity
             return _build_resolution(
                 decision=warn_decision,
                 override_required=False,
@@ -138,8 +130,8 @@ def resolve_decision(
     # conditions failed — override available
     # =================================================
 
-    override_roles  = override_config.roles
-    has_override    = user_role in override_roles
+    override_roles = override_config.roles
+    has_override = user_role in override_roles
 
     if has_override:
         return _build_resolution(
@@ -173,6 +165,7 @@ def resolve_decision(
 # RESOLUTION BUILDER
 # =====================================================
 
+
 def _build_resolution(
     decision: str,
     override_required: bool,
@@ -186,25 +179,25 @@ def _build_resolution(
     """
 
     resolution = {
-        "decision":             decision,
-        "override_required":    override_required,
-        "override_possible":    override_possible,
-        "requires_approval":    requires_approval,
-        "governance_severity":  governance_severity.value,
-        "resolution_reason":    reason,
+        "decision": decision,
+        "override_required": override_required,
+        "override_possible": override_possible,
+        "requires_approval": requires_approval,
+        "governance_severity": governance_severity.value,
+        "resolution_reason": reason,
     }
 
     logger.info(
         "decision_resolved",
         extra={
             "extra": {
-                "decision":             decision,
-                "override_required":    override_required,
-                "requires_approval":    requires_approval,
-                "governance_severity":  governance_severity.value,
-                "resolution_reason":    reason,
+                "decision": decision,
+                "override_required": override_required,
+                "requires_approval": requires_approval,
+                "governance_severity": governance_severity.value,
+                "resolution_reason": reason,
             }
-        }
+        },
     )
 
     return resolution

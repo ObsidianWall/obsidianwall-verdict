@@ -32,7 +32,6 @@ from typing import Any
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -42,51 +41,51 @@ logger = get_logger()
 # =====================================================
 
 AWS_EC2_PRICING: dict[str, float] = {
-    "t2.micro":    10.0,
-    "t2.small":    20.0,
-    "t2.medium":   40.0,
-    "t3.micro":    11.0,
-    "t3.small":    22.0,
-    "t3.medium":   42.0,
-    "t3.large":    80.0,
-    "m5.large":    85.0,
-    "m5.xlarge":  170.0,
+    "t2.micro": 10.0,
+    "t2.small": 20.0,
+    "t2.medium": 40.0,
+    "t3.micro": 11.0,
+    "t3.small": 22.0,
+    "t3.medium": 42.0,
+    "t3.large": 80.0,
+    "m5.large": 85.0,
+    "m5.xlarge": 170.0,
     "m5.2xlarge": 340.0,
-    "c5.large":    78.0,
-    "c5.xlarge":  156.0,
+    "c5.large": 78.0,
+    "c5.xlarge": 156.0,
 }
 
 AZURE_VM_PRICING: dict[str, float] = {
-    "Standard_B1s":          12.0,
-    "Standard_B2s":          25.0,
-    "Standard_B4ms":         50.0,
-    "Standard_D2s_v3":       70.0,
-    "Standard_D4s_v3":      140.0,
-    "Standard_D8s_v3":      280.0,
-    "Standard_E2s_v3":       96.0,
-    "Standard_E4s_v3":      192.0,
+    "Standard_B1s": 12.0,
+    "Standard_B2s": 25.0,
+    "Standard_B4ms": 50.0,
+    "Standard_D2s_v3": 70.0,
+    "Standard_D4s_v3": 140.0,
+    "Standard_D8s_v3": 280.0,
+    "Standard_E2s_v3": 96.0,
+    "Standard_E4s_v3": 192.0,
     # GPU instances
-    "Standard_NC6":         657.0,
-    "Standard_NC12":       1314.0,
-    "Standard_ND96asr_v4": 21792.0,   # A100 x8
+    "Standard_NC6": 657.0,
+    "Standard_NC12": 1314.0,
+    "Standard_ND96asr_v4": 21792.0,  # A100 x8
 }
 
 FIXED_RESOURCE_PRICING: dict[str, float] = {
     # Azure
     "azurerm_sentinel_log_analytics_workspace": 50.0,
-    "azurerm_log_analytics_workspace":          30.0,
-    "azurerm_mssql_server":                    100.0,
-    "azurerm_kubernetes_cluster":              150.0,
-    "azurerm_storage_account":                  20.0,
+    "azurerm_log_analytics_workspace": 30.0,
+    "azurerm_mssql_server": 100.0,
+    "azurerm_kubernetes_cluster": 150.0,
+    "azurerm_storage_account": 20.0,
     # AWS
-    "aws_s3_bucket":                             5.0,
-    "aws_db_instance":                          80.0,
-    "aws_ecs_cluster":                          20.0,
-    "aws_eks_cluster":                         150.0,
+    "aws_s3_bucket": 5.0,
+    "aws_db_instance": 80.0,
+    "aws_ecs_cluster": 20.0,
+    "aws_eks_cluster": 150.0,
     # GCP
-    "google_storage_bucket":                     5.0,
-    "google_sql_database_instance":             90.0,
-    "google_container_cluster":               120.0,
+    "google_storage_bucket": 5.0,
+    "google_sql_database_instance": 90.0,
+    "google_container_cluster": 120.0,
 }
 
 DEFAULT_FALLBACK_COST: float = 10.0
@@ -94,15 +93,15 @@ DEFAULT_FALLBACK_COST: float = 10.0
 # Azure VM SKU name map for the Retail Prices API.
 # Maps Terraform vm_size values to Azure API SKU names.
 AZURE_SKU_MAP: dict[str, str] = {
-    "Standard_B1s":    "B1s",
-    "Standard_B2s":    "B2s",
-    "Standard_B4ms":   "B4ms",
+    "Standard_B1s": "B1s",
+    "Standard_B2s": "B2s",
+    "Standard_B4ms": "B4ms",
     "Standard_D2s_v3": "D2s v3",
     "Standard_D4s_v3": "D4s v3",
     "Standard_D8s_v3": "D8s v3",
     "Standard_E2s_v3": "E2s v3",
     "Standard_E4s_v3": "E4s v3",
-    "Standard_NC6":    "NC6",
+    "Standard_NC6": "NC6",
 }
 
 # Monthly hours — standard for cloud billing calculations
@@ -116,6 +115,7 @@ CURRENCY: str = "USD"
 # =====================================================
 # PUBLIC API
 # =====================================================
+
 
 def estimate_cost(
     context: dict[str, Any],
@@ -142,13 +142,12 @@ def estimate_cost(
     resources: list[dict[str, Any]] = context.get("resources", [])
 
     total_cost: float = 0.0
-    breakdown:  list[dict[str, Any]] = []
+    breakdown: list[dict[str, Any]] = []
 
     for resource in resources:
-
-        resource_type: str       = resource.get("type", "")
-        resource_name: str       = resource.get("name", "")
-        values: dict[str, Any]   = resource.get("values", {})
+        resource_type: str = resource.get("type", "")
+        resource_name: str = resource.get("name", "")
+        values: dict[str, Any] = resource.get("values", {})
 
         cost, source = _estimate_resource_cost(
             resource_type=resource_type,
@@ -160,36 +159,41 @@ def estimate_cost(
 
         total_cost += cost
 
-        breakdown.append({
-            "resource":         resource_name,
-            "type":             resource_type,
-            "estimated_cost":   cost,
-            "pricing_source":   source,
-            "currency":         CURRENCY,
-        })
+        breakdown.append(
+            {
+                "resource": resource_name,
+                "type": resource_type,
+                "estimated_cost": cost,
+                "pricing_source": source,
+                "currency": CURRENCY,
+            }
+        )
 
     logger.info(
         "cost_estimation_complete",
-        extra={"extra": {
-            "resource_count":   len(resources),
-            "total_cost":       total_cost,
-            "pricing_mode":     pricing_mode,
-            "region":           region,
-            "currency":         CURRENCY,
-        }}
+        extra={
+            "extra": {
+                "resource_count": len(resources),
+                "total_cost": total_cost,
+                "pricing_mode": pricing_mode,
+                "region": region,
+                "currency": CURRENCY,
+            }
+        },
     )
 
     return {
-        "estimated_cost":   total_cost,
-        "cost_breakdown":   breakdown,
-        "pricing_mode":     pricing_mode,
-        "currency":         CURRENCY,
+        "estimated_cost": total_cost,
+        "cost_breakdown": breakdown,
+        "pricing_mode": pricing_mode,
+        "currency": CURRENCY,
     }
 
 
 # =====================================================
 # INTERNAL ESTIMATION
 # =====================================================
+
 
 def _estimate_resource_cost(
     resource_type: str,
@@ -213,10 +217,12 @@ def _estimate_resource_cost(
         if cost is None:
             logger.warning(
                 "unknown_aws_instance_type",
-                extra={"extra": {
-                    "instance_type": instance_type,
-                    "fallback_cost": DEFAULT_FALLBACK_COST,
-                }}
+                extra={
+                    "extra": {
+                        "instance_type": instance_type,
+                        "fallback_cost": DEFAULT_FALLBACK_COST,
+                    }
+                },
             )
             return DEFAULT_FALLBACK_COST, "fallback"
         return cost, "table"
@@ -235,21 +241,25 @@ def _estimate_resource_cost(
 
             logger.warning(
                 "azure_live_pricing_unavailable",
-                extra={"extra": {
-                    "vm_size":   vm_size,
-                    "region":    region,
-                    "fallback":  "table",
-                }}
+                extra={
+                    "extra": {
+                        "vm_size": vm_size,
+                        "region": region,
+                        "fallback": "table",
+                    }
+                },
             )
 
         cost = AZURE_VM_PRICING.get(vm_size)
         if cost is None:
             logger.warning(
                 "unknown_azure_vm_size",
-                extra={"extra": {
-                    "vm_size":      vm_size,
-                    "fallback_cost": DEFAULT_FALLBACK_COST,
-                }}
+                extra={
+                    "extra": {
+                        "vm_size": vm_size,
+                        "fallback_cost": DEFAULT_FALLBACK_COST,
+                    }
+                },
             )
             return DEFAULT_FALLBACK_COST, "fallback"
         return cost, "table"
@@ -267,11 +277,13 @@ def _estimate_resource_cost(
 
     logger.warning(
         "unknown_resource_type_cost_fallback",
-        extra={"extra": {
-            "resource_type": resource_type,
-            "resource_name": resource_name,
-            "fallback_cost": DEFAULT_FALLBACK_COST,
-        }}
+        extra={
+            "extra": {
+                "resource_type": resource_type,
+                "resource_name": resource_name,
+                "fallback_cost": DEFAULT_FALLBACK_COST,
+            }
+        },
     )
 
     return DEFAULT_FALLBACK_COST, "fallback"
@@ -280,6 +292,7 @@ def _estimate_resource_cost(
 # =====================================================
 # AZURE RETAIL PRICES API
 # =====================================================
+
 
 def _fetch_azure_vm_price(
     vm_size: str,
@@ -309,10 +322,12 @@ def _fetch_azure_vm_price(
         f"and serviceName eq 'Virtual Machines'"
     )
 
-    params = urllib.parse.urlencode({
-        "api-version": "2021-10-01-preview",
-        "$filter": filter_expr,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "api-version": "2021-10-01-preview",
+            "$filter": filter_expr,
+        }
+    )
 
     url = f"https://prices.azure.com/api/retail/prices?{params}"
 
@@ -322,10 +337,20 @@ def _fetch_azure_vm_price(
             headers={"Accept": "application/json"},
         )
 
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data: dict[str, Any] = json.loads(
-                response.read().decode("utf-8")
+        # Validate URL scheme before opening.
+        # Only HTTPS is permitted — prevents file:// or
+        # custom scheme exploitation.
+        # The URL is constructed from a hardcoded HTTPS
+        # domain and URL-encoded parameters only.
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != "https":
+            raise ValueError(
+                f"Security violation: only HTTPS URLs permitted. "
+                f"Got scheme: {parsed.scheme!r}"
             )
+
+        with urllib.request.urlopen(req, timeout=5) as response:  # nosec B310
+            data: dict[str, Any] = json.loads(response.read().decode("utf-8"))
 
         items: list[dict[str, Any]] = data.get("Items", [])
 
@@ -333,10 +358,7 @@ def _fetch_azure_vm_price(
             return None
 
         # Prefer Linux pricing over Windows
-        linux_items = [
-            i for i in items
-            if "Windows" not in i.get("productName", "")
-        ]
+        linux_items = [i for i in items if "Windows" not in i.get("productName", "")]
 
         target = linux_items[0] if linux_items else items[0]
 
@@ -352,14 +374,16 @@ def _fetch_azure_vm_price(
 
         logger.info(
             "azure_live_price_fetched",
-            extra={"extra": {
-                "vm_size":          vm_size,
-                "sku_name":         sku_name,
-                "region":           region,
-                "currency":         currency_code,
-                "hourly_price":     hourly_price,
-                "monthly_estimate": monthly_estimate,
-            }}
+            extra={
+                "extra": {
+                    "vm_size": vm_size,
+                    "sku_name": sku_name,
+                    "region": region,
+                    "currency": currency_code,
+                    "hourly_price": hourly_price,
+                    "monthly_estimate": monthly_estimate,
+                }
+            },
         )
 
         return monthly_estimate
@@ -367,10 +391,12 @@ def _fetch_azure_vm_price(
     except Exception as e:
         logger.warning(
             "azure_pricing_api_error",
-            extra={"extra": {
-                "vm_size": vm_size,
-                "region":  region,
-                "error":   str(e),
-            }}
+            extra={
+                "extra": {
+                    "vm_size": vm_size,
+                    "region": region,
+                    "error": str(e),
+                }
+            },
         )
         return None

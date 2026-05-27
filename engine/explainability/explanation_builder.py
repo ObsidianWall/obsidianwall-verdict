@@ -16,24 +16,13 @@
 # This layer is informational and audit-support only.
 
 
-from engine.explainability.policy_reasoning import (
-    build_policy_reasoning
-)
-
-from engine.explainability.recommendation_explainer import (
-    explain_recommendations
-)
-
-from engine.explainability.trace_graph import (
-    build_trace_graph
-)
-
-from engine.explainability.governance_reasoning_chain import (
-    build_governance_reasoning_chain
-)
-
 from audit.audit_logger import get_logger
-
+from engine.explainability.governance_reasoning_chain import (
+    build_governance_reasoning_chain,
+)
+from engine.explainability.policy_reasoning import build_policy_reasoning
+from engine.explainability.recommendation_explainer import explain_recommendations
+from engine.explainability.trace_graph import build_trace_graph
 
 logger = get_logger()
 
@@ -81,38 +70,23 @@ def build_explanation_artifact(
     # =================================================
 
     if not isinstance(evaluation_result, dict):
-        raise TypeError(
-            "evaluation_result must be a dict"
-        )
+        raise TypeError("evaluation_result must be a dict")
 
     if not isinstance(analyzer_results, dict):
-        raise TypeError(
-            "analyzer_results must be a dict"
-        )
+        raise TypeError("analyzer_results must be a dict")
 
     if not isinstance(recommendations, list):
-        raise TypeError(
-            "recommendations must be a list"
-        )
+        raise TypeError("recommendations must be a list")
 
     if not isinstance(runtime_context, dict):
-        raise TypeError(
-            "runtime_context must be a dict"
-        )
+        raise TypeError("runtime_context must be a dict")
 
-    required_keys = {
-        "decision",
-        "conditions_passed",
-        "trace"
-    }
+    required_keys = {"decision", "conditions_passed", "trace"}
 
     missing_keys = required_keys - evaluation_result.keys()
 
     if missing_keys:
-        raise ValueError(
-            f"evaluation_result missing required keys: "
-            f"{missing_keys}"
-        )
+        raise ValueError(f"evaluation_result missing required keys: {missing_keys}")
 
     # =================================================
     # GOVERNANCE REASONING CHAIN
@@ -137,12 +111,8 @@ def build_explanation_artifact(
     # =================================================
 
     policy_reasoning = build_policy_reasoning(
-        decision=evaluation_result.get(
-            "decision", "UNKNOWN"
-        ),
-        conditions_passed=evaluation_result.get(
-            "conditions_passed", False
-        ),
+        decision=evaluation_result.get("decision", "UNKNOWN"),
+        conditions_passed=evaluation_result.get("conditions_passed", False),
         trace=evaluation_result.get("trace", []),
     )
 
@@ -150,9 +120,7 @@ def build_explanation_artifact(
     # ANALYZER FINDINGS SUMMARY
     # =================================================
 
-    analyzer_findings = _summarize_analyzer_findings(
-        analyzer_results
-    )
+    analyzer_findings = _summarize_analyzer_findings(analyzer_results)
 
     # =================================================
     # EXPLAINED RECOMMENDATIONS
@@ -160,9 +128,7 @@ def build_explanation_artifact(
 
     explained_recommendations = explain_recommendations(
         recommendations=recommendations,
-        decision=evaluation_result.get(
-            "decision", "UNKNOWN"
-        ),
+        decision=evaluation_result.get("decision", "UNKNOWN"),
     )
 
     # =================================================
@@ -183,73 +149,59 @@ def build_explanation_artifact(
     # =================================================
 
     artifact = {
-
         "decision": evaluation_result.get("decision"),
-
-        "conditions_passed": evaluation_result.get(
-            "conditions_passed"
-        ),
-
+        "conditions_passed": evaluation_result.get("conditions_passed"),
         # -----------------------------------------
         # RISK SUMMARY
         # Consolidated across all analyzers.
         # Surfaces at top level for readability.
         # -----------------------------------------
         "risk_summary": risk_summary,
-
         # -----------------------------------------
         # GOVERNANCE REASONING CHAIN
         # Complete causal pipeline narrative.
         # Primary compliance artifact.
         # -----------------------------------------
         "governance_reasoning": governance_reasoning,
-
         # -----------------------------------------
         # CONDITION-LEVEL REASONING
         # -----------------------------------------
         "policy_reasoning": policy_reasoning,
-
         # -----------------------------------------
         # INTELLIGENCE SUMMARIES
         # -----------------------------------------
-        "analyzer_findings":            analyzer_findings,
-
-        "explained_recommendations":    explained_recommendations,
-
+        "analyzer_findings": analyzer_findings,
+        "explained_recommendations": explained_recommendations,
         # -----------------------------------------
         # EXECUTION LINEAGE GRAPH
         # -----------------------------------------
-        "trace_graph":                  trace_graph,
+        "trace_graph": trace_graph,
     }
 
     logger.info(
         "explanation_artifact_built",
         extra={
             "extra": {
-                "decision":             artifact["decision"],
-                "policy_name":          policy_name,
-                "reasoning_stages":     governance_reasoning.get(
-                    "total_stages", 0
-                ),
-                "governance_stages":    governance_reasoning.get(
+                "decision": artifact["decision"],
+                "policy_name": policy_name,
+                "reasoning_stages": governance_reasoning.get("total_stages", 0),
+                "governance_stages": governance_reasoning.get(
                     "governance_stage_count", 0
                 ),
-                "analyzer_findings":    len(analyzer_findings),
+                "analyzer_findings": len(analyzer_findings),
                 "recommendation_count": len(
-                    explained_recommendations.get(
-                        "all_recommendations", []
-                    )
+                    explained_recommendations.get("all_recommendations", [])
                 ),
                 "overall_risk_score": (
-                    risk_summary.get("overall_risk_score", 0)
-                    if risk_summary else 0
+                    risk_summary.get("overall_risk_score", 0) if risk_summary else 0
                 ),
                 "effective_severity": (
                     risk_summary.get("effective_severity", "unknown")
-                    if risk_summary else "unknown"
+                    if risk_summary
+                    else "unknown"
                 ),
             }
-        }
+        },
     )
 
     return artifact
@@ -259,9 +211,8 @@ def build_explanation_artifact(
 # INTERNAL HELPERS
 # =====================================================
 
-def _summarize_analyzer_findings(
-    analyzer_results: dict
-) -> list[dict]:
+
+def _summarize_analyzer_findings(analyzer_results: dict) -> list[dict]:
     """
     Flatten and summarize findings across all analyzers.
     Skips malformed analyzer outputs defensively.
@@ -270,23 +221,23 @@ def _summarize_analyzer_findings(
     summary = []
 
     for analyzer_name, analyzer_data in analyzer_results.items():
-
         if not isinstance(analyzer_data, dict):
             continue
 
         findings = analyzer_data.get("findings", [])
 
         for finding in findings:
-
             message = finding.get("message")
             if not message:
                 continue
 
-            summary.append({
-                "analyzer":     analyzer_name,
-                "type":         finding.get("type", "unknown"),
-                "severity":     finding.get("severity", "medium"),
-                "message":      message,
-            })
+            summary.append(
+                {
+                    "analyzer": analyzer_name,
+                    "type": finding.get("type", "unknown"),
+                    "severity": finding.get("severity", "medium"),
+                    "message": message,
+                }
+            )
 
     return summary

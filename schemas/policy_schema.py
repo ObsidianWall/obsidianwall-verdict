@@ -16,16 +16,15 @@
 # All engine modules depend on this contract.
 
 
-from pydantic import BaseModel
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
 
-
-
+from pydantic import BaseModel
 
 # =====================================================
 # GOVERNANCE SEVERITY
 # =====================================================
+
 
 class GovernanceSeverity(str, Enum):
     """
@@ -34,16 +33,18 @@ class GovernanceSeverity(str, Enum):
     Determines decision routing, notification urgency,
     and approval requirements.
     """
-    INFORMATIONAL   = "informational"
-    LOW             = "low"
-    MEDIUM          = "medium"
-    HIGH            = "high"
-    CRITICAL        = "critical"
+
+    INFORMATIONAL = "informational"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 # =====================================================
 # GOVERNANCE DECISION OUTCOMES
 # =====================================================
+
 
 class GovernanceDecision(str, Enum):
     """
@@ -52,71 +53,81 @@ class GovernanceDecision(str, Enum):
     Replaces binary allow/deny with
     accountability-aware routing decisions.
     """
-    ALLOW                       = "ALLOW"
-    ALLOW_WITH_NOTIFICATION     = "ALLOW_WITH_NOTIFICATION"
+
+    ALLOW = "ALLOW"
+    ALLOW_WITH_NOTIFICATION = "ALLOW_WITH_NOTIFICATION"
     ALLOW_WITH_APPROVAL_REQUIRED = "ALLOW_WITH_APPROVAL_REQUIRED"
-    DENY_WITH_OVERRIDE          = "DENY_WITH_OVERRIDE"
-    DENY                        = "DENY"
+    DENY_WITH_OVERRIDE = "DENY_WITH_OVERRIDE"
+    DENY = "DENY"
 
 
 # =====================================================
 # METADATA
 # =====================================================
 
+
 class Metadata(BaseModel):
     """
     Policy identity and ownership metadata.
     """
-    name:           str
-    version:        str             # string — preserves "0.10" correctly
-    owner:          str
-    description:    Optional[str] = None
+
+    name: str
+    version: str  # string — preserves "0.10" correctly
+    owner: str
+    description: Optional[str] = None
 
 
 # =====================================================
 # CONDITIONS
 # =====================================================
 
+
 class Condition(BaseModel):
     """
     Deterministic policy condition.
     Evaluated by the condition evaluator engine.
     """
-    id:             str
-    expression:     str
-    description:    str
+
+    id: str
+    expression: str
+    description: str
 
 
 # =====================================================
 # ACTIONS
 # =====================================================
 
+
 class Action(BaseModel):
     """
     Post-decision action directive.
     """
-    type:       str
-    message:    str
-    severity:   Optional[str] = "info"
+
+    type: str
+    message: str
+    severity: Optional[str] = "info"
 
 
 # =====================================================
 # DECISION
 # =====================================================
 
+
 class Decision(BaseModel):
     """
     Policy decision outcome mapping.
     Maps condition results to governance decision outcomes.
     """
-    allow:  str
-    deny:   str
-    warn:   Optional[str] = None
+
+    allow: str
+    deny: str
+    warn: Optional[str] = None
 
 
 # =====================================================
 # OVERRIDE
 # =====================================================
+
 
 class Override(BaseModel):
     """
@@ -124,13 +135,15 @@ class Override(BaseModel):
     Defines who can override a governance decision
     and whether approval is required.
     """
-    roles:              List[str]
-    requires_approval:  Optional[bool] = False
+
+    roles: List[str]
+    requires_approval: Optional[bool] = False
 
 
 # =====================================================
 # GOVERNANCE WORKFLOW
 # =====================================================
+
 
 class NotificationTarget(BaseModel):
     """
@@ -138,8 +151,9 @@ class NotificationTarget(BaseModel):
     Defines who receives governance notifications
     and through which channel.
     """
-    role:       str
-    channel:    Optional[str] = "email"
+
+    role: str
+    channel: Optional[str] = "email"
 
 
 class ApprovalConfig(BaseModel):
@@ -148,6 +162,7 @@ class ApprovalConfig(BaseModel):
     Defines which roles must approve before
     a governance decision is resolved.
     """
+
     required: List[str]
 
 
@@ -160,25 +175,28 @@ class GovernanceConfig(BaseModel):
     - Stakeholder notification routing
     - Approval chain definition
     """
-    severity:       GovernanceSeverity          = GovernanceSeverity.MEDIUM
-    notifications:  List[NotificationTarget]    = []
-    approvals:      Optional[ApprovalConfig]    = None
+
+    severity: GovernanceSeverity = GovernanceSeverity.MEDIUM
+    notifications: List[NotificationTarget] = []
+    approvals: Optional[ApprovalConfig] = None
 
 
 # =====================================================
 # PARAMETERS
 # =====================================================
 
+
 class Budget(BaseModel):
     """
     Budget constraint parameters.
     """
-    amount:             float
-    period:             str
-    scope:              str
-    owner:              str
-    flexibility:        str
-    override_allowed:   bool
+
+    amount: float
+    period: str
+    scope: str
+    owner: str
+    flexibility: str
+    override_allowed: bool
 
 
 class Parameters(BaseModel):
@@ -186,6 +204,7 @@ class Parameters(BaseModel):
     Policy runtime parameters.
     Flattened by policy_normalizer before evaluation.
     """
+
     budget: Budget
 
 
@@ -193,22 +212,25 @@ class Parameters(BaseModel):
 # SPEC
 # =====================================================
 
+
 class Spec(BaseModel):
     """
     Policy specification — the enforceable body of the policy.
     """
-    inputs:         List[str]
-    parameters:     Parameters
-    conditions:     List[Condition]
-    decision:       Decision
-    override:       Override
-    governance:     Optional[GovernanceConfig]  = None
-    actions:        List[Action]
+
+    inputs: List[str]
+    parameters: Parameters
+    conditions: List[Condition]
+    decision: Decision
+    override: Override
+    governance: Optional[GovernanceConfig] = None
+    actions: List[Action]
 
 
 # =====================================================
 # POLICY — ROOT CONTRACT
 # =====================================================
+
 
 class Policy(BaseModel):
     """
@@ -217,7 +239,8 @@ class Policy(BaseModel):
     This is the trusted typed object produced by
     the validator and consumed by all engine modules.
     """
+
     apiVersion: str
-    kind:       str
-    metadata:   Metadata
-    spec:       Spec
+    kind: str
+    metadata: Metadata
+    spec: Spec

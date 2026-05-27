@@ -17,7 +17,6 @@
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -26,9 +25,9 @@ logger = get_logger()
 # =====================================================
 
 # TODO: Replace with centralized scoring engine.
-RISK_WEIGHT_PUBLIC_EXPOSURE     = 35
-RISK_WEIGHT_MISSING_LB          = 20
-RISK_WEIGHT_SINGLE_ZONE         = 15
+RISK_WEIGHT_PUBLIC_EXPOSURE = 35
+RISK_WEIGHT_MISSING_LB = 20
+RISK_WEIGHT_SINGLE_ZONE = 15
 RISK_WEIGHT_MISSING_SEGMENTATION = 25
 
 # Resource types that indicate public exposure
@@ -74,9 +73,8 @@ SEGMENTATION_INDICATORS = {
 # TOPOLOGY ANALYZER
 # =====================================================
 
-def analyze_topology(
-    runtime_context: dict
-) -> dict:
+
+def analyze_topology(runtime_context: dict) -> dict:
     """
     Analyze infrastructure topology posture.
 
@@ -87,16 +85,14 @@ def analyze_topology(
     - Single-zone deployment risk
     """
 
-    resources   = runtime_context.get("resources", [])
+    resources = runtime_context.get("resources", [])
     environment = runtime_context.get("environment", "unknown")
 
-    findings                = []
+    findings = []
     optimization_candidates = []
-    risk_score              = 0
+    risk_score = 0
 
-    resource_types = {
-        r.get("type", "") for r in resources
-    }
+    resource_types = {r.get("type", "") for r in resources}
 
     # =================================================
     # PUBLIC EXPOSURE DETECTION
@@ -105,105 +101,111 @@ def analyze_topology(
     public_resources = resource_types & PUBLIC_RESOURCE_INDICATORS
 
     if public_resources:
-
-        has_segmentation = bool(
-            resource_types & SEGMENTATION_INDICATORS
-        )
+        has_segmentation = bool(resource_types & SEGMENTATION_INDICATORS)
 
         if not has_segmentation:
-
             risk_score += RISK_WEIGHT_PUBLIC_EXPOSURE
 
-            findings.append({
-                "type":     "public_exposure_without_segmentation",
-                "severity": "high",
-                "message": (
-                    f"Public-facing resources detected "
-                    f"({', '.join(public_resources)}) "
-                    f"without network segmentation controls."
-                )
-            })
+            findings.append(
+                {
+                    "type": "public_exposure_without_segmentation",
+                    "severity": "high",
+                    "message": (
+                        f"Public-facing resources detected "
+                        f"({', '.join(public_resources)}) "
+                        f"without network segmentation controls."
+                    ),
+                }
+            )
 
-            optimization_candidates.append({
-                "type": "network_segmentation",
-                "message": (
-                    "Add network security groups or firewall rules "
-                    "to segment public-facing resources."
-                ),
-                "estimated_savings_percent": 0
-            })
+            optimization_candidates.append(
+                {
+                    "type": "network_segmentation",
+                    "message": (
+                        "Add network security groups or firewall rules "
+                        "to segment public-facing resources."
+                    ),
+                    "estimated_savings_percent": 0,
+                }
+            )
 
         else:
-
             # Public exposure with segmentation — lower severity
-            findings.append({
-                "type":     "public_exposure_detected",
-                "severity": "low",
-                "message": (
-                    f"Public-facing resources detected "
-                    f"({', '.join(public_resources)}). "
-                    f"Network segmentation controls present."
-                )
-            })
+            findings.append(
+                {
+                    "type": "public_exposure_detected",
+                    "severity": "low",
+                    "message": (
+                        f"Public-facing resources detected "
+                        f"({', '.join(public_resources)}). "
+                        f"Network segmentation controls present."
+                    ),
+                }
+            )
 
     # =================================================
     # LOAD BALANCER COVERAGE
     # =================================================
 
-    has_compute         = bool(resource_types & COMPUTE_TYPES)
-    has_load_balancer   = bool(resource_types & LOAD_BALANCER_TYPES)
+    has_compute = bool(resource_types & COMPUTE_TYPES)
+    has_load_balancer = bool(resource_types & LOAD_BALANCER_TYPES)
 
     if has_compute and not has_load_balancer:
-
         # Only flag in production — dev single-instance is acceptable
         if environment in ("production", "prod", "staging"):
-
             risk_score += RISK_WEIGHT_MISSING_LB
 
-            findings.append({
-                "type":     "missing_load_balancer",
-                "severity": "medium",
-                "message": (
-                    f"Compute resources detected in {environment} "
-                    f"without load balancer coverage. "
-                    f"Single point of failure risk."
-                )
-            })
+            findings.append(
+                {
+                    "type": "missing_load_balancer",
+                    "severity": "medium",
+                    "message": (
+                        f"Compute resources detected in {environment} "
+                        f"without load balancer coverage. "
+                        f"Single point of failure risk."
+                    ),
+                }
+            )
 
-            optimization_candidates.append({
-                "type": "load_balancer_coverage",
-                "message": (
-                    f"Add a load balancer in front of compute "
-                    f"resources for {environment} resilience."
-                ),
-                "estimated_savings_percent": 0
-            })
+            optimization_candidates.append(
+                {
+                    "type": "load_balancer_coverage",
+                    "message": (
+                        f"Add a load balancer in front of compute "
+                        f"resources for {environment} resilience."
+                    ),
+                    "estimated_savings_percent": 0,
+                }
+            )
 
     # =================================================
     # NETWORK SEGMENTATION ANALYSIS
     # =================================================
 
     if resources and not (resource_types & SEGMENTATION_INDICATORS):
-
         risk_score += RISK_WEIGHT_MISSING_SEGMENTATION
 
-        findings.append({
-            "type":     "missing_network_segmentation",
-            "severity": "medium",
-            "message": (
-                "No network segmentation controls detected. "
-                "Consider adding security groups or firewall rules."
-            )
-        })
+        findings.append(
+            {
+                "type": "missing_network_segmentation",
+                "severity": "medium",
+                "message": (
+                    "No network segmentation controls detected. "
+                    "Consider adding security groups or firewall rules."
+                ),
+            }
+        )
 
-        optimization_candidates.append({
-            "type": "security_posture",
-            "message": (
-                "Implement network security groups or firewall "
-                "rules to enforce network segmentation."
-            ),
-            "estimated_savings_percent": 0
-        })
+        optimization_candidates.append(
+            {
+                "type": "security_posture",
+                "message": (
+                    "Implement network security groups or firewall "
+                    "rules to enforce network segmentation."
+                ),
+                "estimated_savings_percent": 0,
+            }
+        )
 
     # =================================================
     # SINGLE-ZONE DETECTION
@@ -214,48 +216,42 @@ def analyze_topology(
     # Currently inferred from resource count and type patterns.
     # Future: parse availability_zone fields from resource values.
 
-    compute_resources = [
-        r for r in resources
-        if r.get("type", "") in COMPUTE_TYPES
-    ]
+    compute_resources = [r for r in resources if r.get("type", "") in COMPUTE_TYPES]
 
-    if len(compute_resources) == 1 and environment in (
-        "production", "prod"
-    ):
-
+    if len(compute_resources) == 1 and environment in ("production", "prod"):
         risk_score += RISK_WEIGHT_SINGLE_ZONE
 
-        findings.append({
-            "type":     "single_zone_compute",
-            "severity": "medium",
-            "message": (
-                "Single compute resource detected in production. "
-                "Multi-zone deployment recommended for resilience."
-            )
-        })
+        findings.append(
+            {
+                "type": "single_zone_compute",
+                "severity": "medium",
+                "message": (
+                    "Single compute resource detected in production. "
+                    "Multi-zone deployment recommended for resilience."
+                ),
+            }
+        )
 
     logger.info(
         "topology_analysis_complete",
         extra={
             "extra": {
-                "resource_count":   len(resources),
-                "risk_score":       risk_score,
-                "finding_count":    len(findings),
+                "resource_count": len(resources),
+                "risk_score": risk_score,
+                "finding_count": len(findings),
             }
-        }
+        },
     )
 
     return {
-        "analyzer":                 "topology_analyzer",
-        "risk_score":               risk_score,
-        "findings":                 findings,
-        "optimization_candidates":  optimization_candidates,
+        "analyzer": "topology_analyzer",
+        "risk_score": risk_score,
+        "findings": findings,
+        "optimization_candidates": optimization_candidates,
         "metadata": {
-            "environment":          environment,
-            "resource_count":       len(resources),
-            "has_load_balancer":    has_load_balancer,
-            "has_segmentation":     bool(
-                resource_types & SEGMENTATION_INDICATORS
-            ),
-        }
+            "environment": environment,
+            "resource_count": len(resources),
+            "has_load_balancer": has_load_balancer,
+            "has_segmentation": bool(resource_types & SEGMENTATION_INDICATORS),
+        },
     }

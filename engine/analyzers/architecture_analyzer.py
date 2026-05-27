@@ -18,7 +18,6 @@
 
 from audit.audit_logger import get_logger
 
-
 logger = get_logger()
 
 
@@ -27,11 +26,11 @@ logger = get_logger()
 # =====================================================
 
 # TODO: Replace with centralized scoring engine.
-RISK_WEIGHT_SINGLE_DB           = 40
-RISK_WEIGHT_SINGLE_COMPUTE      = 20
-RISK_WEIGHT_SINGLE_STORAGE      = 10
-RISK_WEIGHT_NO_MONITORING       = 15
-RISK_WEIGHT_MIXED_CLOUD         = 10
+RISK_WEIGHT_SINGLE_DB = 40
+RISK_WEIGHT_SINGLE_COMPUTE = 20
+RISK_WEIGHT_SINGLE_STORAGE = 10
+RISK_WEIGHT_NO_MONITORING = 15
+RISK_WEIGHT_MIXED_CLOUD = 10
 
 # Resource class mappings
 # NOTE: Subset — full mapping lives in optimization_catalog.
@@ -71,9 +70,9 @@ MONITORING_TYPES = {
 
 # Cloud provider prefixes for cross-cloud detection
 CLOUD_PREFIXES = {
-    "aws":          "aws",
-    "azurerm":      "azure",
-    "google":       "gcp",
+    "aws": "aws",
+    "azurerm": "azure",
+    "google": "gcp",
 }
 
 
@@ -89,9 +88,8 @@ def _detect_cloud_provider(resource_type: str) -> str:
 # ARCHITECTURE ANALYZER
 # =====================================================
 
-def analyze_architecture(
-    runtime_context: dict
-) -> dict:
+
+def analyze_architecture(runtime_context: dict) -> dict:
     """
     Analyze infrastructure architecture posture.
 
@@ -103,12 +101,12 @@ def analyze_architecture(
     - Environment-inappropriate architecture patterns
     """
 
-    resources   = runtime_context.get("resources", [])
+    resources = runtime_context.get("resources", [])
     environment = runtime_context.get("environment", "unknown")
 
-    findings                = []
+    findings = []
     optimization_candidates = []
-    risk_score              = 0
+    risk_score = 0
 
     resource_types = [r.get("type", "") for r in resources]
     resource_type_set = set(resource_types)
@@ -117,68 +115,64 @@ def analyze_architecture(
     # DATABASE REDUNDANCY DETECTION
     # =================================================
 
-    db_resources = [
-        t for t in resource_types
-        if t in DATABASE_TYPES
-    ]
+    db_resources = [t for t in resource_types if t in DATABASE_TYPES]
 
-    if len(db_resources) == 1 and environment in (
-        "production", "prod", "staging"
-    ):
-
+    if len(db_resources) == 1 and environment in ("production", "prod", "staging"):
         risk_score += RISK_WEIGHT_SINGLE_DB
 
-        findings.append({
-            "type":     "single_database_no_replica",
-            "severity": "high",
-            "message": (
-                f"Single database resource detected in {environment}. "
-                f"No replica or failover configuration detected. "
-                f"Data availability risk."
-            )
-        })
+        findings.append(
+            {
+                "type": "single_database_no_replica",
+                "severity": "high",
+                "message": (
+                    f"Single database resource detected in {environment}. "
+                    f"No replica or failover configuration detected. "
+                    f"Data availability risk."
+                ),
+            }
+        )
 
-        optimization_candidates.append({
-            "type": "database_redundancy",
-            "message": (
-                "Configure database read replicas or "
-                "multi-AZ failover for production resilience."
-            ),
-            "estimated_savings_percent": 0
-        })
+        optimization_candidates.append(
+            {
+                "type": "database_redundancy",
+                "message": (
+                    "Configure database read replicas or "
+                    "multi-AZ failover for production resilience."
+                ),
+                "estimated_savings_percent": 0,
+            }
+        )
 
     # =================================================
     # COMPUTE REDUNDANCY DETECTION
     # =================================================
 
-    compute_resources = [
-        t for t in resource_types
-        if t in COMPUTE_TYPES
-    ]
+    compute_resources = [t for t in resource_types if t in COMPUTE_TYPES]
 
-    if len(compute_resources) == 1 and environment in (
-        "production", "prod"
-    ):
-
+    if len(compute_resources) == 1 and environment in ("production", "prod"):
         risk_score += RISK_WEIGHT_SINGLE_COMPUTE
 
-        findings.append({
-            "type":     "single_compute_resource",
-            "severity": "medium",
-            "message": (
-                f"Single compute resource detected in {environment}. "
-                f"No horizontal redundancy detected."
-            )
-        })
+        findings.append(
+            {
+                "type": "single_compute_resource",
+                "severity": "medium",
+                "message": (
+                    f"Single compute resource detected in {environment}. "
+                    f"No horizontal redundancy detected."
+                ),
+            }
+        )
 
-        optimization_candidates.append({
-            "type": "compute_redundancy",
-            "message": (
-                "Consider auto-scaling groups or multiple "
-                "compute instances for production resilience."
-            ),
-            "estimated_savings_percent": 0
-        })
+        optimization_candidates.append(
+            {
+                "type": "compute_redundancy",
+                "message": (
+                    "Consider auto-scaling groups or multiple "
+                    "compute instances for production resilience."
+                ),
+                "estimated_savings_percent": 0,
+            }
+        )
 
     # =================================================
     # SINGLE RESOURCE DEPLOYMENT (ANY CLASS)
@@ -190,7 +184,6 @@ def analyze_architecture(
     # covered by specific class checks above.
 
     if len(resources) == 1:
-
         resource_type = resource_types[0] if resource_types else ""
 
         # Storage-only single resource is lower risk
@@ -200,46 +193,47 @@ def analyze_architecture(
         else:
             severity = "medium"
 
-        findings.append({
-            "type":     "single_resource_architecture",
-            "severity": severity,
-            "message": (
-                "Single-resource deployment detected. "
-                "Review architecture for resilience requirements."
-            )
-        })
+        findings.append(
+            {
+                "type": "single_resource_architecture",
+                "severity": severity,
+                "message": (
+                    "Single-resource deployment detected. "
+                    "Review architecture for resilience requirements."
+                ),
+            }
+        )
 
     # =================================================
     # MONITORING AND OBSERVABILITY
     # =================================================
 
-    has_monitoring = bool(
-        resource_type_set & MONITORING_TYPES
-    )
+    has_monitoring = bool(resource_type_set & MONITORING_TYPES)
 
-    if not has_monitoring and environment in (
-        "production", "prod", "staging"
-    ):
-
+    if not has_monitoring and environment in ("production", "prod", "staging"):
         risk_score += RISK_WEIGHT_NO_MONITORING
 
-        findings.append({
-            "type":     "missing_observability",
-            "severity": "medium",
-            "message": (
-                f"No monitoring or observability resources detected "
-                f"in {environment} deployment."
-            )
-        })
+        findings.append(
+            {
+                "type": "missing_observability",
+                "severity": "medium",
+                "message": (
+                    f"No monitoring or observability resources detected "
+                    f"in {environment} deployment."
+                ),
+            }
+        )
 
-        optimization_candidates.append({
-            "type": "observability",
-            "message": (
-                "Add monitoring, alerting, and logging resources "
-                "to support operational visibility."
-            ),
-            "estimated_savings_percent": 0
-        })
+        optimization_candidates.append(
+            {
+                "type": "observability",
+                "message": (
+                    "Add monitoring, alerting, and logging resources "
+                    "to support operational visibility."
+                ),
+                "estimated_savings_percent": 0,
+            }
+        )
 
     # =================================================
     # MULTI-CLOUD COMPLEXITY DETECTION
@@ -252,40 +246,41 @@ def analyze_architecture(
     }
 
     if len(cloud_providers) > 1:
-
         risk_score += RISK_WEIGHT_MIXED_CLOUD
 
-        findings.append({
-            "type":     "multi_cloud_complexity",
-            "severity": "low",
-            "message": (
-                f"Resources span multiple cloud providers "
-                f"({', '.join(sorted(cloud_providers))}). "
-                f"Operational complexity risk."
-            )
-        })
+        findings.append(
+            {
+                "type": "multi_cloud_complexity",
+                "severity": "low",
+                "message": (
+                    f"Resources span multiple cloud providers "
+                    f"({', '.join(sorted(cloud_providers))}). "
+                    f"Operational complexity risk."
+                ),
+            }
+        )
 
     logger.info(
         "architecture_analysis_complete",
         extra={
             "extra": {
-                "resource_count":   len(resources),
-                "risk_score":       risk_score,
-                "finding_count":    len(findings),
-                "environment":      environment,
+                "resource_count": len(resources),
+                "risk_score": risk_score,
+                "finding_count": len(findings),
+                "environment": environment,
             }
-        }
+        },
     )
 
     return {
-        "analyzer":                 "architecture_analyzer",
-        "risk_score":               risk_score,
-        "findings":                 findings,
-        "optimization_candidates":  optimization_candidates,
+        "analyzer": "architecture_analyzer",
+        "risk_score": risk_score,
+        "findings": findings,
+        "optimization_candidates": optimization_candidates,
         "metadata": {
-            "environment":          environment,
-            "resource_count":       len(resources),
-            "cloud_providers":      list(cloud_providers),
-            "has_monitoring":       has_monitoring,
-        }
+            "environment": environment,
+            "resource_count": len(resources),
+            "cloud_providers": list(cloud_providers),
+            "has_monitoring": has_monitoring,
+        },
     }

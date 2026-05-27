@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obsidianwall-verdict"
-version = "0.2.0"
+version = "0.2.2"
 description = "A deterministic pre-deployment infrastructure governance engine"
 readme = "README.md"
 license =  "Apache-2.0"
@@ -85,12 +85,16 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
+
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py311"
+exclude = ["tests/", "*.yaml", "*.yml"]
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
-exclude = ["tests/", "*.yaml", "*.yml"]
+per-file-ignores = {"**/__init__.py" = ["F401"]}
 
 [tool.coverage.run]
 source = ["engine", "schemas", "audit"]

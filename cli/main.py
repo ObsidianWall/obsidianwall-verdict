@@ -13,6 +13,7 @@
 #   Deterministic execution  ← core architecture
 #   Command separation       ← platform scalability
 
+import importlib.metadata
 import json
 from pathlib import Path
 from typing import Any
@@ -25,12 +26,33 @@ from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 
-
 app = typer.Typer(
     name="verdict",
     help="ObsidianWall Verdict — pre-deployment infrastructure governance.",
     add_completion=False,
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        version = importlib.metadata.version("obsidianwall-verdict")
+        typer.echo(f"ObsidianWall Verdict v{version}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-v",
+        help="Show version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """ObsidianWall Verdict — pre-deployment infrastructure governance."""
+
 
 logger = get_logger()
 
@@ -120,19 +142,18 @@ def evaluate(
     """
 
     try:
-
         logger.info(
             "evaluation_started",
             extra={
                 "extra": {
-                    "plan":          plan,
-                    "policy":        policy,
-                    "role":          role,
-                    "pricing":       pricing,
-                    "region":        region,
+                    "plan": plan,
+                    "policy": policy,
+                    "role": role,
+                    "pricing": pricing,
+                    "region": region,
                     "current_spend": current_spend,
                 }
-            }
+            },
         )
 
         # ---------------------------------------------
@@ -185,10 +206,10 @@ def evaluate(
             "evaluation_completed",
             extra={
                 "extra": {
-                    "decision":     result["decision"],
-                    "decision_id":  result["decision_id"],
+                    "decision": result["decision"],
+                    "decision_id": result["decision_id"],
                 }
-            }
+            },
         )
 
         # ---------------------------------------------
@@ -216,10 +237,7 @@ def evaluate(
         raise
 
     except Exception as e:
-        logger.error(
-            "evaluation_failed",
-            extra={"extra": {"error": str(e)}}
-        )
+        logger.error("evaluation_failed", extra={"extra": {"error": str(e)}})
         raise typer.Exit(code=1)
 
 
@@ -247,20 +265,30 @@ def validate(
         policy_dict: dict[str, Any] = load_policy(policy)
         policy_obj = validate_policy(policy_dict)
 
-        print(json.dumps({
-            "status":   "valid",
-            "policy":   policy,
-            "name":     policy_obj.metadata.name,
-            "version":  policy_obj.metadata.version,
-            "owner":    policy_obj.metadata.owner,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "status": "valid",
+                    "policy": policy,
+                    "name": policy_obj.metadata.name,
+                    "version": policy_obj.metadata.version,
+                    "owner": policy_obj.metadata.owner,
+                },
+                indent=2,
+            )
+        )
 
     except Exception as e:
-        print(json.dumps({
-            "status":   "invalid",
-            "policy":   policy,
-            "error":    str(e),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "status": "invalid",
+                    "policy": policy,
+                    "error": str(e),
+                },
+                indent=2,
+            )
+        )
         raise typer.Exit(code=1)
 
 
