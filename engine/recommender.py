@@ -111,43 +111,50 @@ def enrich_from_analyzers(
     enriched: list[dict[str, Any]] = []
 
     for analyzer_name, analyzer_data in analyzer_results.items():
-
         if not isinstance(analyzer_data, dict):
             logger.warning(
                 "malformed_analyzer_output",
                 extra={
                     "extra": {
-                        "analyzer":      analyzer_name,
+                        "analyzer": analyzer_name,
                         "received_type": type(analyzer_data).__name__,
                     }
                 },
             )
             continue
 
-        findings:               list[Any] = analyzer_data.get("findings", [])
+        findings: list[Any] = analyzer_data.get("findings", [])
         optimization_candidates: list[Any] = analyzer_data.get(
             "optimization_candidates", []
         )
 
         for finding in findings:
-            enriched.append({
-                "type":                     finding.get("type", "analyzer_finding"),
-                "message":                  finding.get("message", "Analyzer finding detected."),
-                "severity":                 finding.get("severity", "medium"),
-                "priority_score":           70,
-                "confidence":               0.85,
-                "estimated_savings_percent": 0,
-            })
+            enriched.append(
+                {
+                    "type": finding.get("type", "analyzer_finding"),
+                    "message": finding.get("message", "Analyzer finding detected."),
+                    "severity": finding.get("severity", "medium"),
+                    "priority_score": 70,
+                    "confidence": 0.85,
+                    "estimated_savings_percent": 0,
+                }
+            )
 
         for candidate in optimization_candidates:
-            enriched.append({
-                "type":                     candidate.get("type", "optimization_candidate"),
-                "message":                  candidate.get("message", "Optimization opportunity identified."),
-                "severity":                 candidate.get("severity", "medium"),
-                "estimated_savings_percent": candidate.get("estimated_savings_percent", 0),
-                "priority_score":           85,
-                "confidence":               0.90,
-            })
+            enriched.append(
+                {
+                    "type": candidate.get("type", "optimization_candidate"),
+                    "message": candidate.get(
+                        "message", "Optimization opportunity identified."
+                    ),
+                    "severity": candidate.get("severity", "medium"),
+                    "estimated_savings_percent": candidate.get(
+                        "estimated_savings_percent", 0
+                    ),
+                    "priority_score": 85,
+                    "confidence": 0.90,
+                }
+            )
 
     return enriched
 
@@ -169,7 +176,6 @@ def deduplicate_recommendations(
     deduped: list[dict[str, Any]] = []
 
     for recommendation in recommendations:
-
         message: str | None = recommendation.get("message")
 
         if not message:
@@ -222,36 +228,36 @@ def generate_suggestions(
         raise TypeError("analyzer_results must be a dict")
 
     suggestions: list[dict[str, Any]] = []
-    resources:   list[Any]            = context.get("resources", [])
+    resources: list[Any] = context.get("resources", [])
 
     seen_resource_classes: set[str] = set()
 
     for resource in resources:
-        resource_type:  str = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         resource_class: str = classify_resource(resource_type)
 
         if resource_class in seen_resource_classes:
             continue
 
         seen_resource_classes.add(resource_class)
-        suggestions.extend(
-            generate_semantic_recommendations(resource_class, context)
-        )
+        suggestions.extend(generate_semantic_recommendations(resource_class, context))
 
     suggestions.extend(enrich_from_analyzers(analyzer_results))
 
     if decision.startswith("DENY"):
-        suggestions.append({
-            "type":    "enforcement",
-            "message": (
-                "Deployment blocked by policy enforcement. "
-                "Review evaluation trace for remediation guidance."
-            ),
-            "severity":                 "high",
-            "priority_score":           95,
-            "confidence":               1.0,
-            "estimated_savings_percent": 0,
-        })
+        suggestions.append(
+            {
+                "type": "enforcement",
+                "message": (
+                    "Deployment blocked by policy enforcement. "
+                    "Review evaluation trace for remediation guidance."
+                ),
+                "severity": "high",
+                "priority_score": 95,
+                "confidence": 1.0,
+                "estimated_savings_percent": 0,
+            }
+        )
 
     deduped: list[dict[str, Any]] = deduplicate_recommendations(suggestions)
 
@@ -259,9 +265,9 @@ def generate_suggestions(
         "recommendations_generated",
         extra={
             "extra": {
-                "decision":             decision,
+                "decision": decision,
                 "recommendation_count": len(deduped),
-                "resource_classes":     list(seen_resource_classes),
+                "resource_classes": list(seen_resource_classes),
             }
         },
     )

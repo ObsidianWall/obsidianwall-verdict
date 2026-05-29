@@ -30,17 +30,17 @@ logger = get_logger()
 
 RISK_SEVERITY_THRESHOLDS: dict[str, int] = {
     "critical": 70,
-    "high":     40,
-    "medium":   15,
-    "low":       1,
+    "high": 40,
+    "medium": 15,
+    "low": 1,
 }
 
 SEVERITY_ORDER: dict[GovernanceSeverity, int] = {
     GovernanceSeverity.INFORMATIONAL: 0,
-    GovernanceSeverity.LOW:           1,
-    GovernanceSeverity.MEDIUM:        2,
-    GovernanceSeverity.HIGH:          3,
-    GovernanceSeverity.CRITICAL:      4,
+    GovernanceSeverity.LOW: 1,
+    GovernanceSeverity.MEDIUM: 2,
+    GovernanceSeverity.HIGH: 3,
+    GovernanceSeverity.CRITICAL: 4,
 }
 
 
@@ -64,8 +64,7 @@ RISK_SEVERITY_NARRATIVES: dict[str, str] = {
         "Advisory findings identified that warrant review."
     ),
     "low": (
-        "Low infrastructure risk detected. "
-        "Minor findings identified for awareness."
+        "Low infrastructure risk detected. Minor findings identified for awareness."
     ),
     "informational": (
         "No significant infrastructure risk detected. "
@@ -121,8 +120,8 @@ def compute_effective_severity(
             extra={
                 "extra": {
                     "policy_severity": policy_severity,
-                    "risk_severity":   risk_severity,
-                    "effective":       risk_severity,
+                    "risk_severity": risk_severity,
+                    "effective": risk_severity,
                 }
             },
         )
@@ -151,41 +150,40 @@ def compute_risk_summary(
     if not isinstance(analyzer_results, dict):
         raise TypeError("analyzer_results must be a dict")
 
-    total_risk_score:       int              = 0
-    highest_risk_analyzer:  str | None       = None
-    highest_risk_score:     int              = 0
-    total_findings:         int              = 0
+    total_risk_score: int = 0
+    highest_risk_analyzer: str | None = None
+    highest_risk_score: int = 0
+    total_findings: int = 0
 
-    analyzer_scores:         dict[str, int]  = {}
-    analyzer_finding_counts: dict[str, int]  = {}
-    failed_analyzers:        list[str]       = []
+    analyzer_scores: dict[str, int] = {}
+    analyzer_finding_counts: dict[str, int] = {}
+    failed_analyzers: list[str] = []
 
     for analyzer_name, analyzer_data in analyzer_results.items():
-
         if not isinstance(analyzer_data, dict):
             failed_analyzers.append(analyzer_name)
-            analyzer_scores[analyzer_name]         = 0
+            analyzer_scores[analyzer_name] = 0
             analyzer_finding_counts[analyzer_name] = 0
             continue
 
         if analyzer_data.get("status") == "failed":
             failed_analyzers.append(analyzer_name)
-            analyzer_scores[analyzer_name]         = 0
+            analyzer_scores[analyzer_name] = 0
             analyzer_finding_counts[analyzer_name] = 0
             continue
 
-        score:    int       = analyzer_data.get("risk_score", 0)
+        score: int = analyzer_data.get("risk_score", 0)
         findings: list[Any] = analyzer_data.get("findings", [])
-        count:    int       = len(findings)
+        count: int = len(findings)
 
-        analyzer_scores[analyzer_name]         = score
+        analyzer_scores[analyzer_name] = score
         analyzer_finding_counts[analyzer_name] = count
 
         total_risk_score += score
-        total_findings   += count
+        total_findings += count
 
         if score > highest_risk_score:
-            highest_risk_score    = score
+            highest_risk_score = score
             highest_risk_analyzer = analyzer_name
 
     overall_risk_score: int = min(total_risk_score, 100)
@@ -209,17 +207,17 @@ def compute_risk_summary(
         )
 
     summary: dict[str, Any] = {
-        "overall_risk_score":      overall_risk_score,
-        "risk_severity":           risk_severity,
-        "effective_severity":      effective_severity,
-        "policy_severity":         policy_severity,
-        "highest_risk_analyzer":   highest_risk_analyzer,
-        "highest_risk_score":      highest_risk_score,
-        "total_findings":          total_findings,
-        "analyzer_scores":         analyzer_scores,
+        "overall_risk_score": overall_risk_score,
+        "risk_severity": risk_severity,
+        "effective_severity": effective_severity,
+        "policy_severity": policy_severity,
+        "highest_risk_analyzer": highest_risk_analyzer,
+        "highest_risk_score": highest_risk_score,
+        "total_findings": total_findings,
+        "analyzer_scores": analyzer_scores,
         "analyzer_finding_counts": analyzer_finding_counts,
-        "failed_analyzers":        failed_analyzers,
-        "risk_narrative":          risk_narrative,
+        "failed_analyzers": failed_analyzers,
+        "risk_narrative": risk_narrative,
     }
 
     logger.info(
@@ -227,12 +225,12 @@ def compute_risk_summary(
         extra={
             "extra": {
                 "overall_risk_score": overall_risk_score,
-                "risk_severity":      risk_severity,
+                "risk_severity": risk_severity,
                 "effective_severity": effective_severity,
-                "policy_severity":    policy_severity,
+                "policy_severity": policy_severity,
                 "highest_risk_analyzer": highest_risk_analyzer,
-                "total_findings":     total_findings,
-                "failed_analyzers":   failed_analyzers,
+                "total_findings": total_findings,
+                "failed_analyzers": failed_analyzers,
             }
         },
     )

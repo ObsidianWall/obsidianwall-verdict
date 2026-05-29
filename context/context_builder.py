@@ -30,8 +30,8 @@ def build_context(
     # Any new keys added to the parser require no changes here.
     context: dict[str, Any] = dict(parsed)
     context["estimated_cost"] = cost_data["estimated_cost"]
-    context["cost_breakdown"]  = cost_data["cost_breakdown"]
-    context["current_spend"]   = current_spend
-    context["pricing_mode"]    = pricing_mode
+    context["cost_breakdown"] = cost_data["cost_breakdown"]
+    context["current_spend"] = current_spend
+    context["pricing_mode"] = pricing_mode
 
     return context

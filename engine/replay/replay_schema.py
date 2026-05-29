@@ -19,7 +19,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-
 # =====================================================
 # REPLAY REQUEST
 # =====================================================
@@ -40,11 +39,11 @@ class ReplayRequest(BaseModel):
     - Regression testing against stored baselines
     """
 
-    original_decision_id:  str
-    policy_path:           str
-    stored_input_context:  dict[str, Any]
-    replay_role:           Optional[str] = "engineer"
-    replay_label:          Optional[str] = None
+    original_decision_id: str
+    policy_path: str
+    stored_input_context: dict[str, Any]
+    replay_role: Optional[str] = "engineer"
+    replay_label: Optional[str] = None
 
 
 # =====================================================
@@ -68,12 +67,12 @@ class SimulationRequest(BaseModel):
     - Policy tuning and threshold calibration
     """
 
-    original_decision_id:  str
-    policy_path:           str
-    stored_input_context:  dict[str, Any]
-    parameter_overrides:   dict[str, Any]
-    simulation_role:       Optional[str] = "engineer"
-    simulation_label:      Optional[str] = None
+    original_decision_id: str
+    policy_path: str
+    stored_input_context: dict[str, Any]
+    parameter_overrides: dict[str, Any]
+    simulation_role: Optional[str] = "engineer"
+    simulation_label: Optional[str] = None
 
 
 # =====================================================
@@ -84,27 +83,27 @@ class SimulationRequest(BaseModel):
 class ReplayOutcome(BaseModel):
     """Result of a governance replay execution."""
 
-    replay_id:                   str
-    original_decision_id:        str
-    replay_label:                Optional[str]
+    replay_id: str
+    original_decision_id: str
+    replay_label: Optional[str]
 
-    original_decision:           str
-    replayed_decision:           str
-    decision_matches:            bool
+    original_decision: str
+    replayed_decision: str
+    decision_matches: bool
 
-    original_conditions_passed:  bool
-    replayed_conditions_passed:  bool
-    conditions_match:            bool
+    original_conditions_passed: bool
+    replayed_conditions_passed: bool
+    conditions_match: bool
 
-    original_risk_score:         Optional[float]
-    replayed_risk_score:         float
-    risk_delta:                  float
+    original_risk_score: Optional[float]
+    replayed_risk_score: float
+    risk_delta: float
 
-    replayed_result:             dict[str, Any]
+    replayed_result: dict[str, Any]
 
-    replay_status:               str   # SUCCESS | FAILED
-    replay_timestamp:            str
-    error:                       Optional[str] = None
+    replay_status: str  # SUCCESS | FAILED
+    replay_timestamp: str
+    error: Optional[str] = None
 
 
 # =====================================================
@@ -115,27 +114,27 @@ class ReplayOutcome(BaseModel):
 class SimulationOutcome(BaseModel):
     """Result of a governance simulation execution."""
 
-    simulation_id:               str
-    original_decision_id:        str
-    simulation_label:            Optional[str]
+    simulation_id: str
+    original_decision_id: str
+    simulation_label: Optional[str]
 
-    parameter_overrides:         dict[str, Any]
+    parameter_overrides: dict[str, Any]
 
-    original_decision:           str
-    simulated_decision:          str
-    decision_changed:            bool
+    original_decision: str
+    simulated_decision: str
+    decision_changed: bool
 
-    original_conditions_passed:  bool
+    original_conditions_passed: bool
     simulated_conditions_passed: bool
-    conditions_changed:          bool
+    conditions_changed: bool
 
-    original_risk_score:         Optional[float]
-    simulated_risk_score:        float
-    risk_delta:                  float
+    original_risk_score: Optional[float]
+    simulated_risk_score: float
+    risk_delta: float
 
-    simulation_narrative:        str
-    simulated_result:            dict[str, Any]
+    simulation_narrative: str
+    simulated_result: dict[str, Any]
 
-    simulation_status:           str   # SUCCESS | FAILED
-    simulation_timestamp:        str
-    error:                       Optional[str] = None
+    simulation_status: str  # SUCCESS | FAILED
+    simulation_timestamp: str
+    error: Optional[str] = None

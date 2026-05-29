@@ -16,7 +16,6 @@
 
 from schemas.policy_schema import Policy
 
-
 # =====================================================
 # INCOMING POLICY NORMALIZATION
 # =====================================================

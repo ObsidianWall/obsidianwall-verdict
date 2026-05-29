@@ -40,10 +40,10 @@ logger = get_logger()
 # =====================================================
 
 SEVERITY_PRIORITY: dict[str, str] = {
-    "critical":      "urgent",
-    "high":          "high",
-    "medium":        "medium",
-    "low":           "low",
+    "critical": "urgent",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
     "informational": "informational",
 }
 
@@ -52,12 +52,14 @@ SEVERITY_PRIORITY: dict[str, str] = {
 # DECISIONS THAT REQUIRE NOTIFICATION
 # =====================================================
 
-NOTIFICATION_DECISIONS: frozenset[str] = frozenset({
-    "ALLOW_WITH_NOTIFICATION",
-    "ALLOW_WITH_APPROVAL_REQUIRED",
-    "DENY_WITH_OVERRIDE",
-    "DENY",
-})
+NOTIFICATION_DECISIONS: frozenset[str] = frozenset(
+    {
+        "ALLOW_WITH_NOTIFICATION",
+        "ALLOW_WITH_APPROVAL_REQUIRED",
+        "DENY_WITH_OVERRIDE",
+        "DENY",
+    }
+)
 
 
 # =====================================================
@@ -80,12 +82,11 @@ def _build_budget_owner_content(
 
     requires_approval: bool = evaluation_result.get("requires_approval", False)
     override_required: bool = evaluation_result.get("override_required", False)
-    overall_risk:       int = risk_summary.get("overall_risk_score", 0)
-    total_findings:     int = risk_summary.get("total_findings", 0)
+    overall_risk: int = risk_summary.get("overall_risk_score", 0)
+    total_findings: int = risk_summary.get("total_findings", 0)
 
     subject: str = (
-        f"[ObsidianWall] Governance Action Required "
-        f"— {policy_name} — {decision}"
+        f"[ObsidianWall] Governance Action Required — {policy_name} — {decision}"
     )
 
     body: str
@@ -153,8 +154,8 @@ def _build_budget_owner_content(
         )
 
     return {
-        "subject":         subject,
-        "body":            body,
+        "subject": subject,
+        "body": body,
         "requires_action": override_required or requires_approval,
     }
 
@@ -172,18 +173,17 @@ def _build_engineering_lead_content(
     Engineering leads need: deployment status, recommendations.
     """
 
-    conditions_passed: bool     = evaluation_result.get("conditions_passed", False)
-    total_findings:    int      = risk_summary.get("total_findings", 0)
-    overall_risk:      int      = risk_summary.get("overall_risk_score", 0)
-    trace:             list[Any] = evaluation_result.get("trace", [])
+    conditions_passed: bool = evaluation_result.get("conditions_passed", False)
+    total_findings: int = risk_summary.get("total_findings", 0)
+    overall_risk: int = risk_summary.get("overall_risk_score", 0)
+    trace: list[Any] = evaluation_result.get("trace", [])
 
     failed_conditions: list[str] = [
         t.get("condition_id") for t in trace if not t.get("result")
     ]
 
     subject: str = (
-        f"[ObsidianWall] Deployment Governance Update "
-        f"— {policy_name} — {decision}"
+        f"[ObsidianWall] Deployment Governance Update — {policy_name} — {decision}"
     )
 
     body: str
@@ -233,8 +233,8 @@ def _build_engineering_lead_content(
         )
 
     return {
-        "subject":         subject,
-        "body":            body,
+        "subject": subject,
+        "body": body,
         "requires_action": False,
     }
 
@@ -252,13 +252,12 @@ def _build_finance_admin_content(
     Finance admins need: financial impact, approval requirement.
     """
 
-    requires_approval: bool      = evaluation_result.get("requires_approval", False)
-    overall_risk:      int       = risk_summary.get("overall_risk_score", 0)
-    highest_analyzer:  str | None = risk_summary.get("highest_risk_analyzer")
+    requires_approval: bool = evaluation_result.get("requires_approval", False)
+    overall_risk: int = risk_summary.get("overall_risk_score", 0)
+    highest_analyzer: str | None = risk_summary.get("highest_risk_analyzer")
 
     subject: str = (
-        f"[ObsidianWall] Financial Governance Review "
-        f"— {policy_name} — {decision}"
+        f"[ObsidianWall] Financial Governance Review — {policy_name} — {decision}"
     )
 
     body: str
@@ -295,8 +294,8 @@ def _build_finance_admin_content(
         )
 
     return {
-        "subject":         subject,
-        "body":            body,
+        "subject": subject,
+        "body": body,
         "requires_action": requires_approval,
     }
 
@@ -333,8 +332,8 @@ def _build_generic_content(
     )
 
     return {
-        "subject":         subject,
-        "body":            body,
+        "subject": subject,
+        "body": body,
         "requires_action": False,
     }
 
@@ -346,9 +345,9 @@ def _build_generic_content(
 ContentBuilder = Any  # callable type alias for role builders
 
 ROLE_CONTENT_BUILDERS: dict[str, ContentBuilder] = {
-    "budget_owner":    _build_budget_owner_content,
+    "budget_owner": _build_budget_owner_content,
     "engineering_lead": _build_engineering_lead_content,
-    "finance_admin":   _build_finance_admin_content,
+    "finance_admin": _build_finance_admin_content,
 }
 
 
@@ -362,8 +361,8 @@ def _build_notification(
 ) -> dict[str, Any]:
     """Build a single stakeholder notification."""
 
-    role:     str = target.get("role", "unknown")
-    channel:  str = target.get("channel", "email")
+    role: str = target.get("role", "unknown")
+    channel: str = target.get("channel", "email")
     priority: str = SEVERITY_PRIORITY.get(effective_severity, "medium")
 
     content_builder = ROLE_CONTENT_BUILDERS.get(role)
@@ -389,16 +388,16 @@ def _build_notification(
         )
 
     return {
-        "target_role":       role,
-        "channel":           channel,
-        "priority":          priority,
-        "subject":           content["subject"],
-        "body":              content["body"],
-        "requires_action":   content["requires_action"],
-        "decision":          decision,
-        "policy":            policy_name,
+        "target_role": role,
+        "channel": channel,
+        "priority": priority,
+        "subject": content["subject"],
+        "body": content["body"],
+        "requires_action": content["requires_action"],
+        "decision": decision,
+        "policy": policy_name,
         "effective_severity": effective_severity,
-        "dispatch_status":   "pending",
+        "dispatch_status": "pending",
     }
 
 
@@ -441,9 +440,9 @@ def route_notifications(
     if not should_notify or not policy_governance:
         manifest: dict[str, Any] = {
             "notifications_triggered": False,
-            "notification_count":      0,
-            "notifications":           [],
-            "dispatch_status":         "not_required",
+            "notification_count": 0,
+            "notifications": [],
+            "dispatch_status": "not_required",
             "reason": (
                 "Decision does not require notification."
                 if not should_notify
@@ -456,7 +455,7 @@ def route_notifications(
             extra={
                 "extra": {
                     "decision": decision,
-                    "reason":   manifest["reason"],
+                    "reason": manifest["reason"],
                 }
             },
         )
@@ -468,9 +467,9 @@ def route_notifications(
     if not notification_targets:
         return {
             "notifications_triggered": False,
-            "notification_count":      0,
-            "notifications":           [],
-            "dispatch_status":         "not_required",
+            "notification_count": 0,
+            "notifications": [],
+            "dispatch_status": "not_required",
             "reason": "No notification targets configured in governance policy.",
         }
 
@@ -497,21 +496,21 @@ def route_notifications(
 
     result: dict[str, Any] = {
         "notifications_triggered": True,
-        "notification_count":      len(notifications),
-        "action_required_count":   action_required_count,
-        "notifications":           notifications,
-        "dispatch_status":         "pending",
+        "notification_count": len(notifications),
+        "action_required_count": action_required_count,
+        "notifications": notifications,
+        "dispatch_status": "pending",
     }
 
     logger.info(
         "notification_manifest_built",
         extra={
             "extra": {
-                "decision":             decision,
-                "policy_name":          policy_name,
-                "notification_count":   len(notifications),
+                "decision": decision,
+                "policy_name": policy_name,
+                "notification_count": len(notifications),
                 "action_required_count": action_required_count,
-                "effective_severity":   effective_severity,
+                "effective_severity": effective_severity,
             }
         },
     )

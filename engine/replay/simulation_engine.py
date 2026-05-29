@@ -133,19 +133,19 @@ def execute_simulation(request: SimulationRequest) -> SimulationOutcome:
         and full simulated evaluation artifact.
     """
 
-    simulation_id:        str = str(uuid.uuid4())
+    simulation_id: str = str(uuid.uuid4())
     simulation_timestamp: str = datetime.now(timezone.utc).isoformat()
 
     logger.info(
         "simulation_started",
         extra={
             "extra": {
-                "simulation_id":        simulation_id,
+                "simulation_id": simulation_id,
                 "original_decision_id": request.original_decision_id,
-                "policy_path":          request.policy_path,
-                "parameter_overrides":  request.parameter_overrides,
-                "simulation_role":      request.simulation_role,
-                "simulation_label":     request.simulation_label,
+                "policy_path": request.policy_path,
+                "parameter_overrides": request.parameter_overrides,
+                "simulation_role": request.simulation_role,
+                "simulation_label": request.simulation_label,
             }
         },
     )
@@ -183,15 +183,15 @@ def execute_simulation(request: SimulationRequest) -> SimulationOutcome:
             user_role=request.simulation_role,
         )
 
-        original_decision:    str  = baseline_result.get("decision", "UNKNOWN")
-        simulated_decision:   str  = simulated_result.get("decision", "UNKNOWN")
-        decision_changed:     bool = original_decision != simulated_decision
+        original_decision: str = baseline_result.get("decision", "UNKNOWN")
+        simulated_decision: str = simulated_result.get("decision", "UNKNOWN")
+        decision_changed: bool = original_decision != simulated_decision
 
-        original_conditions:  bool  = baseline_result.get("conditions_passed", False)
-        simulated_conditions: bool  = simulated_result.get("conditions_passed", False)
-        conditions_changed:   bool  = original_conditions != simulated_conditions
+        original_conditions: bool = baseline_result.get("conditions_passed", False)
+        simulated_conditions: bool = simulated_result.get("conditions_passed", False)
+        conditions_changed: bool = original_conditions != simulated_conditions
 
-        original_risk:  float = float(
+        original_risk: float = float(
             baseline_result.get("risk_summary", {}).get("overall_risk_score", 0)
         )
         simulated_risk: float = float(
@@ -236,14 +236,14 @@ def execute_simulation(request: SimulationRequest) -> SimulationOutcome:
             "simulation_completed",
             extra={
                 "extra": {
-                    "simulation_id":        simulation_id,
+                    "simulation_id": simulation_id,
                     "original_decision_id": request.original_decision_id,
-                    "original_decision":    original_decision,
-                    "simulated_decision":   simulated_decision,
-                    "decision_changed":     decision_changed,
-                    "conditions_changed":   conditions_changed,
-                    "risk_delta":           risk_delta,
-                    "parameter_overrides":  request.parameter_overrides,
+                    "original_decision": original_decision,
+                    "simulated_decision": simulated_decision,
+                    "decision_changed": decision_changed,
+                    "conditions_changed": conditions_changed,
+                    "risk_delta": risk_delta,
+                    "parameter_overrides": request.parameter_overrides,
                 }
             },
         )
@@ -255,9 +255,9 @@ def execute_simulation(request: SimulationRequest) -> SimulationOutcome:
             "simulation_failed",
             extra={
                 "extra": {
-                    "simulation_id":        simulation_id,
+                    "simulation_id": simulation_id,
                     "original_decision_id": request.original_decision_id,
-                    "error":                str(error),
+                    "error": str(error),
                 }
             },
         )

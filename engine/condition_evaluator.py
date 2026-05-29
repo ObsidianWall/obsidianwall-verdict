@@ -18,8 +18,8 @@ from schemas.policy_schema import Policy
 SUPPORTED_OPERATORS: dict[str, Any] = {
     "<=": operator.le,
     ">=": operator.ge,
-    "<":  operator.lt,
-    ">":  operator.gt,
+    "<": operator.lt,
+    ">": operator.gt,
     "==": operator.eq,
 }
 
@@ -53,15 +53,20 @@ def evaluate_expression(
     # ---------------------------------------------------
 
     injection_patterns = (
-        "__", "import", "exec", "eval",
-        "open(", "os.", "sys.", "subprocess",
+        "__",
+        "import",
+        "exec",
+        "eval",
+        "open(",
+        "os.",
+        "sys.",
+        "subprocess",
     )
 
     for pattern in injection_patterns:
         if pattern in expression:
             raise ValueError(
-                f"Unsupported expression: forbidden pattern "
-                f"'{pattern}' detected."
+                f"Unsupported expression: forbidden pattern '{pattern}' detected."
             )
 
     # ---------------------------------------------------
@@ -70,8 +75,8 @@ def evaluate_expression(
 
     normalized_expression = expression.replace("(", "").replace(")", "")
 
-    left_side:           str | None = None
-    right_side:          str | None = None
+    left_side: str | None = None
+    right_side: str | None = None
     comparison_operator: str | None = None
 
     # ---------------------------------------------------
@@ -82,8 +87,8 @@ def evaluate_expression(
 
     for supported_operator in SUPPORTED_OPERATORS:
         if supported_operator in normalized_expression:
-            parts      = normalized_expression.split(supported_operator)
-            left_side  = parts[0]
+            parts = normalized_expression.split(supported_operator)
+            left_side = parts[0]
             right_side = parts[1]
             comparison_operator = supported_operator
             break
@@ -98,12 +103,8 @@ def evaluate_expression(
     # Evaluate both sides
     # ---------------------------------------------------
 
-    left_value  = evaluate_arithmetic_expression(
-        left_side.strip(), evaluation_context
-    )
-    right_value = evaluate_arithmetic_expression(
-        right_side.strip(), evaluation_context
-    )
+    left_value = evaluate_arithmetic_expression(left_side.strip(), evaluation_context)
+    right_value = evaluate_arithmetic_expression(right_side.strip(), evaluation_context)
 
     # ---------------------------------------------------
     # Deterministic comparison
@@ -139,16 +140,11 @@ def evaluate_arithmetic_expression(
     # ---------------------------------------------------
 
     if "+" in arithmetic_expression:
-        expression_parts   = [
-            part.strip()
-            for part in arithmetic_expression.split("+")
-        ]
+        expression_parts = [part.strip() for part in arithmetic_expression.split("+")]
         resolved_values: list[int | float] = []
 
         for expression_part in expression_parts:
-            resolved_values.append(
-                _resolve_token(expression_part, evaluation_context)
-            )
+            resolved_values.append(_resolve_token(expression_part, evaluation_context))
 
         return sum(resolved_values)
 
@@ -219,22 +215,22 @@ def evaluate_conditions(
         )
     """
 
-    evaluation_results: list[bool]           = []
-    evaluation_trace:   list[dict[str, Any]] = []
+    evaluation_results: list[bool] = []
+    evaluation_trace: list[dict[str, Any]] = []
 
     for condition in policy.spec.conditions:
         condition_expression = condition.expression
 
-        condition_result = evaluate_expression(
-            condition_expression, evaluation_context
-        )
+        condition_result = evaluate_expression(condition_expression, evaluation_context)
 
-        evaluation_trace.append({
-            "condition_id": condition.id,
-            "expression":   condition_expression,
-            "result":       condition_result,
-            "description":  condition.description,
-        })
+        evaluation_trace.append(
+            {
+                "condition_id": condition.id,
+                "expression": condition_expression,
+                "result": condition_result,
+                "description": condition.description,
+            }
+        )
 
         evaluation_results.append(condition_result)
 

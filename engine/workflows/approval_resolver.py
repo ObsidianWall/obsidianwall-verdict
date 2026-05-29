@@ -43,10 +43,10 @@ logger = get_logger()
 
 
 class ApprovalStatus:
-    PENDING      = "PENDING"
-    APPROVED     = "APPROVED"
-    REJECTED     = "REJECTED"
-    EXPIRED      = "EXPIRED"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
     NOT_REQUIRED = "NOT_REQUIRED"
 
 
@@ -59,10 +59,10 @@ class ApprovalStatus:
 DEFAULT_APPROVAL_WINDOW_HOURS: int = 24
 
 SEVERITY_APPROVAL_WINDOWS: dict[str, int] = {
-    "critical":      4,   # 4 hours  — urgent
-    "high":         12,   # 12 hours
-    "medium":       24,   # 24 hours — default
-    "low":          48,   # 48 hours
+    "critical": 4,  # 4 hours  — urgent
+    "high": 12,  # 12 hours
+    "medium": 24,  # 24 hours — default
+    "low": 48,  # 48 hours
     "informational": 72,  # 72 hours
 }
 
@@ -84,33 +84,33 @@ def _build_approval_context(
     an informed decision.
     """
 
-    trace:              list[Any] = evaluation_result.get("trace", [])
-    conditions_passed:  bool      = evaluation_result.get("conditions_passed", False)
-    overall_risk:       int       = risk_summary.get("overall_risk_score", 0)
-    effective_severity: str       = risk_summary.get("effective_severity", "medium")
-    total_findings:     int       = risk_summary.get("total_findings", 0)
-    highest_analyzer:   str | None = risk_summary.get("highest_risk_analyzer")
+    trace: list[Any] = evaluation_result.get("trace", [])
+    conditions_passed: bool = evaluation_result.get("conditions_passed", False)
+    overall_risk: int = risk_summary.get("overall_risk_score", 0)
+    effective_severity: str = risk_summary.get("effective_severity", "medium")
+    total_findings: int = risk_summary.get("total_findings", 0)
+    highest_analyzer: str | None = risk_summary.get("highest_risk_analyzer")
 
     failed_conditions: list[dict[str, Any]] = [
         {
             "condition_id": t.get("condition_id"),
-            "expression":   t.get("expression"),
-            "description":  t.get("description"),
+            "expression": t.get("expression"),
+            "description": t.get("description"),
         }
         for t in trace
         if not t.get("result")
     ]
 
     return {
-        "policy_name":          policy_name,
-        "decision":             decision,
-        "conditions_passed":    conditions_passed,
-        "failed_conditions":    failed_conditions,
-        "overall_risk_score":   overall_risk,
-        "effective_severity":   effective_severity,
-        "total_findings":       total_findings,
+        "policy_name": policy_name,
+        "decision": decision,
+        "conditions_passed": conditions_passed,
+        "failed_conditions": failed_conditions,
+        "overall_risk_score": overall_risk,
+        "effective_severity": effective_severity,
+        "total_findings": total_findings,
         "highest_risk_analyzer": highest_analyzer,
-        "governance_severity":  evaluation_result.get("governance_severity", "medium"),
+        "governance_severity": evaluation_result.get("governance_severity", "medium"),
     }
 
 
@@ -130,18 +130,20 @@ def _build_approver_chain(
     chain: list[dict[str, Any]] = []
 
     for approver_role in required_approvers:
-        chain.append({
-            "approver_role":    approver_role,
-            "status":           ApprovalStatus.PENDING,
-            "approved_at":      None,
-            "rejected_at":      None,
-            "approver_comment": None,
-            # NOTE:
-            # approver_id is populated when the approval
-            # request is claimed by a specific user.
-            # Requires auth integration — Phase 5+.
-            "approver_id":      None,
-        })
+        chain.append(
+            {
+                "approver_role": approver_role,
+                "status": ApprovalStatus.PENDING,
+                "approved_at": None,
+                "rejected_at": None,
+                "approver_comment": None,
+                # NOTE:
+                # approver_id is populated when the approval
+                # request is claimed by a specific user.
+                # Requires auth integration — Phase 5+.
+                "approver_id": None,
+            }
+        )
 
     return chain
 
@@ -227,8 +229,8 @@ def build_approval_request(
     if not requires_approval:
         artifact: dict[str, Any] = {
             "approval_required": False,
-            "approval_status":   ApprovalStatus.NOT_REQUIRED,
-            "reason":            "Governance decision does not require formal approval.",
+            "approval_status": ApprovalStatus.NOT_REQUIRED,
+            "reason": "Governance decision does not require formal approval.",
         }
 
         logger.info(
@@ -267,11 +269,11 @@ def build_approval_request(
         )
 
         return {
-            "approval_required":   True,
-            "approval_status":     ApprovalStatus.PENDING,
+            "approval_required": True,
+            "approval_status": ApprovalStatus.PENDING,
             "approval_request_id": str(uuid.uuid4()),
-            "required_approvers":  [],
-            "approver_chain":      [],
+            "required_approvers": [],
+            "approver_chain": [],
             "warning": (
                 "Approval is required but no approver roles "
                 "are configured in the governance policy. "
@@ -319,23 +321,23 @@ def build_approval_request(
     )
 
     result: dict[str, Any] = {
-        "approval_required":    True,
-        "approval_status":      ApprovalStatus.PENDING,
-        "approval_request_id":  approval_request_id,
-        "decision_id":          decision_id,
-        "policy_name":          policy_name,
-        "required_approvers":   required_approvers,
-        "approver_count":       len(required_approvers),
-        "approver_chain":       approver_chain,
-        "expires_at":           expiry,
+        "approval_required": True,
+        "approval_status": ApprovalStatus.PENDING,
+        "approval_request_id": approval_request_id,
+        "decision_id": decision_id,
+        "policy_name": policy_name,
+        "required_approvers": required_approvers,
+        "approver_count": len(required_approvers),
+        "approver_chain": approver_chain,
+        "expires_at": expiry,
         "approval_window_hours": window_hours,
-        "guidance":             guidance,
-        "context":              approval_context,
+        "guidance": guidance,
+        "context": approval_context,
         # NOTE:
         # Populated by the approval tracking system
         # when the request resolves. Phase 5+.
         "resolved_at": None,
-        "resolution":  None,
+        "resolution": None,
     }
 
     logger.info(
@@ -343,13 +345,13 @@ def build_approval_request(
         extra={
             "extra": {
                 "approval_request_id": approval_request_id,
-                "decision_id":         decision_id,
-                "policy_name":         policy_name,
-                "required_approvers":  required_approvers,
-                "approver_count":      len(required_approvers),
-                "effective_severity":  effective_severity,
-                "expires_at":          expiry,
-                "window_hours":        window_hours,
+                "decision_id": decision_id,
+                "policy_name": policy_name,
+                "required_approvers": required_approvers,
+                "approver_count": len(required_approvers),
+                "effective_severity": effective_severity,
+                "expires_at": expiry,
+                "window_hours": window_hours,
             }
         },
     )
