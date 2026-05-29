@@ -28,6 +28,7 @@
 # - Webhook dispatcher (channel: webhook)
 # These dispatchers are Phase 4 integration work.
 
+from typing import Any
 
 from audit.audit_logger import get_logger
 
@@ -38,11 +39,11 @@ logger = get_logger()
 # SEVERITY → PRIORITY MAPPING
 # =====================================================
 
-SEVERITY_PRIORITY = {
-    "critical": "urgent",
-    "high": "high",
-    "medium": "medium",
-    "low": "low",
+SEVERITY_PRIORITY: dict[str, str] = {
+    "critical":      "urgent",
+    "high":          "high",
+    "medium":        "medium",
+    "low":           "low",
     "informational": "informational",
 }
 
@@ -51,12 +52,12 @@ SEVERITY_PRIORITY = {
 # DECISIONS THAT REQUIRE NOTIFICATION
 # =====================================================
 
-NOTIFICATION_DECISIONS = {
+NOTIFICATION_DECISIONS: frozenset[str] = frozenset({
     "ALLOW_WITH_NOTIFICATION",
     "ALLOW_WITH_APPROVAL_REQUIRED",
     "DENY_WITH_OVERRIDE",
     "DENY",
-}
+})
 
 
 # =====================================================
@@ -68,23 +69,26 @@ def _build_budget_owner_content(
     decision: str,
     policy_name: str,
     effective_severity: str,
-    risk_summary: dict,
-    evaluation_result: dict,
+    risk_summary: dict[str, Any],
+    evaluation_result: dict[str, Any],
     channel: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Build notification content for budget owner role.
     Budget owners need: cost impact, authority, risk summary.
     """
 
-    evaluation_result.get("conditions_passed", False)
-    requires_approval = evaluation_result.get("requires_approval", False)
-    override_required = evaluation_result.get("override_required", False)
-    overall_risk = risk_summary.get("overall_risk_score", 0)
-    total_findings = risk_summary.get("total_findings", 0)
+    requires_approval: bool = evaluation_result.get("requires_approval", False)
+    override_required: bool = evaluation_result.get("override_required", False)
+    overall_risk:       int = risk_summary.get("overall_risk_score", 0)
+    total_findings:     int = risk_summary.get("total_findings", 0)
 
-    subject = f"[ObsidianWall] Governance Action Required — {policy_name} — {decision}"
+    subject: str = (
+        f"[ObsidianWall] Governance Action Required "
+        f"— {policy_name} — {decision}"
+    )
 
+    body: str
     if channel == "email":
         if override_required and requires_approval:
             body = (
@@ -99,7 +103,6 @@ def _build_budget_owner_content(
                 f"or reject this deployment in the "
                 f"ObsidianWall governance console."
             )
-
         elif override_required:
             body = (
                 f"A deployment has been blocked by policy "
@@ -114,7 +117,6 @@ def _build_budget_owner_content(
                 f"or deny the override in the ObsidianWall "
                 f"governance console."
             )
-
         elif decision in ("ALLOW_WITH_NOTIFICATION", "ALLOW_WITH_APPROVAL_REQUIRED"):
             body = (
                 f"A deployment within policy '{policy_name}' "
@@ -128,7 +130,6 @@ def _build_budget_owner_content(
                 f"Review the full audit record in the "
                 f"ObsidianWall governance console."
             )
-
         else:
             body = (
                 f"Governance notification for policy "
@@ -137,9 +138,7 @@ def _build_budget_owner_content(
                 f"Risk Score: {overall_risk}/100\n"
                 f"Severity: {effective_severity.upper()}"
             )
-
     else:
-        # Slack and other channels — concise format
         body = (
             f"*[ObsidianWall]* Policy `{policy_name}` "
             f"decision: *{decision}* | "
@@ -154,9 +153,9 @@ def _build_budget_owner_content(
         )
 
     return {
-        "subject": subject,
-        "body": body,
-        "requires_action": (override_required or requires_approval),
+        "subject":         subject,
+        "body":            body,
+        "requires_action": override_required or requires_approval,
     }
 
 
@@ -164,34 +163,37 @@ def _build_engineering_lead_content(
     decision: str,
     policy_name: str,
     effective_severity: str,
-    risk_summary: dict,
-    evaluation_result: dict,
+    risk_summary: dict[str, Any],
+    evaluation_result: dict[str, Any],
     channel: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Build notification content for engineering lead role.
     Engineering leads need: deployment status, recommendations.
     """
 
-    conditions_passed = evaluation_result.get("conditions_passed", False)
-    total_findings = risk_summary.get("total_findings", 0)
-    overall_risk = risk_summary.get("overall_risk_score", 0)
-    trace = evaluation_result.get("trace", [])
+    conditions_passed: bool     = evaluation_result.get("conditions_passed", False)
+    total_findings:    int      = risk_summary.get("total_findings", 0)
+    overall_risk:      int      = risk_summary.get("overall_risk_score", 0)
+    trace:             list[Any] = evaluation_result.get("trace", [])
 
-    failed_conditions = [t.get("condition_id") for t in trace if not t.get("result")]
+    failed_conditions: list[str] = [
+        t.get("condition_id") for t in trace if not t.get("result")
+    ]
 
-    subject = (
-        f"[ObsidianWall] Deployment Governance Update — {policy_name} — {decision}"
+    subject: str = (
+        f"[ObsidianWall] Deployment Governance Update "
+        f"— {policy_name} — {decision}"
     )
 
+    body: str
     if channel == "email":
         if not conditions_passed:
-            condition_detail = (
+            condition_detail: str = (
                 f"Failed conditions: {', '.join(failed_conditions)}."
                 if failed_conditions
                 else "See evaluation trace for details."
             )
-
             body = (
                 f"A deployment evaluated against policy "
                 f"'{policy_name}' was blocked.\n\n"
@@ -204,7 +206,6 @@ def _build_engineering_lead_content(
                 f"Contact your budget owner if an override "
                 f"or approval is required."
             )
-
         else:
             body = (
                 f"A deployment evaluated against policy "
@@ -217,10 +218,8 @@ def _build_engineering_lead_content(
                 f"ObsidianWall recommendations to optimize "
                 f"infrastructure configuration."
             )
-
     else:
-        # Slack — concise
-        status_emoji = "🔴" if not conditions_passed else "🟡"
+        status_emoji: str = "🔴" if not conditions_passed else "🟡"
         body = (
             f"{status_emoji} *[ObsidianWall]* "
             f"Policy `{policy_name}` — *{decision}* | "
@@ -234,8 +233,8 @@ def _build_engineering_lead_content(
         )
 
     return {
-        "subject": subject,
-        "body": body,
+        "subject":         subject,
+        "body":            body,
         "requires_action": False,
     }
 
@@ -244,21 +243,25 @@ def _build_finance_admin_content(
     decision: str,
     policy_name: str,
     effective_severity: str,
-    risk_summary: dict,
-    evaluation_result: dict,
+    risk_summary: dict[str, Any],
+    evaluation_result: dict[str, Any],
     channel: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Build notification content for finance admin role.
     Finance admins need: financial impact, approval requirement.
     """
 
-    requires_approval = evaluation_result.get("requires_approval", False)
-    overall_risk = risk_summary.get("overall_risk_score", 0)
-    highest_analyzer = risk_summary.get("highest_risk_analyzer", "unknown")
+    requires_approval: bool      = evaluation_result.get("requires_approval", False)
+    overall_risk:      int       = risk_summary.get("overall_risk_score", 0)
+    highest_analyzer:  str | None = risk_summary.get("highest_risk_analyzer")
 
-    subject = f"[ObsidianWall] Financial Governance Review — {policy_name} — {decision}"
+    subject: str = (
+        f"[ObsidianWall] Financial Governance Review "
+        f"— {policy_name} — {decision}"
+    )
 
+    body: str
     if channel == "email":
         body = (
             f"A deployment evaluated against financial "
@@ -267,7 +270,7 @@ def _build_finance_admin_content(
             f"Decision: {decision}\n"
             f"Severity: {effective_severity.upper()}\n"
             f"Overall Risk Score: {overall_risk}/100\n"
-            f"Highest Risk Area: {highest_analyzer}\n\n"
+            f"Highest Risk Area: {highest_analyzer or 'unknown'}\n\n"
             + (
                 "Your approval is required as part of the "
                 "dual-approval governance workflow before "
@@ -278,7 +281,6 @@ def _build_finance_admin_content(
             + "Review the full financial governance audit "
             "record in the ObsidianWall governance console."
         )
-
     else:
         body = (
             f"*[ObsidianWall Finance]* Policy `{policy_name}` | "
@@ -293,8 +295,8 @@ def _build_finance_admin_content(
         )
 
     return {
-        "subject": subject,
-        "body": body,
+        "subject":         subject,
+        "body":            body,
         "requires_action": requires_approval,
     }
 
@@ -304,19 +306,19 @@ def _build_generic_content(
     decision: str,
     policy_name: str,
     effective_severity: str,
-    risk_summary: dict,
+    risk_summary: dict[str, Any],
     channel: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Build generic notification content for roles
     without specific content builders.
     """
 
-    overall_risk = risk_summary.get("overall_risk_score", 0)
+    overall_risk: int = risk_summary.get("overall_risk_score", 0)
 
-    subject = f"[ObsidianWall] Governance Notification — {policy_name}"
+    subject: str = f"[ObsidianWall] Governance Notification — {policy_name}"
 
-    body = (
+    body: str = (
         f"Governance notification for role '{role}'.\n\n"
         f"Policy: {policy_name}\n"
         f"Decision: {decision}\n"
@@ -331,8 +333,8 @@ def _build_generic_content(
     )
 
     return {
-        "subject": subject,
-        "body": body,
+        "subject":         subject,
+        "body":            body,
         "requires_action": False,
     }
 
@@ -341,31 +343,32 @@ def _build_generic_content(
 # ROLE CONTENT DISPATCHER
 # =====================================================
 
-ROLE_CONTENT_BUILDERS = {
-    "budget_owner": _build_budget_owner_content,
+ContentBuilder = Any  # callable type alias for role builders
+
+ROLE_CONTENT_BUILDERS: dict[str, ContentBuilder] = {
+    "budget_owner":    _build_budget_owner_content,
     "engineering_lead": _build_engineering_lead_content,
-    "finance_admin": _build_finance_admin_content,
+    "finance_admin":   _build_finance_admin_content,
 }
 
 
 def _build_notification(
-    target: dict,
+    target: dict[str, Any],
     decision: str,
     policy_name: str,
     effective_severity: str,
-    risk_summary: dict,
-    evaluation_result: dict,
-) -> dict:
-    """
-    Build a single stakeholder notification.
-    """
+    risk_summary: dict[str, Any],
+    evaluation_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a single stakeholder notification."""
 
-    role = target.get("role", "unknown")
-    channel = target.get("channel", "email")
-    priority = SEVERITY_PRIORITY.get(effective_severity, "medium")
+    role:     str = target.get("role", "unknown")
+    channel:  str = target.get("channel", "email")
+    priority: str = SEVERITY_PRIORITY.get(effective_severity, "medium")
 
     content_builder = ROLE_CONTENT_BUILDERS.get(role)
 
+    content: dict[str, Any]
     if content_builder:
         content = content_builder(
             decision=decision,
@@ -375,7 +378,6 @@ def _build_notification(
             evaluation_result=evaluation_result,
             channel=channel,
         )
-
     else:
         content = _build_generic_content(
             role=role,
@@ -387,18 +389,16 @@ def _build_notification(
         )
 
     return {
-        "target_role": role,
-        "channel": channel,
-        "priority": priority,
-        "subject": content["subject"],
-        "body": content["body"],
-        "requires_action": content["requires_action"],
-        "decision": decision,
-        "policy": policy_name,
+        "target_role":       role,
+        "channel":           channel,
+        "priority":          priority,
+        "subject":           content["subject"],
+        "body":              content["body"],
+        "requires_action":   content["requires_action"],
+        "decision":          decision,
+        "policy":            policy_name,
         "effective_severity": effective_severity,
-        # Dispatch status — updated by dispatcher
-        # when notification is actually sent.
-        "dispatch_status": "pending",
+        "dispatch_status":   "pending",
     }
 
 
@@ -411,10 +411,10 @@ def route_notifications(
     decision: str,
     effective_severity: str,
     policy_name: str,
-    evaluation_result: dict,
-    risk_summary: dict,
-    policy_governance: dict | None = None,
-) -> dict:
+    evaluation_result: dict[str, Any],
+    risk_summary: dict[str, Any],
+    policy_governance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Build the complete notification manifest for all
     configured governance stakeholder targets.
@@ -422,22 +422,10 @@ def route_notifications(
     Returns a structured manifest ready for dispatch.
     Actual sending is handled by downstream dispatchers.
 
-    Args:
-        decision:           The governance decision outcome
-        effective_severity: Max of policy and risk severity
-        policy_name:        Name of the evaluated policy
-        evaluation_result:  Full evaluation result dict
-        risk_summary:       Consolidated risk summary
-        policy_governance:  Serialized governance config
-
     Raises:
         TypeError:  if required inputs are not correct types.
         ValueError: if decision is empty.
     """
-
-    # =================================================
-    # BOUNDARY VALIDATION
-    # =================================================
 
     if not isinstance(evaluation_result, dict):
         raise TypeError("evaluation_result must be a dict")
@@ -448,22 +436,14 @@ def route_notifications(
     if not isinstance(decision, str) or not decision:
         raise ValueError("decision must be a non-empty string")
 
-    # =================================================
-    # DETERMINE IF NOTIFICATIONS SHOULD FIRE
-    # =================================================
-
-    # Always notify on DENY and DENY_WITH_OVERRIDE.
-    # Notify on ALLOW_WITH_* based on governance config.
-    # Do not notify on plain ALLOW.
-
-    should_notify = decision in NOTIFICATION_DECISIONS
+    should_notify: bool = decision in NOTIFICATION_DECISIONS
 
     if not should_notify or not policy_governance:
-        manifest = {
+        manifest: dict[str, Any] = {
             "notifications_triggered": False,
-            "notification_count": 0,
-            "notifications": [],
-            "dispatch_status": "not_required",
+            "notification_count":      0,
+            "notifications":           [],
+            "dispatch_status":         "not_required",
             "reason": (
                 "Decision does not require notification."
                 if not should_notify
@@ -476,74 +456,64 @@ def route_notifications(
             extra={
                 "extra": {
                     "decision": decision,
-                    "reason": manifest["reason"],
+                    "reason":   manifest["reason"],
                 }
             },
         )
 
         return manifest
 
-    # =================================================
-    # BUILD NOTIFICATION MANIFEST
-    # =================================================
-
-    notification_targets = policy_governance.get("notifications", [])
+    notification_targets: list[Any] = policy_governance.get("notifications", [])
 
     if not notification_targets:
         return {
             "notifications_triggered": False,
-            "notification_count": 0,
-            "notifications": [],
-            "dispatch_status": "not_required",
-            "reason": ("No notification targets configured in governance policy."),
+            "notification_count":      0,
+            "notifications":           [],
+            "dispatch_status":         "not_required",
+            "reason": "No notification targets configured in governance policy.",
         }
 
-    notifications = []
+    notifications: list[dict[str, Any]] = []
 
     for target in notification_targets:
         if not isinstance(target, dict):
             continue
 
-        notification = _build_notification(
-            target=target,
-            decision=decision,
-            policy_name=policy_name,
-            effective_severity=effective_severity,
-            risk_summary=risk_summary,
-            evaluation_result=evaluation_result,
+        notifications.append(
+            _build_notification(
+                target=target,
+                decision=decision,
+                policy_name=policy_name,
+                effective_severity=effective_severity,
+                risk_summary=risk_summary,
+                evaluation_result=evaluation_result,
+            )
         )
 
-        notifications.append(notification)
+    action_required_count: int = sum(
+        1 for n in notifications if n.get("requires_action")
+    )
 
-    # =================================================
-    # COUNT ACTION-REQUIRED NOTIFICATIONS
-    # =================================================
-
-    action_required_count = sum(1 for n in notifications if n.get("requires_action"))
-
-    manifest = {
+    result: dict[str, Any] = {
         "notifications_triggered": True,
-        "notification_count": len(notifications),
-        "action_required_count": action_required_count,
-        "notifications": notifications,
-        "dispatch_status": "pending",
-        # NOTE:
-        # dispatch_status transitions to "dispatched"
-        # when the integration dispatcher confirms send.
-        # This is a Phase 4 integration concern.
+        "notification_count":      len(notifications),
+        "action_required_count":   action_required_count,
+        "notifications":           notifications,
+        "dispatch_status":         "pending",
     }
 
     logger.info(
         "notification_manifest_built",
         extra={
             "extra": {
-                "decision": decision,
-                "policy_name": policy_name,
-                "notification_count": len(notifications),
+                "decision":             decision,
+                "policy_name":          policy_name,
+                "notification_count":   len(notifications),
                 "action_required_count": action_required_count,
-                "effective_severity": effective_severity,
+                "effective_severity":   effective_severity,
             }
         },
     )
 
-    return manifest
+    return result

@@ -24,16 +24,13 @@
 # - Policy threshold calibration
 # - Governance impact analysis before policy changes
 
-
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from audit.audit_logger import get_logger
 from engine.orchestrator import PolicyOrchestrator
-from engine.replay.replay_schema import (
-    SimulationOutcome,
-    SimulationRequest,
-)
+from engine.replay.replay_schema import SimulationOutcome, SimulationRequest
 
 logger = get_logger()
 
@@ -44,7 +41,7 @@ logger = get_logger()
 
 
 def _build_simulation_narrative(
-    parameter_overrides: dict,
+    parameter_overrides: dict[str, Any],
     original_decision: str,
     simulated_decision: str,
     decision_changed: bool,
@@ -56,10 +53,12 @@ def _build_simulation_narrative(
     the simulation changed and what the outcome was.
     """
 
-    override_summary = ", ".join(f"{k}={v}" for k, v in parameter_overrides.items())
+    override_summary: str = ", ".join(
+        f"{k}={v}" for k, v in parameter_overrides.items()
+    )
 
     if not decision_changed:
-        narrative = (
+        return (
             f"Simulation applied parameter overrides "
             f"({override_summary}). "
             f"The governance decision remained unchanged: "
@@ -68,22 +67,21 @@ def _build_simulation_narrative(
             f"parameter changes under current conditions."
         )
 
-    else:
-        direction = "improved" if simulated_conditions_passed else "worsened"
+    direction: str = "improved" if simulated_conditions_passed else "worsened"
 
-        narrative = (
-            f"Simulation applied parameter overrides "
-            f"({override_summary}). "
-            f"The governance decision changed from "
-            f"'{original_decision}' to '{simulated_decision}'. "
-            f"Governance posture {direction} under "
-            f"simulated conditions. "
-        )
+    narrative: str = (
+        f"Simulation applied parameter overrides "
+        f"({override_summary}). "
+        f"The governance decision changed from "
+        f"'{original_decision}' to '{simulated_decision}'. "
+        f"Governance posture {direction} under "
+        f"simulated conditions. "
+    )
 
-        if risk_delta > 0:
-            narrative += f"Risk score increased by {risk_delta:.1f} points."
-        elif risk_delta < 0:
-            narrative += f"Risk score decreased by {abs(risk_delta):.1f} points."
+    if risk_delta > 0:
+        narrative += f"Risk score increased by {risk_delta:.1f} points."
+    elif risk_delta < 0:
+        narrative += f"Risk score decreased by {abs(risk_delta):.1f} points."
 
     return narrative
 
@@ -94,22 +92,18 @@ def _build_simulation_narrative(
 
 
 def _apply_overrides(
-    base_context: dict,
-    parameter_overrides: dict,
-) -> dict:
+    base_context: dict[str, Any],
+    parameter_overrides: dict[str, Any],
+) -> dict[str, Any]:
     """
     Apply simulation parameter overrides to the
     base input context.
-
-    Overrides are applied as top-level context keys.
-    Dot-notation keys (e.g. "budget.amount") override
-    flattened parameters directly.
 
     The base context is never mutated —
     a copy is always produced.
     """
 
-    simulated_context = dict(base_context)
+    simulated_context: dict[str, Any] = dict(base_context)
 
     for key, value in parameter_overrides.items():
         simulated_context[key] = value
@@ -122,9 +116,7 @@ def _apply_overrides(
 # =====================================================
 
 
-def execute_simulation(
-    request: SimulationRequest,
-) -> SimulationOutcome:
+def execute_simulation(request: SimulationRequest) -> SimulationOutcome:
     """
     Execute a what-if governance simulation.
 
@@ -141,19 +133,19 @@ def execute_simulation(
         and full simulated evaluation artifact.
     """
 
-    simulation_id = str(uuid.uuid4())
-    simulation_timestamp = datetime.now(timezone.utc).isoformat()
+    simulation_id:        str = str(uuid.uuid4())
+    simulation_timestamp: str = datetime.now(timezone.utc).isoformat()
 
     logger.info(
         "simulation_started",
         extra={
             "extra": {
-                "simulation_id": simulation_id,
+                "simulation_id":        simulation_id,
                 "original_decision_id": request.original_decision_id,
-                "policy_path": request.policy_path,
-                "parameter_overrides": request.parameter_overrides,
-                "simulation_role": request.simulation_role,
-                "simulation_label": request.simulation_label,
+                "policy_path":          request.policy_path,
+                "parameter_overrides":  request.parameter_overrides,
+                "simulation_role":      request.simulation_role,
+                "simulation_label":     request.simulation_label,
             }
         },
     )
@@ -163,7 +155,7 @@ def execute_simulation(
         # APPLY PARAMETER OVERRIDES
         # =============================================
 
-        simulated_context = _apply_overrides(
+        simulated_context: dict[str, Any] = _apply_overrides(
             base_context=request.stored_input_context,
             parameter_overrides=request.parameter_overrides,
         )
@@ -172,54 +164,46 @@ def execute_simulation(
         # EXECUTE SIMULATION
         # =============================================
 
-        orchestrator = PolicyOrchestrator.from_policy_path(request.policy_path)
+        orchestrator: PolicyOrchestrator = PolicyOrchestrator.from_policy_path(
+            request.policy_path
+        )
 
-        simulated_result = orchestrator.evaluate(
+        simulated_result: dict[str, Any] = orchestrator.evaluate(
             context=simulated_context,
             user_role=request.simulation_role,
         )
 
         # =============================================
-        # COMPARE TO ORIGINAL
+        # BASELINE — no overrides for comparison
         # TODO: Phase 5+ — fetch original from audit store
-        # For now, original values are passed through
-        # request or inferred from re-evaluation without
-        # overrides.
         # =============================================
 
-        # Run baseline (no overrides) for comparison
-        baseline_result = orchestrator.evaluate(
+        baseline_result: dict[str, Any] = orchestrator.evaluate(
             context=request.stored_input_context,
             user_role=request.simulation_role,
         )
 
-        original_decision = baseline_result.get("decision", "UNKNOWN")
+        original_decision:    str  = baseline_result.get("decision", "UNKNOWN")
+        simulated_decision:   str  = simulated_result.get("decision", "UNKNOWN")
+        decision_changed:     bool = original_decision != simulated_decision
 
-        simulated_decision = simulated_result.get("decision", "UNKNOWN")
+        original_conditions:  bool  = baseline_result.get("conditions_passed", False)
+        simulated_conditions: bool  = simulated_result.get("conditions_passed", False)
+        conditions_changed:   bool  = original_conditions != simulated_conditions
 
-        decision_changed = original_decision != simulated_decision
-
-        original_conditions = baseline_result.get("conditions_passed", False)
-
-        simulated_conditions = simulated_result.get("conditions_passed", False)
-
-        conditions_changed = original_conditions != simulated_conditions
-
-        original_risk = baseline_result.get("risk_summary", {}).get(
-            "overall_risk_score", 0
+        original_risk:  float = float(
+            baseline_result.get("risk_summary", {}).get("overall_risk_score", 0)
         )
-
-        simulated_risk = simulated_result.get("risk_summary", {}).get(
-            "overall_risk_score", 0
+        simulated_risk: float = float(
+            simulated_result.get("risk_summary", {}).get("overall_risk_score", 0)
         )
-
-        risk_delta = simulated_risk - original_risk
+        risk_delta: float = simulated_risk - original_risk
 
         # =============================================
-        # BUILD NARRATIVE
+        # BUILD NARRATIVE AND OUTCOME
         # =============================================
 
-        narrative = _build_simulation_narrative(
+        narrative: str = _build_simulation_narrative(
             parameter_overrides=request.parameter_overrides,
             original_decision=original_decision,
             simulated_decision=simulated_decision,
@@ -228,11 +212,7 @@ def execute_simulation(
             simulated_conditions_passed=simulated_conditions,
         )
 
-        # =============================================
-        # BUILD OUTCOME
-        # =============================================
-
-        outcome = SimulationOutcome(
+        outcome: SimulationOutcome = SimulationOutcome(
             simulation_id=simulation_id,
             original_decision_id=request.original_decision_id,
             simulation_label=request.simulation_label,
@@ -256,14 +236,14 @@ def execute_simulation(
             "simulation_completed",
             extra={
                 "extra": {
-                    "simulation_id": simulation_id,
+                    "simulation_id":        simulation_id,
                     "original_decision_id": request.original_decision_id,
-                    "original_decision": original_decision,
-                    "simulated_decision": simulated_decision,
-                    "decision_changed": decision_changed,
-                    "conditions_changed": conditions_changed,
-                    "risk_delta": risk_delta,
-                    "parameter_overrides": request.parameter_overrides,
+                    "original_decision":    original_decision,
+                    "simulated_decision":   simulated_decision,
+                    "decision_changed":     decision_changed,
+                    "conditions_changed":   conditions_changed,
+                    "risk_delta":           risk_delta,
+                    "parameter_overrides":  request.parameter_overrides,
                 }
             },
         )
@@ -275,9 +255,9 @@ def execute_simulation(
             "simulation_failed",
             extra={
                 "extra": {
-                    "simulation_id": simulation_id,
+                    "simulation_id":        simulation_id,
                     "original_decision_id": request.original_decision_id,
-                    "error": str(error),
+                    "error":                str(error),
                 }
             },
         )

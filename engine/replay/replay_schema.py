@@ -15,10 +15,10 @@
 # that affect live infrastructure.
 # Results are analytical artifacts only.
 
-
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
+
 
 # =====================================================
 # REPLAY REQUEST
@@ -40,24 +40,11 @@ class ReplayRequest(BaseModel):
     - Regression testing against stored baselines
     """
 
-    # The original audit artifact to replay
-    original_decision_id: str
-
-    # Path to the policy file used in original evaluation.
-    # NOTE: Policy storage integration replaces this
-    # with policy_id lookup in Phase 5+.
-    policy_path: str
-
-    # The stored input context from the original audit.
-    # Sourced from audit_artifact["input_context"].
-    stored_input_context: dict
-
-    # Role of the user in the replay context.
-    # May differ from original to test role-based outcomes.
-    replay_role: Optional[str] = "engineer"
-
-    # Optional label for this replay run.
-    replay_label: Optional[str] = None
+    original_decision_id:  str
+    policy_path:           str
+    stored_input_context:  dict[str, Any]
+    replay_role:           Optional[str] = "engineer"
+    replay_label:          Optional[str] = None
 
 
 # =====================================================
@@ -81,25 +68,12 @@ class SimulationRequest(BaseModel):
     - Policy tuning and threshold calibration
     """
 
-    # The original audit artifact to simulate against
-    original_decision_id: str
-
-    # Path to the policy file
-    policy_path: str
-
-    # The stored input context from original audit
-    stored_input_context: dict
-
-    # Parameter overrides applied before re-evaluation.
-    # Keys are flattened dot-notation or context keys.
-    # Example: {"budget.amount": 200, "environment": "dev"}
-    parameter_overrides: dict
-
-    # Role override for simulation
-    simulation_role: Optional[str] = "engineer"
-
-    # Human-readable description of this simulation
-    simulation_label: Optional[str] = None
+    original_decision_id:  str
+    policy_path:           str
+    stored_input_context:  dict[str, Any]
+    parameter_overrides:   dict[str, Any]
+    simulation_role:       Optional[str] = "engineer"
+    simulation_label:      Optional[str] = None
 
 
 # =====================================================
@@ -108,37 +82,29 @@ class SimulationRequest(BaseModel):
 
 
 class ReplayOutcome(BaseModel):
-    """
-    Result of a governance replay execution.
-    """
+    """Result of a governance replay execution."""
 
-    # Identity
-    replay_id: str
-    original_decision_id: str
-    replay_label: Optional[str]
+    replay_id:                   str
+    original_decision_id:        str
+    replay_label:                Optional[str]
 
-    # Decision comparison
-    original_decision: str
-    replayed_decision: str
-    decision_matches: bool
+    original_decision:           str
+    replayed_decision:           str
+    decision_matches:            bool
 
-    # Condition comparison
-    original_conditions_passed: bool
-    replayed_conditions_passed: bool
-    conditions_match: bool
+    original_conditions_passed:  bool
+    replayed_conditions_passed:  bool
+    conditions_match:            bool
 
-    # Risk comparison
-    original_risk_score: Optional[float]
-    replayed_risk_score: float
-    risk_delta: float
+    original_risk_score:         Optional[float]
+    replayed_risk_score:         float
+    risk_delta:                  float
 
-    # Full replayed result
-    replayed_result: dict
+    replayed_result:             dict[str, Any]
 
-    # Replay metadata
-    replay_status: str  # SUCCESS | FAILED
-    replay_timestamp: str
-    error: Optional[str] = None
+    replay_status:               str   # SUCCESS | FAILED
+    replay_timestamp:            str
+    error:                       Optional[str] = None
 
 
 # =====================================================
@@ -147,40 +113,29 @@ class ReplayOutcome(BaseModel):
 
 
 class SimulationOutcome(BaseModel):
-    """
-    Result of a governance simulation execution.
-    """
+    """Result of a governance simulation execution."""
 
-    # Identity
-    simulation_id: str
-    original_decision_id: str
-    simulation_label: Optional[str]
+    simulation_id:               str
+    original_decision_id:        str
+    simulation_label:            Optional[str]
 
-    # Parameter overrides applied
-    parameter_overrides: dict
+    parameter_overrides:         dict[str, Any]
 
-    # Decision comparison
-    original_decision: str
-    simulated_decision: str
-    decision_changed: bool
+    original_decision:           str
+    simulated_decision:          str
+    decision_changed:            bool
 
-    # Condition comparison
-    original_conditions_passed: bool
+    original_conditions_passed:  bool
     simulated_conditions_passed: bool
-    conditions_changed: bool
+    conditions_changed:          bool
 
-    # Risk comparison
-    original_risk_score: Optional[float]
-    simulated_risk_score: float
-    risk_delta: float
+    original_risk_score:         Optional[float]
+    simulated_risk_score:        float
+    risk_delta:                  float
 
-    # What-if narrative
-    simulation_narrative: str
+    simulation_narrative:        str
+    simulated_result:            dict[str, Any]
 
-    # Full simulated result
-    simulated_result: dict
-
-    # Simulation metadata
-    simulation_status: str  # SUCCESS | FAILED
-    simulation_timestamp: str
-    error: Optional[str] = None
+    simulation_status:           str   # SUCCESS | FAILED
+    simulation_timestamp:        str
+    error:                       Optional[str] = None
