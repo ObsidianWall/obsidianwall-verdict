@@ -25,7 +25,9 @@ metadata:
   description: "Pre-deployment security posture governance — blocks critical security exposures before infrastructure deploys"
 
 spec:
-
+  
+  policy_type: security
+  
   inputs:
     - open_ingress_rules
     - public_storage_buckets

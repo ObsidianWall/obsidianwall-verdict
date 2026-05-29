@@ -1,0 +1,84 @@
+
+# policies/identity/basic_identity.yaml
+#
+# Purpose:
+# IAM and Zero Trust governance policy.
+#
+# Governance model:
+# - Enforces MFA requirements
+# - Limits privileged role assignments
+# - Blocks permanent credentials on service accounts
+# - Security lead notified on violations
+# - Hard enforcement — security lead override required
+#
+# Zero Trust principle: trust nothing, verify everything.
+# Identity is the new perimeter. Privileged access without
+# MFA or time-bounded credentials creates persistent
+# attack surface that governance must catch before deployment.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_identity_verdict
+  version: "0.1"
+  owner: security-team
+  description: "IAM and Zero Trust governance — enforces MFA and privileged access limits"
+
+spec:
+  policy_type: identity
+
+  inputs:
+    - mfa_violations
+    - privileged_role_count
+
+  parameters:
+    identity:
+      require_mfa:                 true
+      max_privileged_roles:        2
+      allow_service_account_keys:  false
+      require_just_in_time_access: false
+      allow_permanent_credentials: false
+      max_inactive_accounts:       0
+      require_role_expiry:         true
+
+  conditions:
+    - id: mfa_check
+      expression: "mfa_violations <= 0"
+      description: "MFA must be enabled for all privileged accounts"
+
+    - id: privileged_role_check
+      expression: "privileged_role_count <= identity.max_privileged_roles"
+      description: "Privileged role assignments must not exceed policy limit"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - security_lead
+
+  override:
+    roles:
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Identity governance violation detected. Deployment blocked pending security review."
+
+    - type: log
+      severity: info
+      message: "Identity governance evaluation recorded in audit trail."

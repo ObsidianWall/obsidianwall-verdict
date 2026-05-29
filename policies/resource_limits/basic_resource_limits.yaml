@@ -29,6 +29,8 @@ metadata:
 
 spec:
 
+  policy_type: resource_limits
+  
   inputs:
     - compute_instance_count
     - gpu_instance_count

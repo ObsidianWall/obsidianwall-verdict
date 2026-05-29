@@ -15,19 +15,6 @@ def build_context(
     pricing_mode: str = "table",
     region: str = "eastus",
 ) -> dict[str, Any]:
-    """
-    Build the full decision context from a Terraform plan.
-
-    Args:
-        plan_path:      path to Terraform plan JSON
-        current_spend:  current period spend to date
-        pricing_mode:   "table" (default) or "live" (Azure API)
-        region:         cloud region for live pricing
-
-    Returns:
-        dict with resources, estimated_cost, cost_breakdown,
-        current_spend, pricing_mode
-    """
 
     parsed: dict[str, Any] = parse_terraform_plan(plan_path)
 
@@ -37,10 +24,14 @@ def build_context(
         region=region,
     )
 
-    return {
-        "resources": parsed["resources"],
-        "estimated_cost": cost_data["estimated_cost"],
-        "cost_breakdown": cost_data["cost_breakdown"],
-        "current_spend": current_spend,
-        "pricing_mode": pricing_mode,
-    }
+    # Start from the full parsed context so all keys extracted
+    # by the parser (security, compliance, resource limits)
+    # flow through to the evaluation context automatically.
+    # Any new keys added to the parser require no changes here.
+    context: dict[str, Any] = dict(parsed)
+    context["estimated_cost"] = cost_data["estimated_cost"]
+    context["cost_breakdown"]  = cost_data["cost_breakdown"]
+    context["current_spend"]   = current_spend
+    context["pricing_mode"]    = pricing_mode
+
+    return context

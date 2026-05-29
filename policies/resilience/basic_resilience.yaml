@@ -1,0 +1,80 @@
+
+# policies/resilience/basic_resilience.yaml
+#
+# Purpose:
+# Availability and disaster recovery governance.
+#
+# Governance model:
+# - Enforces minimum replica counts for HA
+# - Requires backup on stateful resources
+# - Platform lead notified on violations
+# - Override available for exceptions with approval
+#
+# Resilience governance catches availability gaps before
+# deployment rather than discovering them during incidents.
+# Single-replica deployments, missing backups, and absent
+# health checks are governance failures — not just operational
+# concerns. Pre-deployment enforcement prevents SLO violations
+# before they affect production traffic.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_resilience_verdict
+  version: "0.1"
+  owner: platform-team
+  description: "Resilience governance — enforces HA, backup, and DR tier requirements"
+
+spec:
+  policy_type: resilience
+
+  inputs:
+    - compute_instance_count
+
+  parameters:
+    resilience:
+      min_replica_count:      2
+      multi_az_required:      true
+      backup_required:        true
+      disaster_recovery_tier: tier_1
+      max_recovery_time_hours: 4
+      require_health_checks:  true
+      require_auto_scaling:   false
+
+  conditions:
+    - id: instance_count_check
+      expression: "compute_instance_count >= resilience.min_replica_count"
+      description: "Minimum compute instance count must meet HA replica requirements"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: platform_lead
+        channel: slack
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - platform_lead
+
+  override:
+    roles:
+      - platform_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Resilience requirements not satisfied. Deployment blocked pending platform review."
+
+    - type: log
+      severity: info
+      message: "Resilience governance evaluation recorded in audit trail."

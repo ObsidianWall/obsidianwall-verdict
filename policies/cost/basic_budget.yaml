@@ -20,6 +20,8 @@ metadata:
   description: "Prevents infrastructure spend overruns with accountable governance routing"
 
 spec:
+  
+  policy_type: cost
 
   inputs:
     - estimated_cost

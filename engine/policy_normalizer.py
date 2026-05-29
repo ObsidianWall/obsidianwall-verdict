@@ -16,6 +16,7 @@
 
 from schemas.policy_schema import Policy
 
+
 # =====================================================
 # INCOMING POLICY NORMALIZATION
 # =====================================================
@@ -90,7 +91,7 @@ def flatten_policy_parameters(
     parameters: dict, parent_key: str = "", flattened: dict | None = None
 ) -> dict:
     """
-    Flatten nested policy parameters.
+    Flatten nested policy parameters into dot-notation keys.
 
     Example:
 
@@ -105,6 +106,10 @@ def flatten_policy_parameters(
     {
         "budget.amount": 50
     }
+
+    None values are excluded upstream via model_dump(exclude_none=True).
+    This prevents Optional parameter sections from polluting
+    the runtime context with null keys.
     """
 
     if flattened is None:
@@ -132,12 +137,18 @@ def build_policy_runtime_context(policy: Policy, base_context: dict) -> dict:
     - Inject flattened policy parameters
     - Detect context collisions
     - Produce evaluator-ready context
+
+    exclude_none=True ensures that Optional parameter sections
+    not relevant to this policy type (security, compliance, limits
+    when policy_type is cost, for example) are excluded from the
+    flattened context entirely. Only present parameter sections
+    contribute runtime keys.
     """
 
     runtime_context = dict(base_context)
 
     flattened_parameters = flatten_policy_parameters(
-        policy.spec.parameters.model_dump()
+        policy.spec.parameters.model_dump(exclude_none=True)
     )
 
     # ---------------------------------------------------
