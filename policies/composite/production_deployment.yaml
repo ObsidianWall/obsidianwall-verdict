@@ -1,0 +1,142 @@
+# policies/composite/production_deployment.yaml
+#
+# Purpose:
+# Production deployment governance — composite policy
+# coordinating cost, security, and compliance domains
+# in a single governance decision.
+#
+# Governance model:
+# - Enforces budget ceiling for production deployments
+# - Blocks open ingress and public storage
+# - Requires all resources to be tagged
+# - Routes to budget owner, security lead, platform lead
+# - Hard block — all three domains must pass
+#
+# Why composite:
+# Production deployments affect multiple organizational
+# domains simultaneously. Governing them as separate
+# policies creates fragmented audit trails and disconnected
+# stakeholder routing. This composite policy produces one
+# governance decision, one audit artifact, and one
+# coordinated notification to all relevant stakeholders.
+#
+# governance_domains must declare every domain whose
+# keywords appear in conditions — the validator enforces
+# this. Undeclared domain keywords are rejected.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: production_deployment_governance
+  version: "0.1"
+  owner: platform-team
+  description: "Production deployment governance — coordinates cost, security, and compliance in one governance decision"
+
+spec:
+  policy_type: composite
+
+  # Explicit domain declaration required.
+  # Every domain referenced in conditions must be listed here.
+  # Parameters must exist for each declared domain.
+  # Undeclared domain keywords in conditions are rejected.
+  governance_domains:
+    - cost
+    - security
+    - compliance
+
+  inputs:
+    - estimated_cost
+    - current_spend
+    - open_ingress_rules
+    - public_storage_buckets
+    - untagged_resource_count
+
+  parameters:
+
+    # Required because cost is declared in governance_domains
+    budget:
+      amount:           2000.0
+      period:           monthly
+      scope:            production
+      owner:            budget-owner
+      flexibility:      hard
+      override_allowed: false
+
+    # Required because security is declared in governance_domains
+    security:
+      allow_open_ingress:     false
+      allow_public_storage:   false
+      allow_unencrypted_db:   false
+      max_open_ingress_rules: 0
+      max_public_buckets:     0
+
+    # Required because compliance is declared in governance_domains
+    compliance:
+      max_untagged_resources: 0
+      required_tags:
+        - cost_center
+        - environment
+        - owner
+        - team
+      enforcement:            hard
+      scope:                  all_resources
+
+  conditions:
+
+    # Cost domain condition — estimated_cost is a cost keyword
+    - id: production_budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Production deployment must not exceed monthly budget ceiling"
+
+    # Security domain condition — open_ingress_rules is a security keyword
+    - id: no_open_ingress_production
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "No open inbound network rules permitted in production"
+
+    # Security domain condition — public_storage_buckets is a security keyword
+    - id: no_public_storage_production
+      expression: "public_storage_buckets <= security.max_public_buckets"
+      description: "No publicly accessible storage permitted in production"
+
+    # Compliance domain condition — untagged_resource_count is a compliance keyword
+    - id: all_resources_tagged_production
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "All production resources must carry required tags"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: critical
+
+    notifications:
+      - role: budget_owner
+        channel: email
+      - role: security_lead
+        channel: slack
+      - role: platform_lead
+        channel: slack
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - budget_owner
+        - security_lead
+
+  override:
+    roles:
+      - platform_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "Production deployment blocked. Cost, security, or compliance governance conditions failed. All required approvals must be obtained before deployment."
+
+    - type: log
+      severity: info
+      message: "Production deployment governance evaluation recorded in audit trail."

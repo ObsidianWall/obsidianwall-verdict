@@ -64,6 +64,17 @@ jobs:
         run: |
           bandit -r engine/ schemas/ audit/ -ll -f txt
 
+      - name: Semgrep SAST
+        run: |
+          pip install semgrep
+          semgrep --config=auto engine/ schemas/ audit/ cli/ \
+            --error --quiet
+
+      - name: pip-audit SCA
+        run: |
+          pip install pip-audit
+          pip-audit       
+
   # ===================================================
   # TEST SUITE
   # Runs full test suite — unit + integration tests.

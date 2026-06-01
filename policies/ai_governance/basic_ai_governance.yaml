@@ -46,9 +46,12 @@ spec:
       allow_autonomous_deployment:      false
       require_human_approval_high_risk: true
 
+    limitations:
+      max_gpu_instances: 0  
+
   conditions:
     - id: gpu_governance_check
-      expression: "gpu_instance_count <= 0"
+      expression: "ai_gpu_workloads <= 0"
       description: "GPU instances require explicit AI governance approval before deployment"
 
   decision:
