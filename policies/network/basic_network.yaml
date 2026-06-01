@@ -1,0 +1,79 @@
+
+# policies/network/basic_network.yaml
+#
+# Purpose:
+# Basic network topology and exposure governance.
+#
+# Governance model:
+# - Blocks deployments with open inbound network rules
+# - Requires network segmentation
+# - Security lead and engineering lead notified
+# - Hard enforcement — security lead override required
+#
+# This policy works alongside security and compliance policies.
+# Network exposure is a direct attack surface concern.
+# Open ingress rules expose infrastructure to the public internet
+# and must be caught before deployment executes.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_network_verdict
+  version: "0.1"
+  owner: security-team
+  description: "Basic network governance — blocks open ingress and enforces segmentation"
+
+spec:
+  policy_type: network
+
+  inputs:
+    - open_ingress_rules
+    - public_ingress_count
+
+  parameters:
+    network:
+      allow_public_ingress:      false
+      allow_public_egress:       false
+      required_segmentation:     true
+      approved_regions:          []
+      require_private_endpoints: true
+      max_exposed_ports:         0
+      require_firewall:          true
+
+  conditions:
+    - id: no_open_ingress
+      expression: "open_ingress_rules <= network.max_exposed_ports"
+      description: "No open inbound network rules permitted — all ingress must be restricted"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_lead
+        channel: slack
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - security_lead
+
+  override:
+    roles:
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Open network ingress detected. Deployment blocked pending security review."
+
+    - type: log
+      severity: info
+      message: "Network governance evaluation recorded in audit trail."

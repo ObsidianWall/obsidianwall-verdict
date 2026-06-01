@@ -1,0 +1,88 @@
+
+# policies/data_governance/basic_data_governance.yaml
+#
+# Purpose:
+# Data sovereignty, privacy, and encryption governance.
+#
+# Governance model:
+# - Blocks PII storage without explicit governance approval
+# - Enforces encryption on all data stores
+# - Blocks public data access
+# - Data steward and security lead notified on violations
+# - Hard DENY — no soft override for data violations
+#
+# Data governance is the highest-stakes governance domain.
+# PII exposure, unencrypted storage, and public data access
+# create regulatory liability (GDPR, HIPAA, SOC 2) that
+# cannot be remediated after deployment. Pre-deployment
+# enforcement is the only effective control.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_data_governance_verdict
+  version: "0.1"
+  owner: data-governance-team
+  description: "Data governance — enforces encryption, restricts PII storage and public data access"
+
+spec:
+  policy_type: data_governance
+
+  inputs:
+    - unencrypted_databases
+    - public_storage_buckets
+
+  parameters:
+    data:
+      allow_pii_storage:              false
+      allow_cross_region_replication: false
+      encryption_required:            true
+      retention_days:                 30
+      approved_data_classifications:  []
+      require_data_lineage:           true
+      allow_public_data_access:       false
+
+  conditions:
+    - id: encryption_check
+      expression: "unencrypted_databases <= 0"
+      description: "All databases must have encryption enabled at rest"
+
+    - id: no_public_storage
+      expression: "public_storage_buckets <= 0"
+      description: "Public storage access not permitted without data governance approval"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: critical
+
+    notifications:
+      - role: data_steward
+        channel: email
+      - role: security_lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - data_steward
+        - security_lead
+
+  override:
+    roles:
+      - data_steward
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "Data governance violation detected. Deployment blocked — data steward and security review required."
+
+    - type: log
+      severity: info
+      message: "Data governance evaluation recorded in audit trail."

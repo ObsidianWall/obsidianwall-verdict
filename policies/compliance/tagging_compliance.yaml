@@ -31,6 +31,8 @@ metadata:
 
 spec:
 
+  policy_type: compliance
+
   inputs:
     - untagged_resource_count
     - total_resource_count

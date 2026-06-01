@@ -1,0 +1,87 @@
+
+# policies/ai_governance/basic_ai_governance.yaml
+#
+# Purpose:
+# AI system governance — model provenance, logging,
+# and human oversight enforcement.
+#
+# Governance model:
+# - Blocks unapproved external models
+# - Enforces prompt logging on all AI endpoints
+# - Blocks autonomous deployment without human approval
+# - AI governance lead and security lead notified
+# - Hard DENY — AI governance is non-negotiable
+#
+# Doctrine: AI may advise. AI may not govern.
+# This policy enforces that boundary at the infrastructure
+# deployment layer. AI workloads that operate without
+# logging, use unapproved external models, or deploy
+# autonomously create accountability gaps that cannot
+# be remediated after the fact.
+# Pre-deployment governance is the control boundary.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: basic_ai_governance_verdict
+  version: "0.1"
+  owner: ai-governance-team
+  description: "AI governance — enforces model provenance, prompt logging, and human oversight"
+
+spec:
+  policy_type: ai_governance
+
+  inputs:
+    - gpu_instance_count
+
+  parameters:
+    ai:
+      allow_external_models:            false
+      require_prompt_logging:           true
+      allow_sensitive_training_data:    false
+      model_risk_tier:                  medium
+      require_model_versioning:         true
+      require_bias_evaluation:          false
+      allow_autonomous_deployment:      false
+      require_human_approval_high_risk: true
+
+  conditions:
+    - id: gpu_governance_check
+      expression: "gpu_instance_count <= 0"
+      description: "GPU instances require explicit AI governance approval before deployment"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: critical
+
+    notifications:
+      - role: ai_governance_lead
+        channel: email
+      - role: security_lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - ai_governance_lead
+        - security_lead
+
+  override:
+    roles:
+      - ai_governance_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "AI governance violation detected. GPU deployment blocked — AI governance and security review required."
+
+    - type: log
+      severity: info
+      message: "AI governance evaluation recorded in audit trail."
