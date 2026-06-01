@@ -30,42 +30,69 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 # =====================================================
 # RESOURCE CLASSIFICATION CONSTANTS
 # =====================================================
 
-_AZURE_GPU_VM_SIZES: frozenset[str] = frozenset({
-    "Standard_NC6",     "Standard_NC12",     "Standard_NC24",
-    "Standard_NC6s_v3", "Standard_NC12s_v3", "Standard_NC24s_v3",
-    "Standard_ND6s",    "Standard_ND12s",    "Standard_ND24s",
-    "Standard_NV6",     "Standard_NV12",     "Standard_NV24",
-    "Standard_NV6s_v2", "Standard_NV12s_v2", "Standard_NV24s_v2",
-})
+_AZURE_GPU_VM_SIZES: frozenset[str] = frozenset(
+    {
+        "Standard_NC6",
+        "Standard_NC12",
+        "Standard_NC24",
+        "Standard_NC6s_v3",
+        "Standard_NC12s_v3",
+        "Standard_NC24s_v3",
+        "Standard_ND6s",
+        "Standard_ND12s",
+        "Standard_ND24s",
+        "Standard_NV6",
+        "Standard_NV12",
+        "Standard_NV24",
+        "Standard_NV6s_v2",
+        "Standard_NV12s_v2",
+        "Standard_NV24s_v2",
+    }
+)
 
 _AWS_GPU_INSTANCE_PREFIXES: tuple[str, ...] = (
-    "p2.", "p3.", "p4.", "p5.",
-    "g3.", "g4dn.", "g5.",
-    "inf1.", "inf2.",
+    "p2.",
+    "p3.",
+    "p4.",
+    "p5.",
+    "g3.",
+    "g4dn.",
+    "g5.",
+    "inf1.",
+    "inf2.",
     "trn1.",
 )
 
-_AZURE_COMPUTE_TYPES: frozenset[str] = frozenset({
-    "azurerm_virtual_machine",
-    "azurerm_linux_virtual_machine",
-    "azurerm_windows_virtual_machine",
-    "azurerm_virtual_machine_scale_set",
-})
+_AZURE_COMPUTE_TYPES: frozenset[str] = frozenset(
+    {
+        "azurerm_virtual_machine",
+        "azurerm_linux_virtual_machine",
+        "azurerm_windows_virtual_machine",
+        "azurerm_virtual_machine_scale_set",
+    }
+)
 
-_AWS_COMPUTE_TYPES: frozenset[str] = frozenset({
-    "aws_instance",
-    "aws_launch_template",
-    "aws_autoscaling_group",
-})
+_AWS_COMPUTE_TYPES: frozenset[str] = frozenset(
+    {
+        "aws_instance",
+        "aws_launch_template",
+        "aws_autoscaling_group",
+    }
+)
 
-_OPEN_INGRESS_SOURCES: frozenset[str] = frozenset({
-    "*", "Internet", "0.0.0.0/0", "::/0", "Any",
-})
+_OPEN_INGRESS_SOURCES: frozenset[str] = frozenset(
+    {
+        "*",
+        "Internet",
+        "0.0.0.0/0",
+        "::/0",
+        "Any",
+    }
+)
 
 
 # =====================================================
@@ -85,7 +112,7 @@ def _count_open_ingress_rules(
     count: int = 0
 
     for resource in resources:
-        rtype:  str             = resource.get("type", "")
+        rtype: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if rtype == "azurerm_network_security_group":
@@ -130,7 +157,7 @@ def _count_public_storage(
     count: int = 0
 
     for resource in resources:
-        rtype:  str             = resource.get("type", "")
+        rtype: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if rtype == "azurerm_storage_account":
@@ -165,7 +192,7 @@ def _count_unencrypted_databases(
     count: int = 0
 
     for resource in resources:
-        rtype:  str             = resource.get("type", "")
+        rtype: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if rtype in ("azurerm_sql_database", "azurerm_mssql_database"):
@@ -201,10 +228,7 @@ def _count_untagged_resources(
     Domain: compliance
     """
 
-    return sum(
-        1 for r in resources
-        if not r.get("values", {}).get("tags")
-    )
+    return sum(1 for r in resources if not r.get("values", {}).get("tags"))
 
 
 # =====================================================
@@ -221,7 +245,8 @@ def _count_compute_instances(
     """
 
     return sum(
-        1 for r in resources
+        1
+        for r in resources
         if r.get("type") in _AZURE_COMPUTE_TYPES | _AWS_COMPUTE_TYPES
     )
 
@@ -239,7 +264,7 @@ def _count_gpu_instances(
     count: int = 0
 
     for resource in resources:
-        rtype:  str             = resource.get("type", "")
+        rtype: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if rtype in _AZURE_COMPUTE_TYPES:
@@ -317,16 +342,12 @@ def parse_terraform_plan(
         try:
             plan: dict[str, Any] = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(
-                f"Invalid JSON in Terraform plan: {plan_path}"
-            ) from e
+            raise ValueError(f"Invalid JSON in Terraform plan: {plan_path}") from e
 
     raw_resources: list[dict[str, Any]] = []
 
     try:
-        root: dict[str, Any] = (
-            plan.get("planned_values", {}).get("root_module", {})
-        )
+        root: dict[str, Any] = plan.get("planned_values", {}).get("root_module", {})
         raw_resources.extend(root.get("resources", []))
         for child in root.get("child_modules", []):
             raw_resources.extend(child.get("resources", []))
@@ -340,39 +361,37 @@ def parse_terraform_plan(
     parsed_resources: list[dict[str, Any]] = []
 
     for resource in raw_resources:
-        resource_type: str | None     = resource.get("type")
-        resource_name: str | None     = resource.get("name")
+        resource_type: str | None = resource.get("type")
+        resource_name: str | None = resource.get("name")
         resource_values: dict[str, Any] = resource.get("values", {})
 
         if resource_type is None or resource_name is None:
             continue
 
-        parsed_resources.append({
-            "type":   resource_type,
-            "name":   resource_name,
-            "values": resource_values,
-        })
+        parsed_resources.append(
+            {
+                "type": resource_type,
+                "name": resource_name,
+                "values": resource_values,
+            }
+        )
 
     return {
         # Core resource list
-        "resources":               parsed_resources,
-
+        "resources": parsed_resources,
         # Security domain context keys
-        "open_ingress_rules":      _count_open_ingress_rules(parsed_resources),
-        "public_storage_buckets":  _count_public_storage(parsed_resources),
-        "unencrypted_databases":   _count_unencrypted_databases(parsed_resources),
-
+        "open_ingress_rules": _count_open_ingress_rules(parsed_resources),
+        "public_storage_buckets": _count_public_storage(parsed_resources),
+        "unencrypted_databases": _count_unencrypted_databases(parsed_resources),
         # Compliance domain context keys
         "untagged_resource_count": _count_untagged_resources(parsed_resources),
-        "total_resource_count":    len(parsed_resources),
-
+        "total_resource_count": len(parsed_resources),
         # Resource limits domain context keys
-        "compute_instance_count":  _count_compute_instances(parsed_resources),
-        "gpu_instance_count":      _count_gpu_instances(parsed_resources),
-
+        "compute_instance_count": _count_compute_instances(parsed_resources),
+        "gpu_instance_count": _count_gpu_instances(parsed_resources),
         # AI governance domain context key
         # Semantically distinct from gpu_instance_count —
         # treats GPU instances as AI deployment signals,
         # not infrastructure sizing concerns.
-        "ai_gpu_workloads":        _count_ai_gpu_workloads(parsed_resources),
+        "ai_gpu_workloads": _count_ai_gpu_workloads(parsed_resources),
     }

@@ -1,5 +1,5 @@
 # schemas/policy_schema.py
- 
+
 # Purpose:
 # Define the canonical enforceable policy contract.
 #
@@ -75,10 +75,10 @@ class GovernanceSeverity(str, Enum):
     """
 
     INFORMATIONAL = "informational"
-    LOW           = "low"
-    MEDIUM        = "medium"
-    HIGH          = "high"
-    CRITICAL      = "critical"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 # =====================================================
@@ -94,11 +94,11 @@ class GovernanceDecision(str, Enum):
     accountability-aware routing decisions.
     """
 
-    ALLOW                        = "ALLOW"
-    ALLOW_WITH_NOTIFICATION      = "ALLOW_WITH_NOTIFICATION"
+    ALLOW = "ALLOW"
+    ALLOW_WITH_NOTIFICATION = "ALLOW_WITH_NOTIFICATION"
     ALLOW_WITH_APPROVAL_REQUIRED = "ALLOW_WITH_APPROVAL_REQUIRED"
-    DENY_WITH_OVERRIDE           = "DENY_WITH_OVERRIDE"
-    DENY                         = "DENY"
+    DENY_WITH_OVERRIDE = "DENY_WITH_OVERRIDE"
+    DENY = "DENY"
 
 
 # =====================================================
@@ -119,16 +119,16 @@ class PolicyType(str, Enum):
                 Cannot be used to bypass validation.
     """
 
-    COST            = "cost"
-    SECURITY        = "security"
-    COMPLIANCE      = "compliance"
+    COST = "cost"
+    SECURITY = "security"
+    COMPLIANCE = "compliance"
     RESOURCE_LIMITS = "resource_limits"
-    NETWORK         = "network"
-    IDENTITY        = "identity"
+    NETWORK = "network"
+    IDENTITY = "identity"
     DATA_GOVERNANCE = "data_governance"
-    RESILIENCE      = "resilience"
-    AI_GOVERNANCE   = "ai_governance"
-    COMPOSITE       = "composite"
+    RESILIENCE = "resilience"
+    AI_GOVERNANCE = "ai_governance"
+    COMPOSITE = "composite"
 
 
 # =====================================================
@@ -150,11 +150,11 @@ class NotificationChannel(str, Enum):
     webhook   → generic HTTP webhook endpoint
     """
 
-    EMAIL     = "email"
-    SLACK     = "slack"
-    TEAMS     = "teams"
+    EMAIL = "email"
+    SLACK = "slack"
+    TEAMS = "teams"
     PAGERDUTY = "pagerduty"
-    WEBHOOK   = "webhook"
+    WEBHOOK = "webhook"
 
 
 # =====================================================
@@ -165,9 +165,9 @@ class NotificationChannel(str, Enum):
 class Metadata(BaseModel):
     """Policy identity and ownership metadata."""
 
-    name:        str
-    version:     str           # string — preserves "0.10" correctly
-    owner:       str
+    name: str
+    version: str  # string — preserves "0.10" correctly
+    owner: str
     description: Optional[str] = None
 
 
@@ -182,8 +182,8 @@ class Condition(BaseModel):
     Evaluated by the condition evaluator engine.
     """
 
-    id:          str
-    expression:  str
+    id: str
+    expression: str
     description: str
 
 
@@ -195,8 +195,8 @@ class Condition(BaseModel):
 class Action(BaseModel):
     """Post-decision action directive."""
 
-    type:     str
-    message:  str
+    type: str
+    message: str
     severity: Optional[str] = "info"
 
 
@@ -212,8 +212,8 @@ class Decision(BaseModel):
     """
 
     allow: str
-    deny:  str
-    warn:  Optional[str] = None
+    deny: str
+    warn: Optional[str] = None
 
 
 # =====================================================
@@ -228,7 +228,7 @@ class Override(BaseModel):
     and whether approval is required.
     """
 
-    roles:             List[str]
+    roles: List[str]
     requires_approval: Optional[bool] = False
 
 
@@ -244,7 +244,7 @@ class NotificationTarget(BaseModel):
     and through which validated channel.
     """
 
-    role:    str
+    role: str
     channel: NotificationChannel = NotificationChannel.EMAIL
 
 
@@ -268,9 +268,9 @@ class GovernanceConfig(BaseModel):
     - Approval chain definition
     """
 
-    severity:      GovernanceSeverity       = GovernanceSeverity.MEDIUM
+    severity: GovernanceSeverity = GovernanceSeverity.MEDIUM
     notifications: List[NotificationTarget] = []
-    approvals:     Optional[ApprovalConfig] = None
+    approvals: Optional[ApprovalConfig] = None
 
 
 # =====================================================
@@ -286,88 +286,88 @@ class GovernanceConfig(BaseModel):
 class Budget(BaseModel):
     """Budget constraint parameters. Required for policy_type: cost."""
 
-    amount:           float
-    period:           str
-    scope:            str
-    owner:            str
-    flexibility:      str
+    amount: float
+    period: str
+    scope: str
+    owner: str
+    flexibility: str
     override_allowed: bool
 
 
 class SecurityConfig(BaseModel):
     """Security posture parameters. Required for policy_type: security."""
 
-    allow_open_ingress:     bool = False
-    allow_public_storage:   bool = False
-    allow_unencrypted_db:   bool = False
-    max_open_ingress_rules: int  = 0
-    max_public_buckets:     int  = 0
+    allow_open_ingress: bool = False
+    allow_public_storage: bool = False
+    allow_unencrypted_db: bool = False
+    max_open_ingress_rules: int = 0
+    max_public_buckets: int = 0
 
 
 class ComplianceConfig(BaseModel):
     """Compliance and tagging parameters. Required for policy_type: compliance."""
 
-    max_untagged_resources: int       = 0
-    required_tags:          List[str] = []
-    enforcement:            str       = "soft"
-    scope:                  str       = "all_resources"
+    max_untagged_resources: int = 0
+    required_tags: List[str] = []
+    enforcement: str = "soft"
+    scope: str = "all_resources"
 
 
 class ResourceLimits(BaseModel):
     """Resource sizing parameters. Required for policy_type: resource_limits."""
 
-    max_compute_instances:      int   = 5
-    max_gpu_instances:          int   = 0
+    max_compute_instances: int = 5
+    max_gpu_instances: int = 0
     max_single_deployment_cost: float = 500.0
-    environment:                str   = "development"
+    environment: str = "development"
 
 
 class NetworkConfig(BaseModel):
     """Network topology parameters. Required for policy_type: network."""
 
-    allow_public_ingress:     bool      = False
-    allow_public_egress:      bool      = False
-    required_segmentation:    bool      = True
-    approved_regions:         List[str] = []
-    require_private_endpoints: bool     = True
-    max_exposed_ports:        int       = 0
-    require_firewall:         bool      = True
+    allow_public_ingress: bool = False
+    allow_public_egress: bool = False
+    required_segmentation: bool = True
+    approved_regions: List[str] = []
+    require_private_endpoints: bool = True
+    max_exposed_ports: int = 0
+    require_firewall: bool = True
 
 
 class IdentityConfig(BaseModel):
     """IAM and Zero Trust parameters. Required for policy_type: identity."""
 
-    require_mfa:                  bool = True
-    max_privileged_roles:         int  = 2
-    allow_service_account_keys:   bool = False
-    require_just_in_time_access:  bool = False
-    allow_permanent_credentials:  bool = False
-    max_inactive_accounts:        int  = 0
-    require_role_expiry:          bool = True
+    require_mfa: bool = True
+    max_privileged_roles: int = 2
+    allow_service_account_keys: bool = False
+    require_just_in_time_access: bool = False
+    allow_permanent_credentials: bool = False
+    max_inactive_accounts: int = 0
+    require_role_expiry: bool = True
 
 
 class DataGovernanceConfig(BaseModel):
     """Data sovereignty parameters. Required for policy_type: data_governance."""
 
-    allow_pii_storage:              bool      = False
-    allow_cross_region_replication: bool      = False
-    encryption_required:            bool      = True
-    retention_days:                 int       = 30
-    approved_data_classifications:  List[str] = []
-    require_data_lineage:           bool      = True
-    allow_public_data_access:       bool      = False
+    allow_pii_storage: bool = False
+    allow_cross_region_replication: bool = False
+    encryption_required: bool = True
+    retention_days: int = 30
+    approved_data_classifications: List[str] = []
+    require_data_lineage: bool = True
+    allow_public_data_access: bool = False
 
 
 class ResilienceConfig(BaseModel):
     """Availability and DR parameters. Required for policy_type: resilience."""
 
-    min_replica_count:       int  = 2
-    multi_az_required:       bool = True
-    backup_required:         bool = True
-    disaster_recovery_tier:  str  = "tier_1"
-    max_recovery_time_hours: int  = 4
-    require_health_checks:   bool = True
-    require_auto_scaling:    bool = False
+    min_replica_count: int = 2
+    multi_az_required: bool = True
+    backup_required: bool = True
+    disaster_recovery_tier: str = "tier_1"
+    max_recovery_time_hours: int = 4
+    require_health_checks: bool = True
+    require_auto_scaling: bool = False
 
 
 class AIGovernanceConfig(BaseModel):
@@ -379,13 +379,13 @@ class AIGovernanceConfig(BaseModel):
     This policy type enforces that boundary.
     """
 
-    allow_external_models:            bool = False
-    require_prompt_logging:           bool = True
-    allow_sensitive_training_data:    bool = False
-    model_risk_tier:                  str  = "medium"
-    require_model_versioning:         bool = True
-    require_bias_evaluation:          bool = False
-    allow_autonomous_deployment:      bool = False
+    allow_external_models: bool = False
+    require_prompt_logging: bool = True
+    allow_sensitive_training_data: bool = False
+    model_risk_tier: str = "medium"
+    require_model_versioning: bool = True
+    require_bias_evaluation: bool = False
+    allow_autonomous_deployment: bool = False
     require_human_approval_high_risk: bool = True
 
 
@@ -412,15 +412,15 @@ class Parameters(BaseModel):
     None sections are excluded from flattening.
     """
 
-    budget:     Optional[Budget]               = None
-    security:   Optional[SecurityConfig]       = None
-    compliance: Optional[ComplianceConfig]     = None
-    limits:     Optional[ResourceLimits]       = None
-    network:    Optional[NetworkConfig]        = None
-    identity:   Optional[IdentityConfig]       = None
-    data:       Optional[DataGovernanceConfig] = None
-    resilience: Optional[ResilienceConfig]     = None
-    ai:         Optional[AIGovernanceConfig]   = None
+    budget: Optional[Budget] = None
+    security: Optional[SecurityConfig] = None
+    compliance: Optional[ComplianceConfig] = None
+    limits: Optional[ResourceLimits] = None
+    network: Optional[NetworkConfig] = None
+    identity: Optional[IdentityConfig] = None
+    data: Optional[DataGovernanceConfig] = None
+    resilience: Optional[ResilienceConfig] = None
+    ai: Optional[AIGovernanceConfig] = None
 
 
 # =====================================================
@@ -434,84 +434,120 @@ class Parameters(BaseModel):
 # Each keyword belongs to exactly one domain.
 # =====================================================
 
-_COST_KEYWORDS: frozenset[str] = frozenset({
-    "estimated_cost", "current_spend",
-    "budget.amount", "budget.period",
-})
+_COST_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "estimated_cost",
+        "current_spend",
+        "budget.amount",
+        "budget.period",
+    }
+)
 
-_SECURITY_KEYWORDS: frozenset[str] = frozenset({
-    "open_ingress_rules", "public_storage_buckets",
-    "unencrypted_databases",
-    "security.max_open_ingress", "security.max_public",
-})
+_SECURITY_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "open_ingress_rules",
+        "public_storage_buckets",
+        "unencrypted_databases",
+        "security.max_open_ingress",
+        "security.max_public",
+    }
+)
 
-_COMPLIANCE_KEYWORDS: frozenset[str] = frozenset({
-    "untagged_resource_count",
-    "compliance.max_untagged", "naming_violations",
-})
+_COMPLIANCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "untagged_resource_count",
+        "compliance.max_untagged",
+        "naming_violations",
+    }
+)
 
-_LIMITS_KEYWORDS: frozenset[str] = frozenset({
-    "compute_instance_count", "gpu_instance_count",
-    "limits.max_compute", "limits.max_gpu",
-})
+_LIMITS_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "compute_instance_count",
+        "gpu_instance_count",
+        "limits.max_compute",
+        "limits.max_gpu",
+    }
+)
 
-_NETWORK_KEYWORDS: frozenset[str] = frozenset({
-    "public_ingress_count", "public_egress_count",
-    "exposed_ports", "network.allow_public",
-    "segmentation_violations", "network.max_exposed",
-})
+_NETWORK_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "public_ingress_count",
+        "public_egress_count",
+        "exposed_ports",
+        "network.allow_public",
+        "segmentation_violations",
+        "network.max_exposed",
+    }
+)
 
-_IDENTITY_KEYWORDS: frozenset[str] = frozenset({
-    "mfa_violations", "privileged_role_count",
-    "identity.max_privileged", "service_account_key_count",
-    "inactive_account_count",
-})
+_IDENTITY_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "mfa_violations",
+        "privileged_role_count",
+        "identity.max_privileged",
+        "service_account_key_count",
+        "inactive_account_count",
+    }
+)
 
-_DATA_KEYWORDS: frozenset[str] = frozenset({
-    "pii_resource_count", "unencrypted_data_stores",
-    "data.allow_pii", "cross_region_replication_count",
-    "public_data_access_count",
-})
+_DATA_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "pii_resource_count",
+        "unencrypted_data_stores",
+        "data.allow_pii",
+        "cross_region_replication_count",
+        "public_data_access_count",
+    }
+)
 
-_RESILIENCE_KEYWORDS: frozenset[str] = frozenset({
-    "replica_count", "multi_az_compliant",
-    "resilience.min_replica", "backup_enabled",
-    "recovery_time_hours",
-})
+_RESILIENCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "replica_count",
+        "multi_az_compliant",
+        "resilience.min_replica",
+        "backup_enabled",
+        "recovery_time_hours",
+    }
+)
 
-_AI_KEYWORDS: frozenset[str] = frozenset({
-    "external_model_count", "unlogged_ai_endpoints",
-    "ai.allow_external", "high_risk_ai_deployments",
-    "autonomous_deployment_count",
-    # ai_gpu_workloads: GPU instances as AI deployment signals.
-    # Semantically distinct from gpu_instance_count
-    # (resource_limits domain) which treats GPU as a
-    # sizing concern. Same hardware, different governance intent.
-    "ai_gpu_workloads",
-})
+_AI_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "external_model_count",
+        "unlogged_ai_endpoints",
+        "ai.allow_external",
+        "high_risk_ai_deployments",
+        "autonomous_deployment_count",
+        # ai_gpu_workloads: GPU instances as AI deployment signals.
+        # Semantically distinct from gpu_instance_count
+        # (resource_limits domain) which treats GPU as a
+        # sizing concern. Same hardware, different governance intent.
+        "ai_gpu_workloads",
+    }
+)
 
 _TYPE_CONDITION_KEYWORDS: dict[PolicyType, frozenset[str]] = {
-    PolicyType.COST:            _COST_KEYWORDS,
-    PolicyType.SECURITY:        _SECURITY_KEYWORDS,
-    PolicyType.COMPLIANCE:      _COMPLIANCE_KEYWORDS,
+    PolicyType.COST: _COST_KEYWORDS,
+    PolicyType.SECURITY: _SECURITY_KEYWORDS,
+    PolicyType.COMPLIANCE: _COMPLIANCE_KEYWORDS,
     PolicyType.RESOURCE_LIMITS: _LIMITS_KEYWORDS,
-    PolicyType.NETWORK:         _NETWORK_KEYWORDS,
-    PolicyType.IDENTITY:        _IDENTITY_KEYWORDS,
+    PolicyType.NETWORK: _NETWORK_KEYWORDS,
+    PolicyType.IDENTITY: _IDENTITY_KEYWORDS,
     PolicyType.DATA_GOVERNANCE: _DATA_KEYWORDS,
-    PolicyType.RESILIENCE:      _RESILIENCE_KEYWORDS,
-    PolicyType.AI_GOVERNANCE:   _AI_KEYWORDS,
+    PolicyType.RESILIENCE: _RESILIENCE_KEYWORDS,
+    PolicyType.AI_GOVERNANCE: _AI_KEYWORDS,
 }
 
 _TYPE_REQUIRED_PARAMETER: dict[PolicyType, str] = {
-    PolicyType.COST:            "budget",
-    PolicyType.SECURITY:        "security",
-    PolicyType.COMPLIANCE:      "compliance",
+    PolicyType.COST: "budget",
+    PolicyType.SECURITY: "security",
+    PolicyType.COMPLIANCE: "compliance",
     PolicyType.RESOURCE_LIMITS: "limits",
-    PolicyType.NETWORK:         "network",
-    PolicyType.IDENTITY:        "identity",
+    PolicyType.NETWORK: "network",
+    PolicyType.IDENTITY: "identity",
     PolicyType.DATA_GOVERNANCE: "data",
-    PolicyType.RESILIENCE:      "resilience",
-    PolicyType.AI_GOVERNANCE:   "ai",
+    PolicyType.RESILIENCE: "resilience",
+    PolicyType.AI_GOVERNANCE: "ai",
 }
 
 
@@ -533,15 +569,15 @@ class Spec(BaseModel):
     This prevents composite from being used as a bypass.
     """
 
-    policy_type:        Optional[PolicyType]       = None
+    policy_type: Optional[PolicyType] = None
     governance_domains: Optional[List[PolicyType]] = None
-    inputs:             List[str]
-    parameters:         Parameters
-    conditions:         List[Condition]
-    decision:           Decision
-    override:           Override
-    governance:         Optional[GovernanceConfig] = None
-    actions:            List[Action]
+    inputs: List[str]
+    parameters: Parameters
+    conditions: List[Condition]
+    decision: Decision
+    override: Override
+    governance: Optional[GovernanceConfig] = None
+    actions: List[Action]
 
     @model_validator(mode="after")
     def validate_policy_type_contract(self) -> "Spec":
@@ -640,7 +676,7 @@ class Spec(BaseModel):
         # ── LAYER 2 — composite: scoped to declared domains ─────
         else:
             condition_text = " ".join(c.expression for c in self.conditions)
-            declared:      set[PolicyType] = set(self.governance_domains or [])
+            declared: set[PolicyType] = set(self.governance_domains or [])
 
             for other_type, keywords in _TYPE_CONDITION_KEYWORDS.items():
                 if other_type in declared:
@@ -673,6 +709,6 @@ class Policy(BaseModel):
     """
 
     apiVersion: str
-    kind:       str
-    metadata:   Metadata
-    spec:       Spec
+    kind: str
+    metadata: Metadata
+    spec: Spec
