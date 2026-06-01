@@ -22,13 +22,12 @@
 # Live pricing provides real-time accuracy.
 # Neither makes enforcement decisions — only recommendations.
 
-
 from __future__ import annotations
 
-import json
 import urllib.parse
-import urllib.request
 from typing import Any
+
+import requests
 
 from audit.audit_logger import get_logger
 
@@ -41,51 +40,51 @@ logger = get_logger()
 # =====================================================
 
 AWS_EC2_PRICING: dict[str, float] = {
-    "t2.micro": 10.0,
-    "t2.small": 20.0,
-    "t2.medium": 40.0,
-    "t3.micro": 11.0,
-    "t3.small": 22.0,
-    "t3.medium": 42.0,
-    "t3.large": 80.0,
-    "m5.large": 85.0,
-    "m5.xlarge": 170.0,
+    "t2.micro":    10.0,
+    "t2.small":    20.0,
+    "t2.medium":   40.0,
+    "t3.micro":    11.0,
+    "t3.small":    22.0,
+    "t3.medium":   42.0,
+    "t3.large":    80.0,
+    "m5.large":    85.0,
+    "m5.xlarge":  170.0,
     "m5.2xlarge": 340.0,
-    "c5.large": 78.0,
-    "c5.xlarge": 156.0,
+    "c5.large":    78.0,
+    "c5.xlarge":  156.0,
 }
 
 AZURE_VM_PRICING: dict[str, float] = {
-    "Standard_B1s": 12.0,
-    "Standard_B2s": 25.0,
-    "Standard_B4ms": 50.0,
-    "Standard_D2s_v3": 70.0,
-    "Standard_D4s_v3": 140.0,
-    "Standard_D8s_v3": 280.0,
-    "Standard_E2s_v3": 96.0,
-    "Standard_E4s_v3": 192.0,
+    "Standard_B1s":        12.0,
+    "Standard_B2s":        25.0,
+    "Standard_B4ms":       50.0,
+    "Standard_D2s_v3":     70.0,
+    "Standard_D4s_v3":    140.0,
+    "Standard_D8s_v3":    280.0,
+    "Standard_E2s_v3":     96.0,
+    "Standard_E4s_v3":    192.0,
     # GPU instances
-    "Standard_NC6": 657.0,
-    "Standard_NC12": 1314.0,
-    "Standard_ND96asr_v4": 21792.0,  # A100 x8
+    "Standard_NC6":        657.0,
+    "Standard_NC12":      1314.0,
+    "Standard_ND96asr_v4": 21792.0,   # A100 x8
 }
 
 FIXED_RESOURCE_PRICING: dict[str, float] = {
     # Azure
     "azurerm_sentinel_log_analytics_workspace": 50.0,
-    "azurerm_log_analytics_workspace": 30.0,
-    "azurerm_mssql_server": 100.0,
-    "azurerm_kubernetes_cluster": 150.0,
-    "azurerm_storage_account": 20.0,
+    "azurerm_log_analytics_workspace":          30.0,
+    "azurerm_mssql_server":                    100.0,
+    "azurerm_kubernetes_cluster":              150.0,
+    "azurerm_storage_account":                  20.0,
     # AWS
-    "aws_s3_bucket": 5.0,
+    "aws_s3_bucket":    5.0,
     "aws_db_instance": 80.0,
-    "aws_ecs_cluster": 20.0,
+    "aws_ecs_cluster":  20.0,
     "aws_eks_cluster": 150.0,
     # GCP
-    "google_storage_bucket": 5.0,
-    "google_sql_database_instance": 90.0,
-    "google_container_cluster": 120.0,
+    "google_storage_bucket":          5.0,
+    "google_sql_database_instance":  90.0,
+    "google_container_cluster":     120.0,
 }
 
 DEFAULT_FALLBACK_COST: float = 10.0
@@ -93,15 +92,15 @@ DEFAULT_FALLBACK_COST: float = 10.0
 # Azure VM SKU name map for the Retail Prices API.
 # Maps Terraform vm_size values to Azure API SKU names.
 AZURE_SKU_MAP: dict[str, str] = {
-    "Standard_B1s": "B1s",
-    "Standard_B2s": "B2s",
-    "Standard_B4ms": "B4ms",
+    "Standard_B1s":    "B1s",
+    "Standard_B2s":    "B2s",
+    "Standard_B4ms":   "B4ms",
     "Standard_D2s_v3": "D2s v3",
     "Standard_D4s_v3": "D4s v3",
     "Standard_D8s_v3": "D8s v3",
     "Standard_E2s_v3": "E2s v3",
     "Standard_E4s_v3": "E4s v3",
-    "Standard_NC6": "NC6",
+    "Standard_NC6":    "NC6",
 }
 
 # Monthly hours — standard for cloud billing calculations
@@ -145,9 +144,9 @@ def estimate_cost(
     breakdown: list[dict[str, Any]] = []
 
     for resource in resources:
-        resource_type: str = resource.get("type", "")
-        resource_name: str = resource.get("name", "")
-        values: dict[str, Any] = resource.get("values", {})
+        resource_type: str        = resource.get("type", "")
+        resource_name: str        = resource.get("name", "")
+        values: dict[str, Any]   = resource.get("values", {})
 
         cost, source = _estimate_resource_cost(
             resource_type=resource_type,
@@ -159,25 +158,23 @@ def estimate_cost(
 
         total_cost += cost
 
-        breakdown.append(
-            {
-                "resource": resource_name,
-                "type": resource_type,
-                "estimated_cost": cost,
-                "pricing_source": source,
-                "currency": CURRENCY,
-            }
-        )
+        breakdown.append({
+            "resource":       resource_name,
+            "type":           resource_type,
+            "estimated_cost": cost,
+            "pricing_source": source,
+            "currency":       CURRENCY,
+        })
 
     logger.info(
         "cost_estimation_complete",
         extra={
             "extra": {
                 "resource_count": len(resources),
-                "total_cost": total_cost,
-                "pricing_mode": pricing_mode,
-                "region": region,
-                "currency": CURRENCY,
+                "total_cost":     total_cost,
+                "pricing_mode":   pricing_mode,
+                "region":         region,
+                "currency":       CURRENCY,
             }
         },
     )
@@ -185,8 +182,8 @@ def estimate_cost(
     return {
         "estimated_cost": total_cost,
         "cost_breakdown": breakdown,
-        "pricing_mode": pricing_mode,
-        "currency": CURRENCY,
+        "pricing_mode":   pricing_mode,
+        "currency":       CURRENCY,
     }
 
 
@@ -219,8 +216,8 @@ def _estimate_resource_cost(
                 "unknown_aws_instance_type",
                 extra={
                     "extra": {
-                        "instance_type": instance_type,
-                        "fallback_cost": DEFAULT_FALLBACK_COST,
+                        "instance_type":  instance_type,
+                        "fallback_cost":  DEFAULT_FALLBACK_COST,
                     }
                 },
             )
@@ -243,8 +240,8 @@ def _estimate_resource_cost(
                 "azure_live_pricing_unavailable",
                 extra={
                     "extra": {
-                        "vm_size": vm_size,
-                        "region": region,
+                        "vm_size":  vm_size,
+                        "region":   region,
                         "fallback": "table",
                     }
                 },
@@ -256,7 +253,7 @@ def _estimate_resource_cost(
                 "unknown_azure_vm_size",
                 extra={
                     "extra": {
-                        "vm_size": vm_size,
+                        "vm_size":       vm_size,
                         "fallback_cost": DEFAULT_FALLBACK_COST,
                     }
                 },
@@ -308,6 +305,10 @@ def _fetch_azure_vm_price(
     Always returns prices in USD.
     Returns estimated monthly cost (hourly price × 730 hours).
     Returns None if the price cannot be fetched.
+
+    Uses requests library exclusively — no urllib.request.
+    requests does not support file:// or custom schemes,
+    eliminating the dynamic URL scheme attack surface.
     """
 
     sku_name = AZURE_SKU_MAP.get(vm_size)
@@ -322,65 +323,54 @@ def _fetch_azure_vm_price(
         f"and serviceName eq 'Virtual Machines'"
     )
 
-    params = urllib.parse.urlencode(
-        {
-            "api-version": "2021-10-01-preview",
-            "$filter": filter_expr,
-        }
-    )
+    params = urllib.parse.urlencode({
+        "api-version": "2021-10-01-preview",
+        "$filter":     filter_expr,
+    })
 
     url = f"https://prices.azure.com/api/retail/prices?{params}"
 
     try:
-        req = urllib.request.Request(
+        response = requests.get(
             url,
             headers={"Accept": "application/json"},
+            timeout=5,
         )
+        response.raise_for_status()
 
-        # Validate URL scheme before opening.
-        # Only HTTPS is permitted — prevents file:// or
-        # custom scheme exploitation.
-        # The URL is constructed from a hardcoded HTTPS
-        # domain and URL-encoded parameters only.
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme != "https":
-            raise ValueError(
-                f"Security violation: only HTTPS URLs permitted. "
-                f"Got scheme: {parsed.scheme!r}"
-            )
-
-        with urllib.request.urlopen(req, timeout=5) as response:  # nosec B310
-            data: dict[str, Any] = json.loads(response.read().decode("utf-8"))
-
+        data: dict[str, Any] = response.json()
         items: list[dict[str, Any]] = data.get("Items", [])
 
         if not items:
             return None
 
         # Prefer Linux pricing over Windows
-        linux_items = [i for i in items if "Windows" not in i.get("productName", "")]
+        linux_items = [
+            i for i in items
+            if "Windows" not in i.get("productName", "")
+        ]
 
         target = linux_items[0] if linux_items else items[0]
 
         # Currency is captured here, inside the function,
         # after target is defined — not as a default parameter.
-        currency_code: str = str(target.get("currencyCode", CURRENCY))
+        currency_code: str  = str(target.get("currencyCode", CURRENCY))
         hourly_price: float = float(target.get("retailPrice", 0))
 
         if hourly_price == 0:
             return None
 
-        monthly_estimate = hourly_price * HOURS_PER_MONTH
+        monthly_estimate: float = hourly_price * HOURS_PER_MONTH
 
         logger.info(
             "azure_live_price_fetched",
             extra={
                 "extra": {
-                    "vm_size": vm_size,
-                    "sku_name": sku_name,
-                    "region": region,
-                    "currency": currency_code,
-                    "hourly_price": hourly_price,
+                    "vm_size":          vm_size,
+                    "sku_name":         sku_name,
+                    "region":           region,
+                    "currency":         currency_code,
+                    "hourly_price":     hourly_price,
                     "monthly_estimate": monthly_estimate,
                 }
             },
@@ -394,8 +384,8 @@ def _fetch_azure_vm_price(
             extra={
                 "extra": {
                     "vm_size": vm_size,
-                    "region": region,
-                    "error": str(e),
+                    "region":  region,
+                    "error":   str(e),
                 }
             },
         )
