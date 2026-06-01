@@ -30,19 +30,31 @@
 # ai_governance   → AI system governance
 # composite       → multi-domain governance coordination
 #
-# HYBRID VALIDATION MODEL:
+# HYBRID VALIDATION MODEL — TWO LAYERS:
+#
 # Layer 1 — Declaration enforcement:
 #   policy_type declares what parameters are required.
 #   A cost policy without a budget block is rejected.
 #   A security policy without a security block is rejected.
+#   A composite policy without governance_domains is rejected.
+#   A composite policy without parameters for each declared
+#   domain is rejected.
 #
 # Layer 2 — Condition consistency:
-#   Condition expressions are inspected against the declared type.
-#   An engineer cannot declare policy_type: security
-#   while writing budget conditions — mismatch is caught.
-#   This prevents dishonest or accidental type declarations.
-#   Skipped for composite policies which intentionally
-#   mix governance domains.
+#   Condition expressions are inspected against declared type.
+#   An engineer cannot declare policy_type: security while
+#   writing budget conditions — mismatch is caught.
+#   For composite: conditions are scoped to declared domains.
+#   Conditions referencing undeclared domains are rejected.
+#   This prevents composite from being used as a bypass.
+#
+# ZERO TRUST APPROACH TO COMPOSITE:
+#   composite does NOT relax validation — it redirects it.
+#   Every composite policy must declare its governance_domains.
+#   Validation is enforced against those declared domains.
+#   A bad actor cannot use composite to bypass Layer 2 —
+#   composite enforces MORE checks, not fewer.
+
 
 from enum import Enum
 from typing import List, Optional
@@ -91,13 +103,6 @@ class GovernanceDecision(str, Enum):
 
 # =====================================================
 # POLICY TYPE
-#
-# Engineers must explicitly declare the governance
-# domain their policy enforces.
-#
-# Used by the hybrid validator to:
-# - Enforce required parameter sections (Layer 1)
-# - Validate condition consistency (Layer 2)
 # =====================================================
 
 
@@ -108,9 +113,10 @@ class PolicyType(str, Enum):
     Declares the governance concern this policy enforces.
     Drives parameter enforcement and condition validation.
 
-    composite — intentionally governs multiple domains.
-                Layer 2 condition validation is relaxed.
-                Represents a governance coordination contract.
+    composite — coordinates multiple governance domains.
+                Requires explicit governance_domains declaration.
+                Layer 2 is scoped to declared domains only.
+                Cannot be used to bypass validation.
     """
 
     COST = "cost"
@@ -157,9 +163,7 @@ class NotificationChannel(str, Enum):
 
 
 class Metadata(BaseModel):
-    """
-    Policy identity and ownership metadata.
-    """
+    """Policy identity and ownership metadata."""
 
     name: str
     version: str  # string — preserves "0.10" correctly
@@ -189,9 +193,7 @@ class Condition(BaseModel):
 
 
 class Action(BaseModel):
-    """
-    Post-decision action directive.
-    """
+    """Post-decision action directive."""
 
     type: str
     message: str
@@ -282,10 +284,7 @@ class GovernanceConfig(BaseModel):
 
 
 class Budget(BaseModel):
-    """
-    Budget constraint parameters.
-    Required for policy_type: cost.
-    """
+    """Budget constraint parameters. Required for policy_type: cost."""
 
     amount: float
     period: str
@@ -296,10 +295,7 @@ class Budget(BaseModel):
 
 
 class SecurityConfig(BaseModel):
-    """
-    Security posture parameters.
-    Required for policy_type: security.
-    """
+    """Security posture parameters. Required for policy_type: security."""
 
     allow_open_ingress: bool = False
     allow_public_storage: bool = False
@@ -309,10 +305,7 @@ class SecurityConfig(BaseModel):
 
 
 class ComplianceConfig(BaseModel):
-    """
-    Compliance and tagging parameters.
-    Required for policy_type: compliance.
-    """
+    """Compliance and tagging parameters. Required for policy_type: compliance."""
 
     max_untagged_resources: int = 0
     required_tags: List[str] = []
@@ -321,10 +314,7 @@ class ComplianceConfig(BaseModel):
 
 
 class ResourceLimits(BaseModel):
-    """
-    Resource sizing and count parameters.
-    Required for policy_type: resource_limits.
-    """
+    """Resource sizing parameters. Required for policy_type: resource_limits."""
 
     max_compute_instances: int = 5
     max_gpu_instances: int = 0
@@ -333,14 +323,7 @@ class ResourceLimits(BaseModel):
 
 
 class NetworkConfig(BaseModel):
-    """
-    Network topology and exposure parameters.
-    Required for policy_type: network.
-
-    Governs: segmentation, public exposure,
-    port policies, regional constraints,
-    private endpoint requirements.
-    """
+    """Network topology parameters. Required for policy_type: network."""
 
     allow_public_ingress: bool = False
     allow_public_egress: bool = False
@@ -352,14 +335,7 @@ class NetworkConfig(BaseModel):
 
 
 class IdentityConfig(BaseModel):
-    """
-    IAM and Zero Trust governance parameters.
-    Required for policy_type: identity.
-
-    Governs: MFA requirements, privileged access,
-    service account security, just-in-time access,
-    credential lifecycle policies.
-    """
+    """IAM and Zero Trust parameters. Required for policy_type: identity."""
 
     require_mfa: bool = True
     max_privileged_roles: int = 2
@@ -371,14 +347,7 @@ class IdentityConfig(BaseModel):
 
 
 class DataGovernanceConfig(BaseModel):
-    """
-    Data sovereignty and privacy governance parameters.
-    Required for policy_type: data_governance.
-
-    Governs: PII handling, encryption requirements,
-    data residency, retention policies,
-    cross-region replication, public data access.
-    """
+    """Data sovereignty parameters. Required for policy_type: data_governance."""
 
     allow_pii_storage: bool = False
     allow_cross_region_replication: bool = False
@@ -390,14 +359,7 @@ class DataGovernanceConfig(BaseModel):
 
 
 class ResilienceConfig(BaseModel):
-    """
-    Availability and disaster recovery parameters.
-    Required for policy_type: resilience.
-
-    Governs: replica counts, multi-AZ requirements,
-    backup policies, DR tiers, health checks,
-    auto-scaling requirements.
-    """
+    """Availability and DR parameters. Required for policy_type: resilience."""
 
     min_replica_count: int = 2
     multi_az_required: bool = True
@@ -412,11 +374,6 @@ class AIGovernanceConfig(BaseModel):
     """
     AI system governance parameters.
     Required for policy_type: ai_governance.
-
-    Governs: model provenance, prompt logging,
-    training data restrictions, model risk tiers,
-    autonomous deployment controls, human oversight
-    requirements for high-risk AI operations.
 
     Doctrine: AI may advise. AI may not govern.
     This policy type enforces that boundary.
@@ -469,12 +426,12 @@ class Parameters(BaseModel):
 # =====================================================
 # CONDITION KEYWORD MAPS
 #
-# Used by Layer 2 of the hybrid validator.
-# Maps condition expression keywords to the
-# governance domain they belong to.
+# Maps condition expression keywords to governance domains.
+# Used by Layer 2 to detect domain mismatches.
 #
-# Keywords match actual condition expression
-# patterns to avoid false positives.
+# Keywords match actual condition expression patterns
+# to avoid false positives on unrelated field names.
+# Each keyword belongs to exactly one domain.
 # =====================================================
 
 _COST_KEYWORDS: frozenset[str] = frozenset(
@@ -561,10 +518,14 @@ _AI_KEYWORDS: frozenset[str] = frozenset(
         "ai.allow_external",
         "high_risk_ai_deployments",
         "autonomous_deployment_count",
+        # ai_gpu_workloads: GPU instances as AI deployment signals.
+        # Semantically distinct from gpu_instance_count
+        # (resource_limits domain) which treats GPU as a
+        # sizing concern. Same hardware, different governance intent.
+        "ai_gpu_workloads",
     }
 )
 
-# Maps each non-composite policy type to its condition keywords
 _TYPE_CONDITION_KEYWORDS: dict[PolicyType, frozenset[str]] = {
     PolicyType.COST: _COST_KEYWORDS,
     PolicyType.SECURITY: _SECURITY_KEYWORDS,
@@ -577,7 +538,6 @@ _TYPE_CONDITION_KEYWORDS: dict[PolicyType, frozenset[str]] = {
     PolicyType.AI_GOVERNANCE: _AI_KEYWORDS,
 }
 
-# Maps each policy type to its required parameter section name
 _TYPE_REQUIRED_PARAMETER: dict[PolicyType, str] = {
     PolicyType.COST: "budget",
     PolicyType.SECURITY: "security",
@@ -600,18 +560,17 @@ class Spec(BaseModel):
     """
     Policy specification — the enforceable body of the policy.
 
-    policy_type is optional for backward compatibility
-    with policies that predate this field.
-    When present, the hybrid validator enforces:
+    policy_type is optional for backward compatibility.
+    When present, the hybrid validator enforces both layers.
 
-    Layer 1: Required parameter section must exist
-    Layer 2: Condition expressions must be consistent
-             with the declared governance domain
-
-    policy_type will become required in v0.3.0.
+    governance_domains is ONLY valid for policy_type: composite.
+    Composite policies MUST declare their governance_domains —
+    validation is then enforced against those declared domains.
+    This prevents composite from being used as a bypass.
     """
 
     policy_type: Optional[PolicyType] = None
+    governance_domains: Optional[List[PolicyType]] = None
     inputs: List[str]
     parameters: Parameters
     conditions: List[Condition]
@@ -625,31 +584,33 @@ class Spec(BaseModel):
         """
         Hybrid validator — enforces governance domain contract.
 
-        Only runs when policy_type is declared.
         Backward compatible: policies without policy_type pass.
 
-        Layer 1 — Declaration enforcement:
-            Checks that the required parameter section
-            exists for the declared policy_type.
-            Cost policy without budget → rejected.
-            Security policy without security → rejected.
+        SINGLE DOMAIN:
+        Layer 1 — required parameter section must exist
+        Layer 2 — conditions must match declared domain
 
-        Layer 2 — Condition consistency:
-            Inspects condition expressions for keywords
-            that signal a different governance domain
-            than declared. Catches dishonest or accidental
-            type declarations.
-            Skipped for policy_type: composite.
+        COMPOSITE (Zero Trust approach):
+        Layer 1a — governance_domains must be declared
+        Layer 1b — no nesting (composite not in domains)
+        Layer 1c — parameters must exist for each declared domain
+        Layer 2  — conditions scoped to declared domains only
+                   conditions from undeclared domains rejected
         """
 
         if self.policy_type is None:
-            # Backward compatible — no policy_type declared
             return self
 
-        # -----------------------------------------------
-        # LAYER 1 — Required parameters by type
-        # -----------------------------------------------
+        # ── governance_domains only valid on composite ──────────
+        if self.governance_domains and self.policy_type != PolicyType.COMPOSITE:
+            raise ValueError(
+                f"spec.governance_domains is only valid for "
+                f"policy_type 'composite'. "
+                f"policy_type '{self.policy_type.value}' does not "
+                f"support domain declarations."
+            )
 
+        # ── LAYER 1 — single domain ─────────────────────────────
         if self.policy_type != PolicyType.COMPOSITE:
             required_param = _TYPE_REQUIRED_PARAMETER.get(self.policy_type)
 
@@ -660,53 +621,76 @@ class Spec(BaseModel):
                     f"Add a {required_param} block to your policy parameters."
                 )
 
+        # ── LAYER 1 — composite ─────────────────────────────────
         else:
-            # Composite: at least one parameter section must exist
-            all_sections = [
-                self.parameters.budget,
-                self.parameters.security,
-                self.parameters.compliance,
-                self.parameters.limits,
-                self.parameters.network,
-                self.parameters.identity,
-                self.parameters.data,
-                self.parameters.resilience,
-                self.parameters.ai,
-            ]
-            if not any(s is not None for s in all_sections):
+            # 1a — governance_domains must be declared
+            if not self.governance_domains:
                 raise ValueError(
-                    "policy_type 'composite' requires at least one "
-                    "parameter section. Add one or more governance "
-                    "domain blocks to spec.parameters."
+                    "policy_type 'composite' requires "
+                    "spec.governance_domains declaring which domains "
+                    "this policy coordinates.\n"
+                    "Example:\n"
+                    "  governance_domains:\n"
+                    "    - cost\n"
+                    "    - security\n"
+                    "composite without declared domains is not permitted."
                 )
 
-        # -----------------------------------------------
-        # LAYER 2 — Condition consistency
-        # Skipped for composite policies which intentionally
-        # combine governance domains.
-        # -----------------------------------------------
-
-        if self.policy_type == PolicyType.COMPOSITE:
-            return self
-
-        condition_text = " ".join(c.expression for c in self.conditions)
-
-        for other_type, keywords in _TYPE_CONDITION_KEYWORDS.items():
-            if other_type == self.policy_type:
-                continue
-
-            matched = [k for k in keywords if k in condition_text]
-
-            if matched:
+            # 1b — no nesting composite inside composite
+            if PolicyType.COMPOSITE in self.governance_domains:
                 raise ValueError(
-                    f"Condition expressions reference "
-                    f"'{matched[0]}' which belongs to "
-                    f"governance domain '{other_type.value}', "
-                    f"but policy_type '{self.policy_type.value}' "
-                    f"was declared. "
-                    f"Either change policy_type to '{other_type.value}' "
-                    f"or remove the mismatched condition."
+                    "spec.governance_domains cannot include 'composite'. "
+                    "Composite policies coordinate specific governance "
+                    "domains, not other composite policies."
                 )
+
+            # 1c — parameters must exist for each declared domain
+            for domain in self.governance_domains:
+                required_param = _TYPE_REQUIRED_PARAMETER.get(domain)
+                if required_param and getattr(self.parameters, required_param) is None:
+                    raise ValueError(
+                        f"Composite policy declares domain '{domain.value}' "
+                        f"but spec.parameters.{required_param} is missing. "
+                        f"Add a {required_param} block or remove "
+                        f"'{domain.value}' from governance_domains."
+                    )
+
+        # ── LAYER 2 — single domain ─────────────────────────────
+        if self.policy_type != PolicyType.COMPOSITE:
+            condition_text = " ".join(c.expression for c in self.conditions)
+
+            for other_type, keywords in _TYPE_CONDITION_KEYWORDS.items():
+                if other_type == self.policy_type:
+                    continue
+                matched = [k for k in keywords if k in condition_text]
+                if matched:
+                    raise ValueError(
+                        f"Condition expressions reference '{matched[0]}' "
+                        f"which belongs to governance domain "
+                        f"'{other_type.value}', but policy_type "
+                        f"'{self.policy_type.value}' was declared. "
+                        f"Either change policy_type to '{other_type.value}' "
+                        f"or remove the mismatched condition."
+                    )
+
+        # ── LAYER 2 — composite: scoped to declared domains ─────
+        else:
+            condition_text = " ".join(c.expression for c in self.conditions)
+            declared: set[PolicyType] = set(self.governance_domains or [])
+
+            for other_type, keywords in _TYPE_CONDITION_KEYWORDS.items():
+                if other_type in declared:
+                    continue  # declared domain — keywords are permitted
+                matched = [k for k in keywords if k in condition_text]
+                if matched:
+                    raise ValueError(
+                        f"Composite policy condition references "
+                        f"'{matched[0]}' which belongs to governance "
+                        f"domain '{other_type.value}', but that domain "
+                        f"is not listed in spec.governance_domains. "
+                        f"Either add '{other_type.value}' to "
+                        f"governance_domains or remove the condition."
+                    )
 
         return self
 

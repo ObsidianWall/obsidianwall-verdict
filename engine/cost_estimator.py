@@ -22,13 +22,12 @@
 # Live pricing provides real-time accuracy.
 # Neither makes enforcement decisions — only recommendations.
 
-
 from __future__ import annotations
 
-import json
 import urllib.parse
-import urllib.request
 from typing import Any
+
+import requests
 
 from audit.audit_logger import get_logger
 
@@ -308,6 +307,10 @@ def _fetch_azure_vm_price(
     Always returns prices in USD.
     Returns estimated monthly cost (hourly price × 730 hours).
     Returns None if the price cannot be fetched.
+
+    Uses requests library exclusively — no urllib.request.
+    requests does not support file:// or custom schemes,
+    eliminating the dynamic URL scheme attack surface.
     """
 
     sku_name = AZURE_SKU_MAP.get(vm_size)
@@ -332,26 +335,14 @@ def _fetch_azure_vm_price(
     url = f"https://prices.azure.com/api/retail/prices?{params}"
 
     try:
-        req = urllib.request.Request(
+        response = requests.get(
             url,
             headers={"Accept": "application/json"},
+            timeout=5,
         )
+        response.raise_for_status()
 
-        # Validate URL scheme before opening.
-        # Only HTTPS is permitted — prevents file:// or
-        # custom scheme exploitation.
-        # The URL is constructed from a hardcoded HTTPS
-        # domain and URL-encoded parameters only.
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme != "https":
-            raise ValueError(
-                f"Security violation: only HTTPS URLs permitted. "
-                f"Got scheme: {parsed.scheme!r}"
-            )
-
-        with urllib.request.urlopen(req, timeout=5) as response:  # nosec B310
-            data: dict[str, Any] = json.loads(response.read().decode("utf-8"))
-
+        data: dict[str, Any] = response.json()
         items: list[dict[str, Any]] = data.get("Items", [])
 
         if not items:
@@ -370,7 +361,7 @@ def _fetch_azure_vm_price(
         if hourly_price == 0:
             return None
 
-        monthly_estimate = hourly_price * HOURS_PER_MONTH
+        monthly_estimate: float = hourly_price * HOURS_PER_MONTH
 
         logger.info(
             "azure_live_price_fetched",

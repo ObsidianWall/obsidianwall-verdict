@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obsidianwall-verdict"
-version = "0.2.2"
+version = "0.2.3"
 description = "A deterministic pre-deployment infrastructure governance engine"
 readme = "README.md"
 license =  "Apache-2.0"
@@ -42,6 +42,7 @@ dependencies = [
     "click>=8.0",
     "typer>=0.9",
     "python-json-logger>=2.0",
+    "requests>=2.28",
 ]
 
 [project.optional-dependencies]
