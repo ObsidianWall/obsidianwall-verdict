@@ -85,7 +85,7 @@ jobs:
 
       - name: Semgrep SAST
         run: |
-          pip install semgrep
+          pip install semgrep "pyjwt>=2.13.0"
           semgrep --config=auto engine/ schemas/ audit/ cli/ \
             --error --quiet
 
