@@ -6,34 +6,62 @@
 #
 # Usage:
 #   verdict audit
+#   verdict audit --insights
 #   verdict audit --policy policies/cost/basic_budget.yaml
 #   verdict audit --limit 100
 #   verdict audit --format json
 #
-# Requires telemetry to be enabled.
+# Requires OW_TELEMETRY_ENABLED=true
 # Data source: ~/.obsidianwall/decisions.db
 #
-# Output:
-#   Domain-by-domain governance risk report
-#   Policy effectiveness summary
-#   Denial rate and override rate
-#   Recent decision history
+# Output sections:
+#   Overview             total evaluations, deny rate
+#   Domain Risk Scores   per-domain risk with visual bar
+#   Why Denied/Allowed   top failing and passing conditions
+#   Policy Effectiveness deny rate, override rate per policy
+#   Deployment Outcomes  populated by Sentinel v0.4.0
+#   Recent Decisions     decision history with scores
+#   Governance Insights  heuristic analysis (--insights only)
 
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.store import (
     get_domain_risk_summary,
+    get_failed_conditions_summary,
+    get_outcome_summary,
+    get_passed_conditions_summary,
     get_policy_effectiveness,
     get_recent_decisions,
 )
 
+# ── Command registration ──────────────────────────────
+# invoke_without_command=True allows `verdict audit` to
+# run the callback directly without a sub-command.
+# Future sub-commands (audit history, audit effectiveness)
+# can be added as @audit_app.command() without refactoring.
+audit_app = typer.Typer(
+    invoke_without_command=True,
+    help="Governance risk audit across recorded decisions.",
+)
 
+# ── Constants ─────────────────────────────────────────
+_WIDTH: int = 72
+
+_DOMAIN_LABELS: dict[str, str] = {
+    "cost_analysis":         "Cost",
+    "topology_analysis":     "Network / Topology",
+    "architecture_analysis": "Architecture",
+    "utilization_analysis":  "Utilization",
+}
+
+
+@audit_app.callback()
 def audit(
     policy: Optional[str] = typer.Option(
         None,
@@ -53,15 +81,30 @@ def audit(
         "-f",
         help="Output format: table (default) or json.",
     ),
+    insights: bool = typer.Option(
+        False,
+        "--insights",
+        help=(
+            "Include governance insights — heuristic analysis "
+            "of policy health, override patterns, and risk trends."
+        ),
+    ),
 ) -> None:
     """
     Governance risk audit across recorded decisions.
 
     Requires OW_TELEMETRY_ENABLED=true.
     Reads from ~/.obsidianwall/decisions.db.
+
+    Examples:
+      verdict audit
+      verdict audit --insights
+      verdict audit --policy policies/cost/basic_budget.yaml
+      verdict audit --format json
+      verdict audit --limit 100
     """
 
-    # ── Telemetry gate ───────────────────────────────
+    # ── Telemetry gate ────────────────────────────────
     if not is_telemetry_enabled():
         typer.echo(
             "\n  Telemetry is disabled.\n"
@@ -69,17 +112,22 @@ def audit(
             "  To enable:\n"
             "    export OW_TELEMETRY_ENABLED=true\n\n"
             "  What is stored locally:\n"
-            "    Decision outcomes, risk scores, policy names.\n"
-            "    No plan contents. No cost amounts.\n"
-            "    No resource names. No org identifiers.\n\n"
+            "    Decision outcomes, risk scores, policy names,\n"
+            "    condition results. No plan contents.\n"
+            "    No cost amounts. No resource names.\n\n"
             f"  Storage: {get_db_path()}\n"
         )
         raise typer.Exit(code=1)
 
-    # ── Load data ────────────────────────────────────
-    recent = get_recent_decisions(limit=limit)
-    effectiveness = get_policy_effectiveness(policy_name=policy)
-    domain_summary = get_domain_risk_summary()
+    # ── Load data ─────────────────────────────────────
+    recent:          list[dict[str, Any]] = get_recent_decisions(limit=limit)
+    effectiveness:   list[dict[str, Any]] = get_policy_effectiveness(
+        policy_name=policy
+    )
+    domain_summary:  dict[str, Any]       = get_domain_risk_summary()
+    failed_conds:    list[dict[str, Any]] = get_failed_conditions_summary()
+    passed_conds:    list[dict[str, Any]] = get_passed_conditions_summary()
+    outcomes:        list[dict[str, Any]] = get_outcome_summary()
 
     if not recent:
         typer.echo(
@@ -88,132 +136,394 @@ def audit(
         )
         raise typer.Exit(code=0)
 
-    # ── JSON output ──────────────────────────────────
+    # ── JSON output ───────────────────────────────────
     if output_format == "json":
-        output = {
-            "audit_summary": domain_summary,
+        output: dict[str, Any] = {
+            "audit_summary":        domain_summary,
             "policy_effectiveness": effectiveness,
-            "recent_decisions": recent[:limit],
+            "failed_conditions":    failed_conds,
+            "passed_conditions":    passed_conds,
+            "outcomes":             outcomes,
+            "recent_decisions":     recent[:limit],
         }
+        if insights:
+            output["insights"] = _generate_insights(
+                domain_summary, effectiveness,
+                failed_conds, passed_conds, outcomes, recent,
+            )
         typer.echo(json.dumps(output, indent=2))
         return
 
-    # ── Table output ─────────────────────────────────
+    # ── Table output ──────────────────────────────────
     _print_audit_table(
         recent=recent,
         effectiveness=effectiveness,
         domain_summary=domain_summary,
+        failed_conds=failed_conds,
+        passed_conds=passed_conds,
+        outcomes=outcomes,
         policy_filter=policy,
         limit=limit,
+        show_insights=insights,
     )
 
 
+# =====================================================
+# TABLE RENDERER
+# =====================================================
+
+
 def _print_audit_table(
-    recent: list[dict],
-    effectiveness: list[dict],
-    domain_summary: dict,
-    policy_filter: str | None,
-    limit: int,
+    recent:         list[dict[str, Any]],
+    effectiveness:  list[dict[str, Any]],
+    domain_summary: dict[str, Any],
+    failed_conds:   list[dict[str, Any]],
+    passed_conds:   list[dict[str, Any]],
+    outcomes:       list[dict[str, Any]],
+    policy_filter:  Optional[str],
+    limit:          int,
+    show_insights:  bool,
 ) -> None:
     """Render the governance audit as a formatted table."""
 
-    width = 72
-
-    typer.echo("\n" + "─" * width)
+    typer.echo("\n" + "─" * _WIDTH)
     typer.echo("  ObsidianWall Verdict — Governance Audit")
     if policy_filter:
         typer.echo(f"  Policy filter: {policy_filter}")
-    typer.echo("─" * width)
+    typer.echo("─" * _WIDTH)
 
-    # ── Overview ─────────────────────────────────────
-    total = domain_summary.get("total_evaluations", 0)
-    denied = domain_summary.get("total_denied", 0)
-    deny_rate = domain_summary.get("deny_rate", 0)
-    allowed = total - denied
+    # ── Overview ──────────────────────────────────────
+    total:     int   = domain_summary.get("total_evaluations", 0)
+    denied:    int   = domain_summary.get("total_denied", 0)
+    deny_rate: float = domain_summary.get("deny_rate", 0.0)
+    allowed:   int   = total - denied
 
     typer.echo(f"\n  Total evaluations:  {total}")
     typer.echo(f"  Allowed:            {allowed}")
     typer.echo(f"  Denied:             {denied}  ({deny_rate}%)")
 
     # ── Domain risk scores ────────────────────────────
-    domain_scores: dict = domain_summary.get("domain_avg_scores", {})
+    # Shows every domain with visual bar, score, and
+    # severity label. Always shown — not insights-only.
+    domain_scores: dict[str, float] = domain_summary.get(
+        "domain_avg_scores", {}
+    )
     if domain_scores:
-        typer.echo(f"\n{'─' * width}")
-        typer.echo("  Domain Risk Scores  (average across recorded decisions)")
-        typer.echo("─" * width)
-
-        domain_labels = {
-            "cost_analysis": "Cost",
-            "topology_analysis": "Network/Topology",
-            "architecture_analysis": "Architecture",
-            "utilization_analysis": "Utilization",
-        }
+        typer.echo(f"\n{'─' * _WIDTH}")
+        typer.echo(
+            "  Domain Risk Scores  "
+            "(average across recorded decisions)"
+        )
+        typer.echo("─" * _WIDTH)
 
         for domain, score in sorted(
-            domain_scores.items(), key=lambda x: x[1], reverse=True
+            domain_scores.items(),
+            key=lambda item: item[1],
+            reverse=True,
         ):
-            label = domain_labels.get(domain, domain)
-            bar = _risk_bar(score)
-            severity = _score_to_severity(score)
-            typer.echo(f"  {label:<24}  {bar}  {score:>5.1f}/100  {severity}")
+            label:    str = _DOMAIN_LABELS.get(domain, domain)
+            bar:      str = _risk_bar(score)
+            severity: str = _score_to_severity(score)
+            typer.echo(
+                f"  {label:<24}  {bar}  {score:>5.1f}/100  {severity}"
+            )
+
+    # ── Why decisions were made ───────────────────────
+    if failed_conds or passed_conds:
+        typer.echo(f"\n{'─' * _WIDTH}")
+        typer.echo("  Why Decisions Were Made")
+        typer.echo("─" * _WIDTH)
+
+        if failed_conds:
+            typer.echo(
+                "\n  Failed conditions  "
+                "(why deployments were DENIED)"
+            )
+            typer.echo(
+                f"  {'Condition':<40}  {'Failures':>8}  {'Rate':>6}"
+            )
+            typer.echo(
+                f"  {'─' * 40}  {'─' * 8}  {'─' * 6}"
+            )
+            for c in failed_conds[:10]:
+                typer.echo(
+                    f"  {str(c['condition_id']):<40}  "
+                    f"{int(c['count']):>8}  "
+                    f"{float(c['rate']):>5.1f}%"
+                )
+
+        if passed_conds:
+            typer.echo(
+                "\n  Passed conditions  "
+                "(why deployments were ALLOWED)"
+            )
+            typer.echo(
+                f"  {'Condition':<40}  {'Passes':>7}  {'Rate':>6}"
+            )
+            typer.echo(
+                f"  {'─' * 40}  {'─' * 7}  {'─' * 6}"
+            )
+            for c in passed_conds[:10]:
+                typer.echo(
+                    f"  {str(c['condition_id']):<40}  "
+                    f"{int(c['count']):>7}  "
+                    f"{float(c['rate']):>5.1f}%"
+                )
 
     # ── Policy effectiveness ──────────────────────────
     if effectiveness:
-        typer.echo(f"\n{'─' * width}")
+        typer.echo(f"\n{'─' * _WIDTH}")
         typer.echo("  Policy Effectiveness")
-        typer.echo("─" * width)
+        typer.echo("─" * _WIDTH)
         typer.echo(
-            f"  {'Policy':<40}  {'Evals':>6}  {'Denied':>7}  "
-            f"{'Override':>9}  {'Rate':>6}"
+            f"  {'Policy':<34}  {'Evals':>5}  "
+            f"{'Denied':>6}  {'Overrides':>9}  "
+            f"{'Override%':>9}  {'Deny%':>6}"
         )
-        typer.echo(f"  {'─' * 40}  {'─' * 6}  {'─' * 7}  {'─' * 9}  {'─' * 6}")
-
+        typer.echo(
+            f"  {'─' * 34}  {'─' * 5}  "
+            f"{'─' * 6}  {'─' * 9}  {'─' * 9}  {'─' * 6}"
+        )
         for row in effectiveness:
-            evals = row.get("total_evaluations", 0)
-            denied = row.get("total_denied", 0)
-            overrides = row.get("override_count", 0)
-            rate = round(denied / evals * 100, 1) if evals else 0
-            name = row.get("policy_name", "")[:38]
-
+            evals:     int   = int(row.get("total_evaluations", 0))
+            denied_r:  int   = int(row.get("total_denied", 0))
+            overrides: int   = int(row.get("override_count", 0))
+            deny_pct:  float = round(denied_r / evals * 100, 1) if evals else 0.0
+            over_pct:  float = (
+                round(overrides / denied_r * 100, 1) if denied_r else 0.0
+            )
+            name: str = str(row.get("policy_name", ""))[:32]
             typer.echo(
-                f"  {name:<40}  {evals:>6}  {denied:>7}  {overrides:>9}  {rate:>5.1f}%"
+                f"  {name:<34}  {evals:>5}  "
+                f"{denied_r:>6}  {overrides:>9}  "
+                f"{over_pct:>8.1f}%  {deny_pct:>5.1f}%"
             )
 
-    # ── Recent decisions ──────────────────────────────
-    typer.echo(f"\n{'─' * width}")
-    typer.echo(f"  Recent Decisions  (last {min(len(recent), limit)})")
-    typer.echo("─" * width)
-    typer.echo(f"  {'Decision ID':<12}  {'Policy':<32}  {'Decision':<24}  {'Score':>6}")
-    typer.echo(f"  {'─' * 12}  {'─' * 32}  {'─' * 24}  {'─' * 6}")
-
-    for row in recent[:limit]:
-        short_id = str(row.get("id", ""))[:8]
-        name = str(row.get("policy_name", ""))[:30]
-        decision = str(row.get("decision", ""))[:22]
-        score = row.get("overall_risk_score", 0)
-        icon = "✅" if "ALLOW" == row.get("decision") else "🚫"
-
+    # ── Deployment outcomes ───────────────────────────
+    typer.echo(f"\n{'─' * _WIDTH}")
+    typer.echo(
+        "  Deployment Outcomes  "
+        "(populated by Sentinel v0.4.0)"
+    )
+    typer.echo("─" * _WIDTH)
+    if outcomes:
+        typer.echo(f"  {'Outcome Type':<32}  {'Count':>6}")
+        typer.echo(f"  {'─' * 32}  {'─' * 6}")
+        for row in outcomes:
+            typer.echo(
+                f"  {str(row['outcome_type']):<32}  "
+                f"{int(row['count']):>6}"
+            )
+    else:
         typer.echo(
-            f"  {short_id:<12}  {name:<32}  {icon} {decision:<22}  {score:>5}/100"
+            "  No outcomes recorded yet.\n"
+            "  Sentinel will record what happened after\n"
+            "  each deployment decision."
         )
 
-    typer.echo("\n" + "─" * width + "\n")
+    # ── Recent decisions ──────────────────────────────
+    typer.echo(f"\n{'─' * _WIDTH}")
+    typer.echo(f"  Recent Decisions  (last {min(len(recent), limit)})")
+    typer.echo("─" * _WIDTH)
+    typer.echo(
+        f"  {'Decision ID':<12}  {'Policy':<32}  "
+        f"{'Decision':<24}  {'Score':>6}"
+    )
+    typer.echo(
+        f"  {'─' * 12}  {'─' * 32}  {'─' * 24}  {'─' * 6}"
+    )
+    for row in recent[:limit]:
+        short_id: str = str(row.get("id", ""))[:8]
+        name_r:   str = str(row.get("policy_name", ""))[:30]
+        decision: str = str(row.get("decision", ""))[:22]
+        score:    int = int(row.get("overall_risk_score", 0))
+        icon:     str = "✅" if row.get("decision") == "ALLOW" else "🚫"
+        typer.echo(
+            f"  {short_id:<12}  {name_r:<32}  "
+            f"{icon} {decision:<22}  {score:>5}/100"
+        )
+
+    # ── Governance insights ───────────────────────────
+    if show_insights:
+        insight_lines: list[str] = _generate_insights(
+            domain_summary, effectiveness,
+            failed_conds, passed_conds, outcomes, recent,
+        )
+        typer.echo(f"\n{'─' * _WIDTH}")
+        typer.echo("  Governance Insights")
+        typer.echo("─" * _WIDTH)
+        if insight_lines:
+            for line in insight_lines:
+                typer.echo(f"  {line}")
+        else:
+            typer.echo(
+                "  Not enough data for insights yet.\n"
+                "  Run more evaluations to surface patterns."
+            )
+
+    typer.echo("\n" + "─" * _WIDTH + "\n")
+
+
+# =====================================================
+# INSIGHTS ENGINE
+#
+# Pure heuristics over telemetry data.
+# No ML. No LLMs. Deterministic pattern detection.
+#
+# Aligned with ObsidianWall doctrine:
+#   AI may advise. AI may not govern.
+#   The insights engine advises — it does not enforce.
+# =====================================================
+
+
+def _generate_insights(
+    domain_summary: dict[str, Any],
+    effectiveness:  list[dict[str, Any]],
+    failed_conds:   list[dict[str, Any]],
+    passed_conds:   list[dict[str, Any]],
+    outcomes:       list[dict[str, Any]],
+    recent:         list[dict[str, Any]],
+) -> list[str]:
+    """
+    Generate governance insights from telemetry data.
+    Pure heuristics — no probabilistic models.
+    Returns list of insight strings for display.
+    """
+
+    insights:      list[str]        = []
+    total:         int              = domain_summary.get("total_evaluations", 0)
+    domain_scores: dict[str, float] = domain_summary.get(
+        "domain_avg_scores", {}
+    )
+
+    if total == 0:
+        return insights
+
+    # ── Policy health insights ────────────────────────
+    for row in effectiveness:
+        name:      str   = str(row.get("policy_name", ""))
+        evals:     int   = int(row.get("total_evaluations", 0))
+        denied_:   int   = int(row.get("total_denied", 0))
+        overrides: int   = int(row.get("override_count", 0))
+
+        if evals == 0:
+            continue
+
+        p_deny: float = round(denied_ / evals * 100, 1)
+        p_over: float = (
+            round(overrides / denied_ * 100, 1) if denied_ else 0.0
+        )
+
+        if p_deny == 100.0:
+            insights.append(
+                f"⚠  '{name}' is denying 100% of evaluations.\n"
+                f"     Threshold may be too strict or deployments\n"
+                f"     consistently exceed policy limits."
+            )
+        elif p_deny == 0.0 and evals >= 5:
+            insights.append(
+                f"ℹ  '{name}' has not denied any deployments "
+                f"across {evals} evaluations.\n"
+                f"     Policy may be too permissive."
+            )
+
+        if p_over >= 60.0 and denied_ >= 3:
+            insights.append(
+                f"⚠  '{name}' has a {p_over:.0f}% override rate.\n"
+                f"     Policy may not reflect deployment reality.\n"
+                f"     Consider adjusting thresholds."
+            )
+        elif p_over >= 30.0 and denied_ >= 3:
+            insights.append(
+                f"ℹ  '{name}' has a moderate override rate "
+                f"({p_over:.0f}%).\n"
+                f"     Monitor whether overrides become the norm."
+            )
+
+    # ── Domain risk insight ───────────────────────────
+    if domain_scores:
+        top_domain: str   = max(
+            domain_scores, key=lambda d: domain_scores[d]
+        )
+        top_score:  float = domain_scores[top_domain]
+        label:      str   = _DOMAIN_LABELS.get(top_domain, top_domain)
+        if top_score >= 40.0:
+            insights.append(
+                f"ℹ  {label} is the highest risk domain "
+                f"(avg score: {top_score:.0f}/100).\n"
+                f"     Review policies in this domain."
+            )
+
+    # ── Top failed condition ──────────────────────────
+    if failed_conds:
+        top_failed: dict[str, Any] = failed_conds[0]
+        if float(top_failed.get("rate", 0)) >= 50.0:
+            insights.append(
+                f"ℹ  '{top_failed['condition_id']}' is the most "
+                f"frequently failed condition\n"
+                f"     ({top_failed['count']} failures, "
+                f"{top_failed['rate']:.0f}% of evaluations).\n"
+                f"     Review whether this condition is "
+                f"calibrated correctly."
+            )
+
+    # ── Approval and override gap ─────────────────────
+    total_approvals: int = sum(
+        int(row.get("approval_count", 0)) for row in effectiveness
+    )
+    total_overrides: int = sum(
+        int(row.get("override_count", 0)) for row in effectiveness
+    )
+    total_denied_all: int = sum(
+        int(row.get("total_denied", 0)) for row in effectiveness
+    )
+
+    if total_denied_all > 0 and total_approvals == 0:
+        insights.append(
+            "ℹ  No approvals recorded.\n"
+            "     Approval workflow has not been exercised yet."
+        )
+
+    if total_denied_all > 0 and total_overrides == 0:
+        insights.append(
+            "ℹ  No overrides recorded.\n"
+            "     Override authority has not been exercised.\n"
+            "     Ensure authorized roles are aware of their\n"
+            "     override capability."
+        )
+
+    # ── Outcomes gap insight ──────────────────────────
+    if not outcomes and total >= 5:
+        insights.append(
+            "ℹ  No deployment outcomes recorded.\n"
+            "     Sentinel (v0.4.0) will record what actually\n"
+            "     happened after each governance decision.\n"
+            "     Without outcomes, policy effectiveness cannot\n"
+            "     be measured against real-world results."
+        )
+
+    return insights
+
+
+# =====================================================
+# HELPERS
+# =====================================================
 
 
 def _risk_bar(score: float, width: int = 12) -> str:
     """Render a simple ASCII risk bar."""
-    filled = round(score / 100 * width)
+    filled: int = round(score / 100 * width)
     return "[" + "█" * filled + "░" * (width - filled) + "]"
 
 
 def _score_to_severity(score: float) -> str:
-    """Map a 0-100 risk score to a severity label."""
-    if score >= 80:
+    """Map a 0–100 risk score to a severity label."""
+    if score >= 80.0:
         return "critical"
-    if score >= 60:
+    if score >= 60.0:
         return "high"
-    if score >= 40:
+    if score >= 40.0:
         return "medium"
-    if score >= 20:
+    if score >= 20.0:
         return "low"
     return "informational"
