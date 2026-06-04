@@ -36,13 +36,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-
 # =====================================================
 # TELEMETRY CONFIGURATION
 # =====================================================
 
 _ENV_KEY = "OW_TELEMETRY_ENABLED"
-_DB_DIR  = Path.home() / ".obsidianwall"
+_DB_DIR = Path.home() / ".obsidianwall"
 _DB_PATH = _DB_DIR / "decisions.db"
 
 

@@ -77,7 +77,7 @@ def audit(
         raise typer.Exit(code=1)
 
     # ── Load data ────────────────────────────────────
-    recent       = get_recent_decisions(limit=limit)
+    recent = get_recent_decisions(limit=limit)
     effectiveness = get_policy_effectiveness(policy_name=policy)
     domain_summary = get_domain_risk_summary()
 
@@ -91,9 +91,9 @@ def audit(
     # ── JSON output ──────────────────────────────────
     if output_format == "json":
         output = {
-            "audit_summary":       domain_summary,
+            "audit_summary": domain_summary,
             "policy_effectiveness": effectiveness,
-            "recent_decisions":    recent[:limit],
+            "recent_decisions": recent[:limit],
         }
         typer.echo(json.dumps(output, indent=2))
         return
@@ -109,11 +109,11 @@ def audit(
 
 
 def _print_audit_table(
-    recent:        list[dict],
+    recent: list[dict],
     effectiveness: list[dict],
     domain_summary: dict,
     policy_filter: str | None,
-    limit:         int,
+    limit: int,
 ) -> None:
     """Render the governance audit as a formatted table."""
 
@@ -126,10 +126,10 @@ def _print_audit_table(
     typer.echo("─" * width)
 
     # ── Overview ─────────────────────────────────────
-    total      = domain_summary.get("total_evaluations", 0)
-    denied     = domain_summary.get("total_denied", 0)
-    deny_rate  = domain_summary.get("deny_rate", 0)
-    allowed    = total - denied
+    total = domain_summary.get("total_evaluations", 0)
+    denied = domain_summary.get("total_denied", 0)
+    deny_rate = domain_summary.get("deny_rate", 0)
+    allowed = total - denied
 
     typer.echo(f"\n  Total evaluations:  {total}")
     typer.echo(f"  Allowed:            {allowed}")
@@ -143,21 +143,19 @@ def _print_audit_table(
         typer.echo("─" * width)
 
         domain_labels = {
-            "cost_analysis":         "Cost",
-            "topology_analysis":     "Network/Topology",
+            "cost_analysis": "Cost",
+            "topology_analysis": "Network/Topology",
             "architecture_analysis": "Architecture",
-            "utilization_analysis":  "Utilization",
+            "utilization_analysis": "Utilization",
         }
 
         for domain, score in sorted(
             domain_scores.items(), key=lambda x: x[1], reverse=True
         ):
-            label    = domain_labels.get(domain, domain)
-            bar      = _risk_bar(score)
+            label = domain_labels.get(domain, domain)
+            bar = _risk_bar(score)
             severity = _score_to_severity(score)
-            typer.echo(
-                f"  {label:<24}  {bar}  {score:>5.1f}/100  {severity}"
-            )
+            typer.echo(f"  {label:<24}  {bar}  {score:>5.1f}/100  {severity}")
 
     # ── Policy effectiveness ──────────────────────────
     if effectiveness:
@@ -168,42 +166,35 @@ def _print_audit_table(
             f"  {'Policy':<40}  {'Evals':>6}  {'Denied':>7}  "
             f"{'Override':>9}  {'Rate':>6}"
         )
-        typer.echo(f"  {'─'*40}  {'─'*6}  {'─'*7}  {'─'*9}  {'─'*6}")
+        typer.echo(f"  {'─' * 40}  {'─' * 6}  {'─' * 7}  {'─' * 9}  {'─' * 6}")
 
         for row in effectiveness:
-            evals     = row.get("total_evaluations", 0)
-            denied    = row.get("total_denied", 0)
+            evals = row.get("total_evaluations", 0)
+            denied = row.get("total_denied", 0)
             overrides = row.get("override_count", 0)
-            rate      = round(denied / evals * 100, 1) if evals else 0
-            name      = row.get("policy_name", "")[:38]
+            rate = round(denied / evals * 100, 1) if evals else 0
+            name = row.get("policy_name", "")[:38]
 
             typer.echo(
-                f"  {name:<40}  {evals:>6}  {denied:>7}  "
-                f"{overrides:>9}  {rate:>5.1f}%"
+                f"  {name:<40}  {evals:>6}  {denied:>7}  {overrides:>9}  {rate:>5.1f}%"
             )
 
     # ── Recent decisions ──────────────────────────────
     typer.echo(f"\n{'─' * width}")
     typer.echo(f"  Recent Decisions  (last {min(len(recent), limit)})")
     typer.echo("─" * width)
-    typer.echo(
-        f"  {'Decision ID':<12}  {'Policy':<32}  "
-        f"{'Decision':<24}  {'Score':>6}"
-    )
-    typer.echo(
-        f"  {'─'*12}  {'─'*32}  {'─'*24}  {'─'*6}"
-    )
+    typer.echo(f"  {'Decision ID':<12}  {'Policy':<32}  {'Decision':<24}  {'Score':>6}")
+    typer.echo(f"  {'─' * 12}  {'─' * 32}  {'─' * 24}  {'─' * 6}")
 
     for row in recent[:limit]:
-        short_id  = str(row.get("id", ""))[:8]
-        name      = str(row.get("policy_name", ""))[:30]
-        decision  = str(row.get("decision", ""))[:22]
-        score     = row.get("overall_risk_score", 0)
-        icon      = "✅" if "ALLOW" == row.get("decision") else "🚫"
+        short_id = str(row.get("id", ""))[:8]
+        name = str(row.get("policy_name", ""))[:30]
+        decision = str(row.get("decision", ""))[:22]
+        score = row.get("overall_risk_score", 0)
+        icon = "✅" if "ALLOW" == row.get("decision") else "🚫"
 
         typer.echo(
-            f"  {short_id:<12}  {name:<32}  "
-            f"{icon} {decision:<22}  {score:>5}/100"
+            f"  {short_id:<12}  {name:<32}  {icon} {decision:<22}  {score:>5}/100"
         )
 
     typer.echo("\n" + "─" * width + "\n")
