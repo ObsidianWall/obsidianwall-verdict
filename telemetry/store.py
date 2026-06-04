@@ -7,8 +7,10 @@
 # - Initialize database schema on first use
 # - Write governance decisions to local store
 # - Write override and approval events
+# - Write outcome events (populated by Sentinel v0.4.0)
 # - Query decision history for audit command
 # - Query policy effectiveness metrics
+# - Query outcome correlation for governance intelligence
 #
 # Privacy:
 # - No plan contents stored
@@ -17,10 +19,18 @@
 # - No organization identifiers stored
 # - Plan is represented by SHA-256 hash only
 #
-# Schema:
-#   decisions      → one row per evaluation
-#   overrides      → one row per override event
-#   approvals      → one row per approval event
+# Telemetry layers implemented here:
+#   Layer 1 — Decision Telemetry      (decisions table)
+#   Layer 2 — Evaluation Telemetry    (decisions table — conditions)
+#   Layer 3 — Governance Workflow     (overrides + approvals tables)
+#   Layer 4 — Outcome Telemetry       (outcomes table — schema defined,
+#                                      populated by Sentinel v0.4.0)
+#   Layer 5 — Drift Telemetry         (outcomes table, type=drift_detected)
+#   Layer 6 — Effectiveness Telemetry (policy_effectiveness — derived/computed)
+#
+# Database evolution:
+#   v0.3.0  SQLite — local only (~/.obsidianwall/decisions.db)
+#   Compass PostgreSQL (Supabase) — hosted, multi-tenant
 #
 # Location:
 #   ~/.obsidianwall/decisions.db
@@ -30,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,6 +54,7 @@ from telemetry.config import get_db_path, is_telemetry_enabled
 
 _SCHEMA = """
 -- Governance decision history.
+-- Layers 1 + 2: Decision and Evaluation Telemetry.
 -- One row per verdict evaluate invocation.
 CREATE TABLE IF NOT EXISTS decisions (
     id                  TEXT PRIMARY KEY,
@@ -68,6 +80,7 @@ CREATE TABLE IF NOT EXISTS decisions (
 );
 
 -- Override events.
+-- Layer 3: Governance Workflow Telemetry.
 -- One row per override decision on a blocked deployment.
 CREATE TABLE IF NOT EXISTS overrides (
     id              TEXT PRIMARY KEY,
@@ -79,6 +92,7 @@ CREATE TABLE IF NOT EXISTS overrides (
 );
 
 -- Approval events.
+-- Layer 3: Governance Workflow Telemetry.
 -- One row per approval workflow resolution.
 CREATE TABLE IF NOT EXISTS approvals (
     id              TEXT PRIMARY KEY,
@@ -90,7 +104,37 @@ CREATE TABLE IF NOT EXISTS approvals (
     FOREIGN KEY (decision_id) REFERENCES decisions(id)
 );
 
+-- Outcome events.
+-- Layer 4 + 5: Outcome and Drift Telemetry.
+-- Schema defined now. Populated by Sentinel v0.4.0.
+--
+-- outcome_type values:
+--   deployment_success    → deployment completed
+--   deployment_failure    → deployment failed after authorization
+--   budget_overrun        → actual cost exceeded estimate
+--   security_incident     → security event after allowed deployment
+--   compliance_violation  → compliance failure after allowed deployment
+--   availability_event    → availability impact after deployment
+--   drift_detected        → resource drifted from declared state
+--
+-- Correlating decisions with outcomes enables:
+--   "92% of cost denials that were overridden
+--    resulted in budget_overrun within 30 days"
+--
+-- That is Governance Intelligence.
+CREATE TABLE IF NOT EXISTS outcomes (
+    id              TEXT PRIMARY KEY,
+    decision_id     TEXT NOT NULL,
+    outcome_type    TEXT NOT NULL,
+    timestamp       TEXT NOT NULL,
+    severity        TEXT,
+    description     TEXT,
+    metadata        TEXT,
+    FOREIGN KEY (decision_id) REFERENCES decisions(id)
+);
+
 -- Policy effectiveness summary.
+-- Layer 6: Effectiveness Telemetry (derived, not collected).
 -- Updated on each evaluation — running totals per policy.
 CREATE TABLE IF NOT EXISTS policy_effectiveness (
     policy_name         TEXT PRIMARY KEY,
@@ -133,7 +177,7 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 # =====================================================
-# WRITE
+# WRITE — Layer 1 + 2: Decision and Evaluation
 # =====================================================
 
 
@@ -143,6 +187,7 @@ def record_decision(
 ) -> bool:
     """
     Write a governance decision to the local store.
+    Covers telemetry layers 1 and 2.
 
     Only writes if telemetry is enabled.
     Never writes plan contents — only a SHA-256
@@ -176,17 +221,13 @@ def record_decision(
                 plan_path.encode("utf-8")
             ).hexdigest()[:16]
 
-        # Extract risk summary
-        risk_summary: dict[str, Any] = result.get(
-            "risk_summary", {}
-        )
+        risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
-        # Extract condition traces
-        trace: list[dict[str, Any]] = result.get("trace", [])
-        failed  = [t["condition_id"] for t in trace if not t.get("result", True)]
-        passed  = [t["condition_id"] for t in trace if t.get("result", True)]
+        # Layer 2: condition evaluation detail
+        trace:  list[dict[str, Any]] = result.get("trace", [])
+        failed = [t["condition_id"] for t in trace if not t.get("result", True)]
+        passed = [t["condition_id"] for t in trace if t.get("result", True)]
 
-        # Analyzer scores — store as JSON string
         analyzer_scores = json.dumps(
             risk_summary.get("analyzer_scores", {})
         )
@@ -219,7 +260,7 @@ def record_decision(
                 decision_id,
                 timestamp,
                 result.get("policy", ""),
-                None,                          # policy_type added in v0.3.5
+                None,
                 result.get("decision", ""),
                 1 if result.get("conditions_passed") else 0,
                 risk_summary.get("overall_risk_score", 0),
@@ -228,14 +269,14 @@ def record_decision(
                 1 if result.get("override_required") else 0,
                 1 if result.get("override_possible") else 0,
                 1 if result.get("requires_approval") else 0,
-                None,                          # user_role not in result yet
+                None,
                 plan_hash,
                 risk_summary.get("total_findings", 0),
                 json.dumps(failed),
                 json.dumps(passed),
                 analyzer_scores,
                 result.get("pricing_mode", "table"),
-                None,                          # region not in result yet
+                None,
             ),
         )
 
@@ -255,6 +296,11 @@ def record_decision(
         return False
 
 
+# =====================================================
+# WRITE — Layer 3: Governance Workflow
+# =====================================================
+
+
 def record_override(
     decision_id:   str,
     override_role: str | None,
@@ -262,22 +308,13 @@ def record_override(
 ) -> bool:
     """
     Record an override event against a decision.
-
-    Args:
-        decision_id:   the decision being overridden
-        override_role: role exercising override authority
-        approved:      whether the override was approved
-
-    Returns:
-        True if written, False if telemetry disabled
+    Telemetry layer 3.
     """
     if not is_telemetry_enabled():
         return False
 
     try:
-        import uuid
         conn = init_db()
-
         conn.execute(
             """
             INSERT INTO overrides (
@@ -293,10 +330,8 @@ def record_override(
                 1 if approved else 0,
             ),
         )
-
         conn.commit()
         conn.close()
-
         return True
 
     except Exception:
@@ -311,23 +346,13 @@ def record_approval(
 ) -> bool:
     """
     Record an approval event against a decision.
-
-    Args:
-        decision_id:   the decision requiring approval
-        approver_role: role approving or rejecting
-        approved:      whether approval was granted
-        notes:         optional approval notes
-
-    Returns:
-        True if written, False if telemetry disabled
+    Telemetry layer 3.
     """
     if not is_telemetry_enabled():
         return False
 
     try:
-        import uuid
         conn = init_db()
-
         conn.execute(
             """
             INSERT INTO approvals (
@@ -344,7 +369,6 @@ def record_approval(
                 notes,
             ),
         )
-
         conn.commit()
         conn.close()
         return True
@@ -354,7 +378,75 @@ def record_approval(
 
 
 # =====================================================
-# EFFECTIVENESS TRACKING
+# WRITE — Layer 4 + 5: Outcome and Drift
+# Populated by Sentinel v0.4.0.
+# Schema defined here so correlation exists from day one.
+# =====================================================
+
+
+def record_outcome(
+    decision_id:  str,
+    outcome_type: str,
+    severity:     str | None = None,
+    description:  str | None = None,
+    metadata:     dict[str, Any] | None = None,
+) -> bool:
+    """
+    Record an outcome event against a governance decision.
+    Telemetry layers 4 and 5.
+
+    Called by Sentinel after deployment observation.
+    Can also be called manually via verdict outcome command
+    in a future release.
+
+    outcome_type values:
+        deployment_success, deployment_failure,
+        budget_overrun, security_incident,
+        compliance_violation, availability_event,
+        drift_detected
+
+    Args:
+        decision_id:  UUID of the original governance decision
+        outcome_type: what actually happened
+        severity:     informational | low | medium | high | critical
+        description:  human-readable outcome description
+        metadata:     domain-specific outcome data (JSON-serializable)
+
+    Returns:
+        True if written, False if telemetry disabled or failed
+    """
+    if not is_telemetry_enabled():
+        return False
+
+    try:
+        conn = init_db()
+        conn.execute(
+            """
+            INSERT INTO outcomes (
+                id, decision_id, outcome_type,
+                timestamp, severity, description, metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                decision_id,
+                outcome_type,
+                datetime.now(timezone.utc).isoformat(),
+                severity,
+                description,
+                json.dumps(metadata) if metadata else None,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    except Exception:
+        return False
+
+
+# =====================================================
+# EFFECTIVENESS — Layer 6 (derived)
 # =====================================================
 
 
@@ -365,11 +457,10 @@ def _update_effectiveness(
     timestamp:   str,
 ) -> None:
     """
-    Update running totals in policy_effectiveness table.
-    Called inside record_decision — same connection/transaction.
+    Update running totals in policy_effectiveness.
+    Called inside record_decision — same connection.
     """
-    now = datetime.now(timezone.utc).isoformat()
-
+    now       = datetime.now(timezone.utc).isoformat()
     is_denied = decision in ("DENY", "DENY_WITH_OVERRIDE")
 
     conn.execute(
@@ -397,32 +488,19 @@ def _update_effectiveness(
 
 
 # =====================================================
-# READ — for verdict audit and verdict history
+# READ — for verdict audit, history, effectiveness
 # =====================================================
 
 
 def get_recent_decisions(
-    limit: int = 50,
+    limit:   int        = 50,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Return the most recent governance decisions.
-
-    Args:
-        limit:   maximum rows to return
-        db_path: optional path override (for testing)
-
-    Returns:
-        list of decision dicts ordered by timestamp desc
-    """
+    """Return most recent governance decisions."""
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
-            """
-            SELECT * FROM decisions
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
+            "SELECT * FROM decisions ORDER BY timestamp DESC LIMIT ?",
             (limit,),
         )
         rows = [dict(row) for row in cursor.fetchall()]
@@ -433,33 +511,25 @@ def get_recent_decisions(
 
 
 def get_policy_effectiveness(
-    policy_name: str | None = None,
-    db_path: Path | None = None,
+    policy_name: str | None  = None,
+    db_path:     Path | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Return policy effectiveness summaries.
-
-    Args:
-        policy_name: filter to specific policy (optional)
-        db_path:     optional path override (for testing)
-
-    Returns:
-        list of effectiveness dicts
-    """
+    """Return policy effectiveness summaries with override counts."""
     try:
         conn = init_db(db_path)
-
         if policy_name:
             cursor = conn.execute(
                 """
                 SELECT
                     pe.*,
-                    COUNT(o.id) as override_count,
-                    COUNT(a.id) as approval_count
+                    COUNT(DISTINCT o.id) as override_count,
+                    COUNT(DISTINCT a.id) as approval_count,
+                    COUNT(DISTINCT oc.id) as outcome_count
                 FROM policy_effectiveness pe
-                LEFT JOIN decisions d ON d.policy_name = pe.policy_name
-                LEFT JOIN overrides o ON o.decision_id = d.id
-                LEFT JOIN approvals a ON a.decision_id = d.id
+                LEFT JOIN decisions d  ON d.policy_name = pe.policy_name
+                LEFT JOIN overrides o  ON o.decision_id = d.id
+                LEFT JOIN approvals a  ON a.decision_id = d.id
+                LEFT JOIN outcomes  oc ON oc.decision_id = d.id
                 WHERE pe.policy_name = ?
                 GROUP BY pe.policy_name
                 """,
@@ -470,17 +540,18 @@ def get_policy_effectiveness(
                 """
                 SELECT
                     pe.*,
-                    COUNT(o.id) as override_count,
-                    COUNT(a.id) as approval_count
+                    COUNT(DISTINCT o.id) as override_count,
+                    COUNT(DISTINCT a.id) as approval_count,
+                    COUNT(DISTINCT oc.id) as outcome_count
                 FROM policy_effectiveness pe
-                LEFT JOIN decisions d ON d.policy_name = pe.policy_name
-                LEFT JOIN overrides o ON o.decision_id = d.id
-                LEFT JOIN approvals a ON a.decision_id = d.id
+                LEFT JOIN decisions d  ON d.policy_name = pe.policy_name
+                LEFT JOIN overrides o  ON o.decision_id = d.id
+                LEFT JOIN approvals a  ON a.decision_id = d.id
+                LEFT JOIN outcomes  oc ON oc.decision_id = d.id
                 GROUP BY pe.policy_name
                 ORDER BY pe.total_evaluations DESC
                 """
             )
-
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return rows
@@ -490,27 +561,31 @@ def get_policy_effectiveness(
 
 def get_decision_by_id(
     decision_id: str,
-    db_path: Path | None = None,
+    db_path:     Path | None = None,
 ) -> dict[str, Any] | None:
-    """
-    Return a single decision by ID.
-
-    Args:
-        decision_id: the UUID of the decision
-        db_path:     optional path override (for testing)
-
-    Returns:
-        decision dict or None if not found
-    """
+    """Return a single decision by ID with outcomes."""
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             "SELECT * FROM decisions WHERE id = ?",
             (decision_id,),
         )
         row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return None
+
+        result = dict(row)
+
+        # Include outcomes if any exist
+        outcomes_cursor = conn.execute(
+            "SELECT * FROM outcomes WHERE decision_id = ? ORDER BY timestamp",
+            (decision_id,),
+        )
+        result["outcomes"] = [dict(r) for r in outcomes_cursor.fetchall()]
+
         conn.close()
-        return dict(row) if row else None
+        return result
     except Exception:
         return None
 
@@ -521,26 +596,15 @@ def get_domain_risk_summary(
     """
     Return aggregated risk scores by governance domain.
     Used by verdict audit command.
-
-    Args:
-        db_path: optional path override (for testing)
-
-    Returns:
-        dict of domain → aggregated risk data
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT
-                policy_name,
-                decision,
-                overall_risk_score,
-                effective_severity,
-                analyzer_scores,
-                conditions_passed,
-                failed_conditions,
-                timestamp
+                policy_name, decision, overall_risk_score,
+                effective_severity, analyzer_scores,
+                conditions_passed, failed_conditions, timestamp
             FROM decisions
             ORDER BY timestamp DESC
             LIMIT 500
@@ -552,9 +616,7 @@ def get_domain_risk_summary(
         if not rows:
             return {}
 
-        # Aggregate analyzer scores across recent decisions
         domain_scores: dict[str, list[int]] = {}
-        deny_counts:   dict[str, int] = {}
         total_count = len(rows)
         deny_total  = sum(1 for r in rows if "DENY" in r["decision"])
 
@@ -568,19 +630,50 @@ def get_domain_risk_summary(
             except (json.JSONDecodeError, TypeError):
                 continue
 
-        summary: dict[str, Any] = {
+        return {
             "total_evaluations": total_count,
             "total_denied":      deny_total,
             "deny_rate":         round(deny_total / total_count * 100, 1)
                                  if total_count else 0,
             "domain_avg_scores": {
-                domain: round(sum(scores) / len(scores), 1)
-                for domain, scores in domain_scores.items()
-                if scores
+                domain: round(sum(s) / len(s), 1)
+                for domain, s in domain_scores.items()
+                if s
             },
         }
 
-        return summary
-
     except Exception:
         return {}
+
+
+def get_outcome_correlation(
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Correlate governance decisions with outcomes.
+    Powers future Governance Intelligence in Compass.
+
+    Example result:
+        "budget policy DENY overridden 91% of the time,
+         budget_overrun outcome in 73% of those cases"
+    """
+    try:
+        conn   = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT
+                d.policy_name,
+                d.decision,
+                oc.outcome_type,
+                COUNT(*) as frequency
+            FROM decisions d
+            JOIN outcomes oc ON oc.decision_id = d.id
+            GROUP BY d.policy_name, d.decision, oc.outcome_type
+            ORDER BY frequency DESC
+            """
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+    except Exception:
+        return []
