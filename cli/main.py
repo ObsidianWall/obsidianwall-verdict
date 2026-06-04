@@ -22,7 +22,7 @@ from typing import Any
 import typer
 
 from audit.audit_logger import get_logger
-from cli.commands.audit import audit
+from cli.commands.audit import audit_app
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
@@ -36,7 +36,7 @@ app = typer.Typer(
 )
 
 # ── Register commands ──────────────────────────
-app.command(name="audit")(audit)
+app.add_typer(audit_app, name="audit")
 
 
 def _version_callback(value: bool) -> None:
