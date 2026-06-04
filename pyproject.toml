@@ -71,6 +71,7 @@ include = [
     "cli*",
     "context*",
     "scripts*",
+    "telemetry*",
 ]
 exclude = [
     "tests*",

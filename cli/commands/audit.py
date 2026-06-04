@@ -33,10 +33,7 @@ from telemetry.store import (
     get_recent_decisions,
 )
 
-audit_app = typer.Typer()
 
-
-@audit_app.command()
 def audit(
     policy: Optional[str] = typer.Option(
         None,
