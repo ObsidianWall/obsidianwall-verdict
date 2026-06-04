@@ -47,6 +47,7 @@ from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
 
+
 # =====================================================
 # SCHEMA
 # =====================================================
@@ -216,7 +217,9 @@ def record_decision(
         # Hash the plan path — never store plan contents
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
+            plan_hash = hashlib.sha256(
+                plan_path.encode("utf-8")
+            ).hexdigest()[:16]
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
@@ -617,7 +620,9 @@ def get_domain_risk_summary(
 
         for row in rows:
             try:
-                scores: dict[str, int] = json.loads(row.get("analyzer_scores") or "{}")
+                scores: dict[str, int] = json.loads(
+                    row.get("analyzer_scores") or "{}"
+                )
                 for domain, score in scores.items():
                     domain_scores.setdefault(domain, []).append(score)
             except (json.JSONDecodeError, TypeError):
@@ -626,7 +631,11 @@ def get_domain_risk_summary(
         return {
             "total_evaluations": total_count,
             "total_denied": deny_total,
-            "deny_rate": round(deny_total / total_count * 100, 1) if total_count else 0,
+            "deny_rate": (
+                round(deny_total / total_count * 100, 1)
+                if total_count
+                else 0
+            ),
             "domain_avg_scores": {
                 domain: round(sum(s) / len(s), 1)
                 for domain, s in domain_scores.items()
@@ -636,6 +645,156 @@ def get_domain_risk_summary(
 
     except Exception:
         return {}
+
+
+def get_failed_conditions_summary(
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate failed condition counts across all decisions.
+    Powers the 'Why denied?' section of verdict audit.
+
+    Returns a list of dicts sorted by failure count descending:
+        [{"condition_id": "budget_check", "count": 5, "rate": 83.3}]
+
+    rate is the percentage of total evaluations in which
+    this condition failed — not just evaluations where
+    conditions were checked.
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT failed_conditions
+            FROM decisions
+            WHERE failed_conditions IS NOT NULL
+            """
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        if not rows:
+            return []
+
+        condition_counts: dict[str, int] = {}
+        total: int = len(rows)
+
+        for row in rows:
+            try:
+                failed: list[str] = json.loads(
+                    row.get("failed_conditions") or "[]"
+                )
+                for cid in failed:
+                    condition_counts[cid] = (
+                        condition_counts.get(cid, 0) + 1
+                    )
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        return sorted(
+            [
+                {
+                    "condition_id": cid,
+                    "count":        count,
+                    "rate":         round(count / total * 100, 1),
+                }
+                for cid, count in condition_counts.items()
+            ],
+            key=lambda x: x["count"],  # type: ignore[return-value]
+            reverse=True,
+        )
+
+    except Exception:
+        return []
+
+
+def get_passed_conditions_summary(
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate passed condition counts across all decisions.
+    Powers the 'Why allowed?' section of verdict audit.
+
+    Returns a list of dicts sorted by pass count descending:
+        [{"condition_id": "budget_check", "count": 10, "rate": 100.0}]
+
+    rate is the percentage of total evaluations in which
+    this condition passed.
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT passed_conditions
+            FROM decisions
+            WHERE passed_conditions IS NOT NULL
+            """
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        if not rows:
+            return []
+
+        condition_counts: dict[str, int] = {}
+        total: int = len(rows)
+
+        for row in rows:
+            try:
+                passed: list[str] = json.loads(
+                    row.get("passed_conditions") or "[]"
+                )
+                for cid in passed:
+                    condition_counts[cid] = (
+                        condition_counts.get(cid, 0) + 1
+                    )
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        return sorted(
+            [
+                {
+                    "condition_id": cid,
+                    "count":        count,
+                    "rate":         round(count / total * 100, 1),
+                }
+                for cid, count in condition_counts.items()
+            ],
+            key=lambda x: x["count"],  # type: ignore[return-value]
+            reverse=True,
+        )
+
+    except Exception:
+        return []
+
+
+def get_outcome_summary(
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Return outcome type counts across all recorded outcomes.
+    Empty until Sentinel v0.4.0 starts recording outcomes.
+
+    Powers the 'Deployment Outcomes' section of verdict audit.
+
+    Returns a list of dicts sorted by frequency descending:
+        [{"outcome_type": "budget_overrun", "count": 3}]
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT outcome_type, COUNT(*) as count
+            FROM outcomes
+            GROUP BY outcome_type
+            ORDER BY count DESC
+            """
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+    except Exception:
+        return []
 
 
 def get_outcome_correlation(
@@ -648,6 +807,8 @@ def get_outcome_correlation(
     Example result:
         "budget policy DENY overridden 91% of the time,
          budget_overrun outcome in 73% of those cases"
+
+    Empty until Sentinel v0.4.0 populates the outcomes table.
     """
     try:
         conn = init_db(db_path)
