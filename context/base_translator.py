@@ -73,9 +73,7 @@ class BaseTranslator(ABC):
             FileNotFoundError: if plan_path does not exist
             ValueError:        if plan format is invalid
         """
-        raise NotImplementedError(
-          f"{self.__class__.__name__} must implement parse()"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} must implement parse()")
 
     @property
     @abstractmethod
