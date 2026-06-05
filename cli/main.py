@@ -23,6 +23,7 @@ import typer
 
 from audit.audit_logger import get_logger
 from cli.commands.audit import audit_app
+from cli.commands.test_command import test_command
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
@@ -37,6 +38,7 @@ app = typer.Typer(
 
 # ── Register commands ──────────────────────────
 app.add_typer(audit_app, name="audit")
+app.command(name="test")(test_command)
 
 
 def _version_callback(value: bool) -> None:

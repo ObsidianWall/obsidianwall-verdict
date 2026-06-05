@@ -47,7 +47,6 @@ from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
 
-
 # =====================================================
 # SCHEMA
 # =====================================================
@@ -217,9 +216,7 @@ def record_decision(
         # Hash the plan path — never store plan contents
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(
-                plan_path.encode("utf-8")
-            ).hexdigest()[:16]
+            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
@@ -620,9 +617,7 @@ def get_domain_risk_summary(
 
         for row in rows:
             try:
-                scores: dict[str, int] = json.loads(
-                    row.get("analyzer_scores") or "{}"
-                )
+                scores: dict[str, int] = json.loads(row.get("analyzer_scores") or "{}")
                 for domain, score in scores.items():
                     domain_scores.setdefault(domain, []).append(score)
             except (json.JSONDecodeError, TypeError):
@@ -632,9 +627,7 @@ def get_domain_risk_summary(
             "total_evaluations": total_count,
             "total_denied": deny_total,
             "deny_rate": (
-                round(deny_total / total_count * 100, 1)
-                if total_count
-                else 0
+                round(deny_total / total_count * 100, 1) if total_count else 0
             ),
             "domain_avg_scores": {
                 domain: round(sum(s) / len(s), 1)
@@ -681,13 +674,9 @@ def get_failed_conditions_summary(
 
         for row in rows:
             try:
-                failed: list[str] = json.loads(
-                    row.get("failed_conditions") or "[]"
-                )
+                failed: list[str] = json.loads(row.get("failed_conditions") or "[]")
                 for cid in failed:
-                    condition_counts[cid] = (
-                        condition_counts.get(cid, 0) + 1
-                    )
+                    condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -695,8 +684,8 @@ def get_failed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count":        count,
-                    "rate":         round(count / total * 100, 1),
+                    "count": count,
+                    "rate": round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
@@ -741,13 +730,9 @@ def get_passed_conditions_summary(
 
         for row in rows:
             try:
-                passed: list[str] = json.loads(
-                    row.get("passed_conditions") or "[]"
-                )
+                passed: list[str] = json.loads(row.get("passed_conditions") or "[]")
                 for cid in passed:
-                    condition_counts[cid] = (
-                        condition_counts.get(cid, 0) + 1
-                    )
+                    condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -755,8 +740,8 @@ def get_passed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count":        count,
-                    "rate":         round(count / total * 100, 1),
+                    "count": count,
+                    "rate": round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
