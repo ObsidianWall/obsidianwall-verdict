@@ -73,7 +73,9 @@ class BaseTranslator(ABC):
             FileNotFoundError: if plan_path does not exist
             ValueError:        if plan format is invalid
         """
-        ...
+        raise NotImplementedError(
+          f"{self.__class__.__name__} must implement parse()"
+        )
 
     @property
     @abstractmethod
@@ -85,7 +87,9 @@ class BaseTranslator(ABC):
         Examples: "terraform_json", "cloudformation",
                   "bicep", "pulumi"
         """
-        ...
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement plan_format"
+        )
 
     @property
     @abstractmethod
@@ -95,7 +99,9 @@ class BaseTranslator(ABC):
 
         Examples: (".json",), (".yaml", ".yml")
         """
-        ...
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement supported_extensions"
+        )
 
     def _empty_context(self) -> dict[str, Any]:
         """
