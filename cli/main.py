@@ -6,6 +6,7 @@
 # Commands:
 #   evaluate   Evaluate a Terraform plan against a policy
 #   validate   Validate a policy schema only
+#   audit      Governance risk summary across recorded decisions
 #
 # Enterprise design:
 #   Validation explicit      ← compliance requirement
@@ -21,16 +22,23 @@ from typing import Any
 import typer
 
 from audit.audit_logger import get_logger
+from cli.commands.audit import audit_app
+from cli.commands.test_command import test_command
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
+from telemetry.store import record_decision
 
 app = typer.Typer(
     name="verdict",
     help="ObsidianWall Verdict — pre-deployment infrastructure governance.",
     add_completion=False,
 )
+
+# ── Register commands ──────────────────────────
+app.add_typer(audit_app, name="audit")
+app.command(name="test")(test_command)
 
 
 def _version_callback(value: bool) -> None:
@@ -105,8 +113,7 @@ def evaluate(
             "Combined with estimated_cost to check total projected spend "
             "against your budget limit. "
             "Example: --current-spend 30.0 means $30 already spent this month. "
-            "Defaults to 0.0. Connect to Azure Cost Management API in future "
-            "versions for automatic current spend detection."
+            "Defaults to 0.0."
         ),
     ),
 ) -> None:
@@ -202,6 +209,15 @@ def evaluate(
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, default=str)
 
+        # ---------------------------------------------
+        # STEP 5 — Record to telemetry store
+        # Only writes if OW_TELEMETRY_ENABLED=true.
+        # Silently no-ops if telemetry is disabled.
+        # Never raises — telemetry must not crash CLI.
+        # ---------------------------------------------
+
+        record_decision(result=result, plan_path=plan)
+
         logger.info(
             "evaluation_completed",
             extra={
@@ -213,7 +229,7 @@ def evaluate(
         )
 
         # ---------------------------------------------
-        # STEP 5 — Print audit artifact to stdout
+        # STEP 6 — Print audit artifact to stdout
         # Structured logs go to stderr via audit_logger.
         # The final JSON artifact goes to stdout.
         # This separation allows shell piping and
@@ -223,7 +239,7 @@ def evaluate(
         print(json.dumps(result, indent=2, default=str))
 
         # ---------------------------------------------
-        # STEP 6 — Exit code based on decision
+        # STEP 7 — Exit code based on decision
         # Non-zero exit blocks CI/CD pipelines
         # automatically on DENY decisions.
         # ---------------------------------------------

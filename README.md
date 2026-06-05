@@ -15,9 +15,11 @@ before they become incidents.
 
 ## What it does
 
-Verdict runs as a CLI command or a GitHub Actions step. It takes a Terraform
-plan and a policy file, evaluates the plan deterministically against the policy
-conditions, and produces a governance decision with a full audit trail.
+Verdict sits between `terraform plan` and `terraform apply`. It takes a
+Terraform plan and a policy file, evaluates the plan deterministically
+against your governance policies, and produces a decision — with a full
+audit trail, risk score, stakeholder notifications, and explainability
+built in.
 
 ```
 $ verdict evaluate \
@@ -120,9 +122,195 @@ blocking CI/CD pipelines automatically.
 
 ---
 
+## Commands
+
+### verdict evaluate
+
+Evaluate a Terraform plan against a governance policy.
+
+```bash
+verdict evaluate \
+  --plan          terraform_plan.json \
+  --policy        policies/cost/budget.yaml \
+  --role          engineer \
+  --current-spend 30.0
+```
+
+| Flag | Description |
+|------|-------------|
+| `--plan` | Path to Terraform plan JSON |
+| `--policy` | Path to policy YAML file |
+| `--role` | Role of the user triggering the deployment |
+| `--current-spend` | Spend already incurred this month (default: 0.0) |
+| `--pricing` | `table` (default, offline) or `live` (Azure Retail API) |
+| `--region` | Cloud region for live pricing (default: eastus) |
+| `--output` | Path to write the audit artifact (default: output/result.json) |
+
+---
+
+### verdict validate
+
+Check that a policy file is valid before using it in an evaluation.
+Useful when writing new policies — catches schema errors immediately
+without needing a plan file.
+
+```bash
+verdict validate --policy policies/cost/budget.yaml
+```
+
+Returns a JSON object with `status: valid` or `status: invalid` and
+the error if the policy fails validation.
+
+---
+
+### verdict test
+
+Assert that a Terraform plan produces a specific governance decision.
+This is the policy regression testing command — use it to verify
+your policies behave correctly and catch regressions when policies change.
+
+```bash
+verdict test \
+  --plan   terraform_plan.json \
+  --policy policies/cost/budget.yaml \
+  --expect DENY_WITH_OVERRIDE
+```
+
+```
+  ✅ Test passed
+
+  Policy:   policies/cost/budget.yaml
+  Plan:     terraform_plan.json
+  Expected: DENY_WITH_OVERRIDE
+  Actual:   DENY_WITH_OVERRIDE
+```
+
+If the decision does not match, Verdict tells you what failed and why:
+
+```
+  ✗ Test failed
+
+  Policy:   policies/cost/budget.yaml
+  Plan:     terraform_plan.json
+  Expected: DENY
+  Actual:   DENY_WITH_OVERRIDE
+
+  Risk score:  75/100
+  Severity:    critical
+
+  Failed conditions:
+    ✗ budget_check
+```
+
+| Flag | Description |
+|------|-------------|
+| `--plan` | Path to Terraform plan JSON |
+| `--policy` | Path to policy YAML file |
+| `--expect` | Expected decision (see governance decisions table) |
+| `--role` | Role of the user (default: engineer) |
+| `--verbose` | Show full evaluation output on failure |
+
+Exit codes: `0` pass, `1` fail, `2` evaluation error.
+
+---
+
+### verdict audit
+
+Review governance decisions recorded over time. Verdict stores a local
+history of every evaluation when telemetry is enabled, and `verdict audit`
+turns that history into a governance report.
+
+**Enable telemetry first:**
+
+```bash
+export OW_TELEMETRY_ENABLED=true
+```
+
+**Run the audit:**
+
+```bash
+verdict audit
+```
+
+```
+────────────────────────────────────────────────────────────────────────
+  ObsidianWall Verdict — Governance Audit
+────────────────────────────────────────────────────────────────────────
+
+  Total evaluations:  12
+  Allowed:            4
+  Denied:             8  (66.7%)
+
+────────────────────────────────────────────────────────────────────────
+  Domain Risk Scores  (average across recorded decisions)
+────────────────────────────────────────────────────────────────────────
+  Cost                      [██████░░░░░░]   50.0/100  medium
+  Network / Topology        [███░░░░░░░░░]   25.0/100  low
+  Architecture              [░░░░░░░░░░░░]    0.0/100  informational
+  Utilization               [░░░░░░░░░░░░]    0.0/100  informational
+
+────────────────────────────────────────────────────────────────────────
+  Why Decisions Were Made
+────────────────────────────────────────────────────────────────────────
+
+  Failed conditions  (why deployments were DENIED)
+  Condition                                 Failures    Rate
+  ────────────────────────────────────────  ────────  ──────
+  budget_check                                     8   66.7%
+
+────────────────────────────────────────────────────────────────────────
+  Policy Effectiveness
+────────────────────────────────────────────────────────────────────────
+  Policy                    Evals  Denied  Overrides  Override%   Deny%
+  basic_budget_verdict         12       8          2      25.0%   66.7%
+```
+
+**Add `--insights` to get a governance interpretation:**
+
+```bash
+verdict audit --insights
+```
+
+This adds two sections at the end — Governance Insights (what patterns
+the data shows) and Recommendations (what to do about them):
+
+```
+────────────────────────────────────────────────────────────────────────
+  Governance Insights
+────────────────────────────────────────────────────────────────────────
+  ⚠  'basic_budget_verdict' has a 25.0% override rate.
+     Policy may not reflect deployment reality.
+  ℹ  Cost is the highest risk domain (avg score: 50/100).
+  ℹ  'budget_check' is the most frequently failed condition
+     (8 failures, 66.7% of evaluations).
+
+────────────────────────────────────────────────────────────────────────
+  Recommendations
+────────────────────────────────────────────────────────────────────────
+  1. Review 'basic_budget_verdict' threshold — consider whether
+     the policy limit reflects realistic deployment patterns.
+  2. Review Cost governance policies.
+     This domain is driving the most aggregate risk.
+  3. Review 'budget_check' condition — it is responsible for
+     66.7% of all denials.
+```
+
+| Flag | Description |
+|------|-------------|
+| `--insights` | Include governance insights and recommendations |
+| `--policy` | Filter to a specific policy name |
+| `--limit` | Number of recent decisions to show (default: 50) |
+| `--format` | `table` (default) or `json` |
+
+**Decision history is stored locally at `~/.obsidianwall/decisions.db`.**
+Nothing leaves your machine. Remote telemetry is not implemented yet —
+that is planned for v0.5.0 with explicit opt-in.
+
+---
+
 ## GitHub Actions
 
-Add Verdict as a governance gate in your CI/CD pipeline in one step:
+Add Verdict as a governance gate in your CI/CD pipeline:
 
 ```yaml
 # .github/workflows/governance.yml
@@ -136,7 +324,7 @@ jobs:
   governance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0   # v6.0.3
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
 
       - name: Generate Terraform plan
         run: |
@@ -161,10 +349,6 @@ jobs:
           echo "Severity:   ${{ steps.verdict.outputs.effective_severity }}"
 ```
 
-Verdict posts a governance summary table to the workflow step summary
-on every run. Budget owners and engineering leads receive notifications
-through the channels defined in the policy.
-
 ### Action outputs
 
 | Output | Description |
@@ -179,12 +363,10 @@ through the channels defined in the policy.
 
 ## How it works
 
-Verdict runs a deterministic evaluation pipeline on every invocation:
-
 ```
 Terraform plan
       ↓
-Context builder       Parses resources, estimates cost
+Translation Layer     Parses plan, estimates cost
       ↓
 Policy loader         Loads and validates the policy YAML
       ↓
@@ -209,7 +391,6 @@ Every stage is deterministic. Analyzers are advisory — they inform
 the risk score but never override the condition evaluation.
 The condition evaluation alone determines the governance decision.
 
-
 ---
 
 ## Enforcement modes
@@ -225,18 +406,15 @@ and restrict cloud credentials so only the pipeline's service principal
 can apply infrastructure. Engineers with read-only credentials cannot
 deploy directly even if they skip Verdict locally.
 
-
 ---
 
 ## Governance decisions
 
-Verdict produces one of five decisions on every evaluation:
-
 | Decision | Meaning |
 |----------|---------|
 | `ALLOW` | All conditions passed. Deployment authorized. |
-| `ALLOW_WITH_NOTIFICATION` | Conditions passed but high severity — stakeholders notified. |
-| `ALLOW_WITH_APPROVAL_REQUIRED` | Conditions passed but formal approval required before deployment. |
+| `ALLOW_WITH_NOTIFICATION` | Conditions passed but stakeholders are notified. |
+| `ALLOW_WITH_APPROVAL_REQUIRED` | Conditions passed but formal approval is required. |
 | `DENY_WITH_OVERRIDE` | Conditions failed. An authorized role may override. |
 | `DENY` | Conditions failed. No override permitted. Hard block. |
 
@@ -269,9 +447,41 @@ spec:
   actions:     list[Action]         notify / log actions
 ```
 
-### Condition expressions
+### Governance domains
 
-Expressions use a restricted grammar — no `eval()`, no dynamic code:
+Policies declare which governance domain they enforce. Verdict validates
+conditions against the declared domain and rejects mismatches.
+
+| Domain | What it governs |
+|--------|----------------|
+| `cost` | Budget spend enforcement |
+| `security` | Security posture — open ingress, public storage, encryption |
+| `compliance` | Tagging, naming, regulatory requirements |
+| `resource_limits` | Instance counts, GPU limits, sizing |
+| `network` | Network topology, segmentation, public exposure |
+| `identity` | IAM, MFA, privileged access |
+| `data_governance` | PII handling, encryption, data residency |
+| `resilience` | Availability, DR, replica counts |
+| `ai_governance` | AI system controls, model provenance, GPU workloads |
+| `composite` | Coordinates multiple domains in one policy |
+
+### Composite policies
+
+A composite policy governs multiple domains simultaneously and produces
+a single governance decision. Every domain used must be declared
+explicitly — Verdict enforces this and rejects any condition that
+references an undeclared domain.
+
+```yaml
+spec:
+  policy_type: composite
+  governance_domains:
+    - cost
+    - security
+    - compliance
+```
+
+### Condition expressions
 
 ```yaml
 conditions:
@@ -279,9 +489,9 @@ conditions:
     expression: "(current_spend + estimated_cost) <= budget.amount"
     description: "Monthly spend must not exceed budget"
 
-  - id: instance_size_check
-    expression: "estimated_cost <= max_instance_cost"
-    description: "No single instance may exceed cost threshold"
+  - id: no_open_ingress
+    expression: "open_ingress_rules <= security.max_open_ingress_rules"
+    description: "No unrestricted inbound rules permitted"
 ```
 
 Supported operators: `<=`, `>=`, `<`, `>`, `==`
@@ -362,11 +572,12 @@ assurance platform.
 │                                                     │
 │  engine/       deterministic evaluation pipeline    │
 │  schemas/      policy DSL and typed contracts       │
-│  context/      Terraform plan parsing               │
+│  context/      Translation Layer (plan parsing)     │
+│  telemetry/    local decision history (SQLite)      │
 │  audit/        structured audit logging             │
 │  cli/          command-line interface               │
 └─────────────────────────────────────────────────────┘
-         ↓ telemetry (opt-in, anonymous)
+         ↓ telemetry (opt-in, local SQLite)
 ┌─────────────────────────────────────────────────────┐
 │  Intelligence Layer  (future — private)             │
 │                                                     │
@@ -389,63 +600,71 @@ assurance platform.
 
 ---
 
+## Telemetry
+
+Telemetry is **opt-in** and **disabled by default**. When enabled,
+Verdict records governance decisions to a local SQLite database at
+`~/.obsidianwall/decisions.db`. Nothing is sent anywhere remotely.
+
+```bash
+export OW_TELEMETRY_ENABLED=true
+```
+
+**What is stored:**
+- Decision outcomes, risk scores, policy names
+- Which conditions passed and which failed
+- Override and approval events
+
+**What is never stored:**
+- Plan contents or resource configurations
+- Cost amounts or budget values
+- Resource names or identifiers
+- Organization or team identifiers
+
+Telemetry powers `verdict audit`. Without it, `verdict audit` has no
+data to read. Remote telemetry with explicit opt-in is planned for v0.5.0.
+
+---
+
 ## Development
 
-**Requirements:** Python 3.13+, Git
+**Requirements:** Python 3.11+, Git
 
 ```bash
 git clone https://github.com/obsidianwall/obsidianwall-verdict
 cd obsidianwall-verdict
-
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # Run the full test suite
 pytest tests/ -v
 
 # Run a sample evaluation
 verdict evaluate \
-  --plan  samples/terraform_plan.json \
+  --plan   samples/terraform_plan.json \
   --policy policies/cost/basic_budget.yaml \
-  --role  engineer
+  --role   engineer
 ```
 
 **Test suite:** 101 tests — unit, integration, and pipeline.
 
 ```bash
-pytest tests/unit/        # 82 tests
-pytest tests/integration/ # 11 tests
-pytest tests/             # 101 tests
+pytest tests/unit/        # unit tests
+pytest tests/integration/ # integration tests
+pytest tests/             # full suite
 ```
 
----
+**Policy examples** are in `policies/` organized by governance domain:
 
-## Policy examples
-
-Sample policies are in `policies/cost/`:
-
-| Policy | Enforcement | Use case |
-|--------|------------|---------|
-| `basic_budget.yaml` | Soft — override available | Engineering teams with budget owner oversight |
-| `strict_budget.yaml` | Hard — dual approval required | Production environments, finance-controlled budgets |
-
----
-
-## Telemetry
-
-Verdict collects anonymous usage telemetry to improve the optimization
-catalog and governance intelligence. Telemetry is **opt-in** and
-**disabled by default**.
-
-```bash
-# Enable in .env
-OW_TELEMETRY_ENABLED=true
 ```
-
-What is collected: evaluation counts, resource type distributions,
-decision outcomes, condition failure patterns.
-
-What is **never** collected: plan contents, cost amounts,
-resource names, organization identifiers, policy file contents.
+policies/
+  cost/           budget enforcement
+  security/       security posture
+  compliance/     tagging and regulatory
+  network/        topology and exposure
+  identity/       IAM and Zero Trust
+  ai_governance/  AI system controls
+  composite/      multi-domain coordination
+```
 
 ---
 
