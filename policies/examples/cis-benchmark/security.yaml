@@ -1,1 +1,112 @@
+
+# policies/examples/cis-benchmark/security.yaml
 #
+# Template: CIS Controls v8 Security Baseline
+#
+# Maps to:
+#   CIS Control 1.1  — Inventory and Control of Enterprise Assets
+#   CIS Control 3.3  — Configure Data Access Control Lists
+#   CIS Control 3.11 — Encrypt Sensitive Data at Rest
+#   CIS Control 12.2 — Establish and Maintain a Secure Network Architecture
+#   CIS Control 12.3 — Securely Manage Network Infrastructure
+#
+# Policy type: composite
+# Governance domains: security + compliance
+#
+# CIS spans two domains: security controls (encryption, access,
+# exposure) and compliance controls (asset inventory via tagging).
+# Composite type is required to enforce conditions across both.
+#
+# This template is a starting point for implementing CIS Controls v8 security
+# benchmarks in your environment. It includes conditions for key security controls
+# and compliance controls, with a governance framework for notification and override.
+#
+#
+# What to customize before using:
+#   1. Replace owner with your security team name
+#   2. Adjust notification roles to match your org
+#   3. Update override roles to your authorized approvers
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/cis-benchmark/security.yaml \
+#     --expect ALLOW
+#
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: cis_benchmark_security
+  version: "0.1"
+  owner: security-team          # Replace with your security team name
+  description: "CIS Controls v8 security baseline — security posture and asset inventory"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - security                  # CIS 3.3, 3.11, 12.2, 12.3
+    - compliance                # CIS 1.1 — asset inventory via tagging
+
+  inputs:
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    security:
+      max_open_ingress_rules:    0    # CIS 12.2 — no unrestricted inbound rules
+      max_public_storage:        0    # CIS 3.3  — no public data exposure
+      max_unencrypted_databases: 0    # CIS 3.11 — encrypt sensitive data at rest
+
+    compliance:
+      max_untagged_resources:    0    # CIS 1.1  — all assets must be inventoried
+
+  conditions:
+    - id: no_open_ingress
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "CIS 12.2 — no unrestricted inbound access rules permitted"
+
+    - id: no_public_storage
+      expression: "public_storage_buckets <= security.max_public_storage"
+      description: "CIS 3.3 — no publicly accessible storage resources"
+
+    - id: no_unencrypted_databases
+      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      description: "CIS 3.11 — all databases must be encrypted at rest"
+
+    - id: asset_inventory_complete
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "CIS 1.1 — all deployed resources must be tagged for asset inventory"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_lead       # Replace with your security lead role
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+  override:
+    roles:
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "CIS benchmark violation detected. Security review required before deployment."
+
+    - type: log
+      severity: info
+      message: "CIS security governance evaluation recorded in audit trail."

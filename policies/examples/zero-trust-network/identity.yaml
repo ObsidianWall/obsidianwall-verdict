@@ -1,1 +1,109 @@
+
+# policies/examples/zero-trust-network/identity.yaml
 #
+# Template: Zero Trust Architecture — Identity Controls
+#
+# Maps to:
+#   NIST SP 800-207 — Zero Trust Architecture
+#   Principle: Verify explicitly — authenticate and authorize every request
+#   Principle: Least privilege access — limit access by role and context
+#   CISA Zero Trust Maturity Model — Identity pillar
+#
+# Policy type: composite
+# Governance domains: identity + security + compliance
+#
+# Zero Trust identity governance spans multiple domains:
+#   identity    — least privilege, explicit ownership
+#   security    — network access restrictions (no implicit trust)
+#   compliance  — resource tagging for ownership attribution
+#
+#
+# Identity is the control plane in Zero Trust. Every resource must
+# have an explicit owner, every access request must be verified, and
+# no implicit trust is granted based on network location or resource
+# type. This policy enforces identity hygiene at the infrastructure
+# declaration layer.
+#
+# What to customize before using:
+#   1. Replace owner with your identity and access management team
+#   2. Adjust max_untagged_resources if legacy resources exist
+#   3. Replace notification and override roles
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/zero-trust-network/identity.yaml \
+#     --expect ALLOW
+#
+#
+#
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: zero_trust_identity
+  version: "0.1"
+  owner: identity-team          # Replace with your IAM team
+  description: "Zero Trust identity governance — least privilege and explicit ownership"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - identity                  # Least privilege, explicit ownership
+    - security                  # No implicit network trust
+    - compliance                # Resource ownership via tagging
+
+  inputs:
+    - open_ingress_rules
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    identity:
+      require_explicit_ownership: true    # Zero Trust — every resource must have an owner
+
+    security:
+      max_open_ingress_rules: 0           # Zero Trust — no implicit network trust
+
+    compliance:
+      max_untagged_resources: 0           # Zero Trust — all resources must have owner tags
+
+  conditions:
+    - id: no_implicit_network_trust
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "Zero Trust — no implicit inbound trust, all access must be explicitly authorized"
+
+    - id: explicit_resource_ownership
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "Zero Trust — every resource must have an explicit owner tag for least privilege enforcement"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: identity_lead         # Replace with your IAM lead role
+        channel: email
+      - role: security_lead
+        channel: slack
+
+  override:
+    roles:
+      - identity_lead
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Zero Trust identity violation. Implicit trust or unowned resources detected. IAM review required."
+
+    - type: log
+      severity: info
+      message: "Zero Trust identity governance evaluation recorded in audit trail."

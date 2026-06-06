@@ -1,1 +1,133 @@
+
+# policies/examples/production-deployment/composite.yaml
 #
+# Template: Production Deployment — Multi-Domain Governance
+#
+# Governance domains:
+#   cost        — budget enforcement
+#   security    — encryption, access, segmentation
+#   compliance  — tagging and asset inventory
+#  
+#
+# A composite policy governs multiple domains simultaneously and
+# produces a single governance decision. This template is the
+# recommended starting point for production environment gates.
+#
+# All four conditions must pass for ALLOW. A failure in any one
+# domain blocks the deployment and triggers the appropriate
+# stakeholder notification.
+#
+# What to customize before using:
+#   1. Set budget.amount to your production monthly limit
+#   2. Set compliance.max_untagged_ratio to your tagging standard
+#      (0.0 = 100% tagging required, 0.1 = 90% minimum)
+#   3. Replace all notification and approval roles
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/production-deployment/composite.yaml \
+#     --expect ALLOW
+
+# 
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: production_deployment_governance
+  version: "0.1"
+  owner: platform-team          # Replace with your platform team name
+  description: "Multi-domain production deployment governance — cost, security, compliance"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - cost
+    - security
+    - compliance
+
+  inputs:
+    - estimated_cost
+    - current_spend
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    budget:
+      amount:           10000.00           # Replace with your production monthly budget
+      period:           monthly
+      scope:            project:production  # Replace with your production project scope
+      owner:            platform-team       # Replace with your budget owner role
+      flexibility:      hard
+      override_allowed: true               # Required field — override available with approval
+
+    security:
+      max_open_ingress_rules:    0    # No unrestricted inbound in production
+      max_public_storage:        0    # No publicly accessible storage in production
+      max_unencrypted_databases: 0    # All databases encrypted in production
+
+    compliance:
+      max_untagged_resources:    0    # 100% tagging required in production
+                                      # Adjust to a small number if legacy resources exist
+
+  conditions:
+    - id: production_budget
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "Production monthly budget must not be exceeded"
+
+    - id: no_open_ingress_in_production
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "No unrestricted inbound access rules in production"
+
+    - id: no_public_storage_in_production
+      expression: "public_storage_buckets <= security.max_public_storage"
+      description: "No publicly accessible storage in production"
+
+    - id: all_databases_encrypted
+      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      description: "All databases must be encrypted in production"
+
+    - id: full_resource_tagging
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "All production resources must be tagged"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: platform_lead       # Replace with your platform lead role
+        channel: email
+      - role: security_lead       # Replace with your security lead role
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - platform_lead
+        - security_lead
+
+  override:
+    roles:
+      - platform_lead
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Production deployment governance violation. Multi-domain review required."
+
+    - type: log
+      severity: info
+      message: "Production deployment governance evaluation recorded in audit trail."

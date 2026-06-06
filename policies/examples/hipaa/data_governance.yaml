@@ -1,1 +1,129 @@
+
+# policies/examples/hipaa/data_governance.yaml
 #
+# Template: HIPAA Security Rule — PHI Infrastructure Governance
+#
+# Maps to:
+#   § 164.312(a)(1)       — Access Control
+#   § 164.312(a)(2)(iv)   — Encryption and Decryption
+#   § 164.312(b)          — Audit Controls
+#   § 164.312(c)(1)       — Integrity
+#   § 164.312(e)(1)       — Transmission Security
+#
+# Policy type: composite
+# Governance domains: data_governance + security + compliance
+#
+# HIPAA Security Rule technical safeguards span three domains:
+#   data_governance  — PHI data handling and encryption at rest
+#   security         — access controls and network exposure
+#   compliance       — tagging and audit trail requirements
+#
+#
+##
+# This policy governs infrastructure that handles Protected Health
+# Information (PHI). It enforces encryption at rest, restricted
+# access, and audit trail requirements at the deployment layer —
+# before PHI-handling infrastructure is provisioned.
+#
+# Hard DENY — HIPAA violations are not overridable by engineers.
+# Only the compliance officer can authorize exceptions with
+# documented justification.
+#
+# What to customize before using:
+#   1. Replace owner with your HIPAA compliance team
+#   2. Replace notification roles with your compliance officer
+#      and security lead
+#   3. Review conditions against your organization's BAA requirements
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/hipaa/data_governance.yaml \
+#     --expect ALLOW
+#
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: hipaa_data_governance
+  version: "0.1"
+  owner: compliance-team        # Replace with your HIPAA compliance team
+  description: "HIPAA Security Rule — PHI infrastructure governance across data, security, and compliance domains"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - data_governance           # § 164.312(a)(2)(iv) — encryption
+    - security                  # § 164.312(a)(1), (e)(1) — access and transmission
+    - compliance                # § 164.312(b) — audit controls via tagging
+
+  inputs:
+    - unencrypted_databases
+    - public_storage_buckets
+    - open_ingress_rules
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    data:
+      max_unencrypted_databases: 0    # § 164.312(a)(2)(iv) — PHI must be encrypted at rest
+
+    security:
+      max_public_storage:        0    # § 164.312(e)(1) — no public PHI transmission
+      max_open_ingress_rules:    0    # § 164.312(a)(1) — restrict access to PHI systems
+
+    compliance:
+      max_untagged_resources:    0    # § 164.312(b) — all PHI resources must be tagged for audit
+
+  conditions:
+    - id: phi_encryption_at_rest
+      expression: "unencrypted_databases <= data.max_unencrypted_databases"
+      description: "HIPAA § 164.312(a)(2)(iv) — PHI must be encrypted at rest"
+
+    - id: no_public_phi_exposure
+      expression: "public_storage_buckets <= security.max_public_storage"
+      description: "HIPAA § 164.312(e)(1) — PHI must not be publicly accessible"
+
+    - id: restricted_phi_access
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "HIPAA § 164.312(a)(1) — access to PHI systems must be explicitly controlled"
+
+    - id: phi_resource_inventory
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "HIPAA § 164.312(b) — all PHI-handling resources must be tagged for audit"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: critical
+
+    notifications:
+      - role: compliance_officer    # Replace with your HIPAA compliance officer
+        channel: email
+      - role: security_lead         # Replace with your security lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - compliance_officer
+        - security_lead
+
+  override:
+    roles:
+      - compliance_officer
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "HIPAA governance violation. PHI infrastructure does not meet Security Rule requirements. Compliance officer review required."
+
+    - type: log
+      severity: info
+      message: "HIPAA governance evaluation recorded in audit trail."

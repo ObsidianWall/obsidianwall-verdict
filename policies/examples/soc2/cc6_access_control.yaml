@@ -1,0 +1,133 @@
+
+# policies/examples/soc2/cc6_access_control.yaml
+#
+# Template: SOC 2 Trust Service Criteria — CC6 (Logical Access and Boundary Protection)
+#
+# Maps to:
+#   CC6.1  — Logical access security measures restrict access
+#             to infrastructure and data
+#   CC6.2  — Prior to issuing access credentials, the entity
+#             registers and authorizes new users
+#   CC6.3  — The entity removes access to protected resources
+#             when appropriate
+#   CC6.6  — The entity implements logical access security
+#             measures to protect against threats from sources
+#             outside its system boundaries
+#   CC6.7  — The entity restricts the transmission of data to
+#             authorized internal and external users
+#
+#
+# Policy type: composite
+# Governance domains: security + compliance
+#
+# CC6 spans security (access controls, encryption, network) and
+# compliance (resource registration and ownership via tagging).
+#
+#
+#
+# This template enforces the CC6 Logical and Physical Access
+# Controls criteria at the infrastructure declaration layer.
+# It is designed to be used as evidence for SOC 2 Type I and
+# Type II audits, demonstrating that access controls are
+# enforced programmatically at the point of deployment.
+#
+# Audit value:
+#   Every verdict evaluate invocation produces an immutable
+#   JSON artifact that serves as continuous CC6 control evidence.
+#   verdict audit --insights surfaces policy effectiveness for
+#   auditor review without manual sampling.
+#
+# What to customize before using:
+#   1. Replace owner with your security team
+#   2. Adjust notification roles to your security lead and CISO
+#   3. Update override roles to your authorized approvers
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/soc2/cc6_access_control.yaml \
+#     --expect ALLOW
+#
+#
+# 
+#
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: soc2_cc6_access_control
+  version: "0.1"
+  owner: security-team          # Replace with your security team name
+  description: "SOC 2 CC6 — Logical access controls and boundary protection"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - security                  # CC6.1, CC6.6, CC6.7 — access and boundary controls
+    - compliance                # CC6.2 — resource registration and ownership
+
+  inputs:
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    security:
+      max_open_ingress_rules:    0    # CC6.6 — restrict access from external sources
+      max_public_storage:        0    # CC6.7 — restrict data to authorized users only
+      max_unencrypted_databases: 0    # CC6.1 — logical access security measures in place
+
+    compliance:
+      max_untagged_resources:    0    # CC6.2 — all resources registered with owner attribution
+
+  conditions:
+    - id: cc6_restrict_external_access
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "SOC 2 CC6.6 — no unrestricted external access to system boundaries"
+
+    - id: cc6_restrict_data_transmission
+      expression: "public_storage_buckets <= security.max_public_storage"
+      description: "SOC 2 CC6.7 — data transmission restricted to authorized users only"
+
+    - id: cc6_logical_access_security
+      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      description: "SOC 2 CC6.1 — logical access security measures protect stored data"
+
+    - id: cc6_resource_registration
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "SOC 2 CC6.2 — all resources registered with owner attribution"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_lead       # Replace with your security lead role
+        channel: email
+      - role: ciso                # Replace with your CISO or security authority
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+  override:
+    roles:
+      - security_lead
+      - ciso
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "SOC 2 CC6 violation — logical access controls not met. Security review required before deployment."
+
+    - type: log
+      severity: info
+      message: "SOC 2 CC6 governance evaluation recorded in audit trail."

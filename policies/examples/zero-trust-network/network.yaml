@@ -1,1 +1,105 @@
+
+# policies/examples/zero-trust-network/network.yaml
 #
+# Template: Zero Trust Architecture — Network Controls
+#
+# Maps to:
+#   NIST SP 800-207 — Zero Trust Architecture
+#   Principle: Never trust, always verify
+#   Principle: Assume breach
+#   Principle: Verify explicitly
+#
+## Policy type: composite
+#  Governance domains: network + security
+#
+# Zero Trust network governance spans two domains:
+#   network   — topology controls (deny by default, no implicit trust)
+#   security  — encryption and access controls (assume breach posture)
+#
+# Zero Trust requires that all network access be explicitly
+# authorized. No implicit trust based on network location.
+# This policy enforces that posture at the infrastructure
+# declaration layer — before any resource is provisioned.
+#
+# What to customize before using:
+#   1. Replace owner with your network security team
+#   2. Adjust notification and override roles
+#   3. Review conditions against your Zero Trust maturity level
+#
+# How to test this template:
+#   verdict test \
+#     --plan   terraform_plan.json \
+#     --policy policies/examples/zero-trust-network/network.yaml \
+#     --expect ALLOW
+#
+# 
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: zero_trust_network
+  version: "0.1"
+  owner: network-security-team  # Replace with your network security team
+  description: "Zero Trust network governance — deny by default, explicit authorization only"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - network                   # Deny by default, no implicit topology trust
+    - security                  # Encryption at rest, no public exposure
+
+  inputs:
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+
+  parameters:
+    network:
+      max_open_ingress_rules: 0    # Zero Trust — deny by default, no 0.0.0.0/0 rules
+      max_public_exposure:    0    # Zero Trust — no implicit public access
+
+    security:
+      max_unencrypted_databases: 0 # Zero Trust — assume breach, encrypt all data at rest
+
+  conditions:
+    - id: deny_by_default
+      expression: "open_ingress_rules <= network.max_open_ingress_rules"
+      description: "Zero Trust — no implicit inbound trust, explicit allow rules only"
+
+    - id: no_implicit_public_access
+      expression: "public_storage_buckets <= network.max_public_exposure"
+      description: "Zero Trust — no publicly exposed resources without explicit authorization"
+
+    - id: encrypt_data_at_rest
+      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      description: "Zero Trust — assume breach, all data storage must be encrypted"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: network_security_lead   # Replace with your network security lead
+        channel: email
+      - role: security_lead
+        channel: slack
+
+  override:
+    roles:
+      - network_security_lead
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Zero Trust network violation. Implicit trust or unencrypted data detected. Network security review required."
+
+    - type: log
+      severity: info
+      message: "Zero Trust network governance evaluation recorded in audit trail."
