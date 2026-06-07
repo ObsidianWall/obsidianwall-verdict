@@ -1,0 +1,113 @@
+
+# policies/registry/soc2/cc7_monitoring.yaml
+#
+# Template: SOC 2 Trust Service Criteria — CC7 (System Operations)
+#
+# Maps to:
+#   CC7.1  — Detection and monitoring for configuration vulnerabilities
+#   CC7.2  — Monitor system components for anomalies
+#   CC7.3  — Evaluate security events to determine if objectives failed
+#
+# 
+# Policy type: composite
+# Governance domains: security + compliance
+#
+# CC7 monitoring requires both security posture checks (detecting
+# configuration changes that introduce vulnerabilities) and compliance
+# tagging to ensure all resources are identifiable for security event
+# evaluation.
+#
+# Audit value:
+#   This policy, combined with verdict audit, provides
+#   continuous CC7 monitoring evidence. The telemetry store
+#   records every evaluation as a monitoring event.
+#   verdict audit --insights surfaces anomaly patterns
+#   for auditor review without manual log sampling.
+#
+# What to customize before using:
+#   1. Replace owner with your security operations team
+#   2. Adjust thresholds based on your monitoring baseline
+#   3. Update notification roles to your SOC team
+#
+# How to test this template:
+#   verdict test \
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/soc2/cc7_monitoring.yaml \
+#     --expect DENY_WITH_OVERRIDE
+# 
+#
+
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: soc2_cc7_monitoring
+  version: "0.1"
+  owner: security-operations    # Replace with your security operations team
+  description: "SOC 2 CC7 — System operations monitoring and anomaly detection"
+
+spec:
+  policy_type: composite
+  governance_domains:
+    - security                  # CC7.1, CC7.2 — vulnerability and anomaly detection
+    - compliance                # CC7.3 — resource identification for event evaluation
+
+  inputs:
+    - open_ingress_rules
+    - public_storage_buckets
+    - unencrypted_databases
+    - untagged_resource_count
+    - total_resource_count
+
+  parameters:
+    security:
+      max_open_ingress_rules:    0    # CC7.1 — detect configuration changes introducing vulnerabilities
+
+    compliance:
+      max_untagged_resources:    0    # CC7.3 — all resources tagged for security event evaluation
+
+  conditions:
+    - id: cc7_configuration_monitoring
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
+      description: "SOC 2 CC7.1 — detect configuration changes introducing vulnerabilities"
+
+    - id: cc7_anomaly_detection
+      expression: "unencrypted_databases <= 0"
+      description: "SOC 2 CC7.2 — monitor controls for anomalies indicating failures"
+
+    - id: cc7_resource_identification
+      expression: "untagged_resource_count <= compliance.max_untagged_resources"
+      description: "SOC 2 CC7.3 — all resources tagged for security event evaluation"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_operations   # Replace with your SOC team role
+        channel: email
+      - role: security_lead         # Replace with your security lead
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+  override:
+    roles:
+      - security_operations
+      - security_lead
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "SOC 2 CC7 monitoring violation — system operations controls not met. Security operations review required."
+
+    - type: log
+      severity: info
+      message: "SOC 2 CC7 governance evaluation recorded in audit trail."

@@ -1,0 +1,93 @@
+
+# policies/registry/finops-cost-control/budget_strict.yaml
+#
+# Template: FinOps Framework — Strict Budget Enforcement
+#
+# Maps to:
+#   FinOps Inform phase   — Cost visibility at the point of declaration
+#   FinOps Operate phase  — Continuous cost discipline in production
+#
+# Use this template for production environments, finance-controlled
+# budgets, or teams where override must require explicit dual approval.
+# No self-service override — both the CFO office and FinOps lead must
+# approve before a blocked deployment can proceed.
+#
+# For teams that need override flexibility, use cost.yaml instead.
+#
+# What to customize before using:
+#   1. Set budget.amount to your hard monthly limit
+#   2. Set budget.scope to your production project identifier
+#   3. Replace approval roles with your finance authority and FinOps lead
+#
+# How to test this template:
+#   verdict test \
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/finops-cost-control/budget_strict.yaml \
+#     --expect ALLOW_WITH_NOTIFICATION
+
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: finops_budget_strict
+  version: "0.1"
+  owner: cfo-office             # Replace with your finance authority
+  description: "FinOps strict budget enforcement — hard deny, dual approval required"
+
+spec:
+  policy_type: cost
+
+  inputs:
+    - estimated_cost
+    - current_spend
+
+  parameters:
+    budget:
+      amount:           10000.00       # Replace with your hard monthly budget limit
+      period:           monthly
+      scope:            project:production  # Replace with your production scope
+      owner:            cfo-office          # Replace with your budget authority
+      flexibility:      hard
+      override_allowed: false               # Required field — hard deny, no self-service override
+
+  conditions:
+    - id: hard_budget_limit
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "FinOps Operate — hard budget limit, dual approval required for exceptions"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: critical
+
+    notifications:
+      - role: cfo_office          # Replace with your CFO or finance authority role
+        channel: email
+      - role: finops_lead         # Replace with your FinOps lead role
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - cfo_office
+        - finops_lead
+
+  override:
+    roles:
+      - cfo_office
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: critical
+      message: "Hard budget limit exceeded. Dual approval required — CFO office and FinOps lead must authorize."
+
+    - type: log
+      severity: info
+      message: "Strict budget governance evaluation recorded in audit trail."

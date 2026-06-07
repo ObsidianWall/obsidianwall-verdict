@@ -1,0 +1,83 @@
+
+# policies/registry/finops-cost-control/cost.yaml
+#
+# Template: FinOps Framework — Standard Cost Control
+#
+# Maps to:
+#   FinOps Inform phase   — Cost visibility and budget awareness
+#   FinOps Optimize phase — Spend enforcement and rightsizing signals
+#
+# Use this template for teams operating with a monthly budget
+# and a budget owner who can authorize overrides. Override is
+# available — use budget_strict.yaml for hard deny environments.
+#
+# What to customize before using:
+#   1. Set budget.amount to your actual monthly budget
+#   2. Set budget.scope to your project or team identifier
+#   3. Replace owner and notification roles with your team names
+#
+# How to test this template:
+#   verdict test \
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/finops-cost-control/cost.yaml \
+#     --expect ALLOW
+
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: finops_cost_control
+  version: "0.1"
+  owner: finops-team          # Replace with your FinOps team name
+  description: "FinOps Framework — standard monthly budget enforcement with override"
+
+spec:
+  policy_type: cost
+
+  inputs:
+    - estimated_cost
+    - current_spend
+
+  parameters:
+    budget:
+      amount:           5000.00        # Replace with your monthly budget in USD
+      period:           monthly
+      scope:            project:default  # Replace with your project or team scope
+      owner:            finops-team      # Replace with your budget owner role
+      flexibility:      soft
+      override_allowed: true            # Required field — override is available
+
+  conditions:
+    - id: monthly_budget_check
+      expression: "(current_spend + estimated_cost) <= budget.amount"
+      description: "FinOps Inform — total projected spend must not exceed monthly budget"
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  governance:
+    severity: medium
+
+    notifications:
+      - role: budget_owner        # Replace with your budget owner role
+        channel: email
+      - role: engineering_lead    # Replace with your engineering lead role
+        channel: slack
+
+  override:
+    roles:
+      - budget_owner
+      - finops_lead
+    requires_approval: false
+
+  actions:
+    - type: notify
+      severity: high
+      message: "FinOps budget threshold exceeded. Budget owner has been notified."
+
+    - type: log
+      severity: info
+      message: "Cost governance evaluation recorded in audit trail."
