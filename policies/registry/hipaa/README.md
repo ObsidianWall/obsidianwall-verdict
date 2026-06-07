@@ -58,24 +58,24 @@ override:
 **Validate:**
 
 ```bash
-verdict validate --policy policies/examples/hipaa/data_governance.yaml
+verdict validate --policy policies/registry/hipaa/data_governance.yaml
 ```
 
 **Test a compliant PHI plan:**
 
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/hipaa/data_governance.yaml \
-  --expect ALLOW
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/hipaa/data_governance.yaml \
+  --expect DENY
 ```
 
 **Evaluate:**
 
 ```bash
 verdict evaluate \
-  --plan   terraform_plan.json \
-  --policy policies/examples/hipaa/data_governance.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/hipaa/data_governance.yaml \
   --role   engineer
 ```
 

@@ -1,5 +1,4 @@
-
-# policies/examples/zero-trust-network/network.yaml
+# policies/registry/zero-trust-network/network.yaml
 #
 # Template: Zero Trust Architecture — Network Controls
 #
@@ -9,30 +8,22 @@
 #   Principle: Assume breach
 #   Principle: Verify explicitly
 #
-## Policy type: composite
-#  Governance domains: network + security
+# Policy type: composite
+# Governance domains: network + security
 #
 # Zero Trust network governance spans two domains:
-#   network   — topology controls (deny by default, no implicit trust)
-#   security  — encryption and access controls (assume breach posture)
-#
-# Zero Trust requires that all network access be explicitly
-# authorized. No implicit trust based on network location.
-# This policy enforces that posture at the infrastructure
-# declaration layer — before any resource is provisioned.
+#   network   — firewall requirements, segmentation, endpoint controls
+#   security  — open ingress rules, public storage, access controls
 #
 # What to customize before using:
 #   1. Replace owner with your network security team
 #   2. Adjust notification and override roles
-#   3. Review conditions against your Zero Trust maturity level
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/zero-trust-network/network.yaml \
-#     --expect ALLOW
-#
-# 
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/zero-trust-network/network.yaml \
+#     --expect ALLOW_WITH_NOTIFICATION
 
 apiVersion: obsidianwall.io/v1
 kind: Policy
@@ -46,8 +37,8 @@ metadata:
 spec:
   policy_type: composite
   governance_domains:
-    - network                   # Deny by default, no implicit topology trust
-    - security                  # Encryption at rest, no public exposure
+    - network                   # Firewall, segmentation, endpoint controls
+    - security                  # Open ingress rules and public storage
 
   inputs:
     - open_ingress_rules
@@ -56,23 +47,26 @@ spec:
 
   parameters:
     network:
-      max_open_ingress_rules: 0    # Zero Trust — deny by default, no 0.0.0.0/0 rules
-      max_public_exposure:    0    # Zero Trust — no implicit public access
+      require_firewall:          true   # Zero Trust — firewall required on all resources
+      allow_public_ingress:      false  # Zero Trust — no implicit inbound trust
+      allow_public_egress:       false  # Zero Trust — no implicit outbound trust
+      required_segmentation:     true   # Zero Trust — microsegmentation required
 
     security:
-      max_unencrypted_databases: 0 # Zero Trust — assume breach, encrypt all data at rest
+      max_open_ingress_rules: 0  # Zero Trust — deny by default, no 0.0.0.0/0 rules
+      max_public_buckets:     0  # Zero Trust — no publicly exposed resources
 
   conditions:
     - id: deny_by_default
-      expression: "open_ingress_rules <= network.max_open_ingress_rules"
+      expression: "open_ingress_rules <= security.max_open_ingress_rules"
       description: "Zero Trust — no implicit inbound trust, explicit allow rules only"
 
     - id: no_implicit_public_access
-      expression: "public_storage_buckets <= network.max_public_exposure"
+      expression: "public_storage_buckets <= security.max_public_buckets"
       description: "Zero Trust — no publicly exposed resources without explicit authorization"
 
     - id: encrypt_data_at_rest
-      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      expression: "unencrypted_databases <= 0"
       description: "Zero Trust — assume breach, all data storage must be encrypted"
 
   decision:
@@ -98,7 +92,7 @@ spec:
   actions:
     - type: notify
       severity: high
-      message: "Zero Trust network violation. Implicit trust or unencrypted data detected. Network security review required."
+      message: "Zero Trust network violation. Implicit trust or unencrypted data detected."
 
     - type: log
       severity: info

@@ -46,7 +46,7 @@ The sample plan is at `samples/terraform_plan.json`.
 
 You have two options:
 
-**Use an example template** from `policies/examples/` — copy one
+**Use an example template** from `policies/registry/` — copy one
 that matches your compliance context, fill in your values, and use it.
 
 **Use an existing domain policy** from `policies/` — these are working
@@ -114,7 +114,7 @@ respect this automatically.
 Copy the template closest to your use case:
 
 ```bash
-cp policies/examples/finops-cost-control/cost.yaml \
+cp policies/registry/finops-cost-control/cost.yaml \
    policies/my-budget.yaml
 ```
 
@@ -223,7 +223,7 @@ jobs:
       - name: Governance evaluation
         uses: obsidianwall/obsidianwall-verdict@main
         with:
-          plan:         terraform_plan.json
+          plan:         samples/terraform_plan.json
           policy:       policies/my-budget.yaml
           role:         engineer
           fail_on_deny: "true"
@@ -243,12 +243,12 @@ start with the example templates:
 
 |Framework              |Template location                         |
 |-----------------------|------------------------------------------|
-|HIPAA Security Rule    |`policies/examples/hipaa/`                |
-|NIST AI RMF 1.0        |`policies/examples/nist-ai-rmf/`          |
-|CIS Controls v8        |`policies/examples/cis-benchmark/`        |
-|FinOps Framework       |`policies/examples/finops-cost-control/`  |
-|Zero Trust Architecture|`policies/examples/zero-trust-network/`   |
-|Production deployment  |`policies/examples/production-deployment/`|
+|HIPAA Security Rule    |`policies/registry/hipaa/`                |
+|NIST AI RMF 1.0        |`policies/registry/nist-ai-rmf/`          |
+|CIS Controls v8        |`policies/registry/cis-benchmark/`        |
+|FinOps Framework       |`policies/registry/finops-cost-control/`  |
+|Zero Trust Architecture|`policies/registry/zero-trust-network/`   |
+|Production deployment  |`policies/registry/production-deployment/`|
 
 Each template directory contains a README explaining the compliance
 mapping and exactly what to customize.
@@ -279,5 +279,5 @@ infrastructure it governs.
 
 - Read the full [README](README.md) for complete command reference
 - Browse `policies/` for working domain policy instances
-- Browse `policies/examples/` for compliance framework templates
+- Browse `policies/registry/` for compliance framework templates
 - Run `verdict --help` to see all available commands

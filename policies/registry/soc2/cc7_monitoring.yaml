@@ -1,5 +1,5 @@
 
-# policies/examples/soc2/cc7_monitoring.yaml
+# policies/registry/soc2/cc7_monitoring.yaml
 #
 # Template: SOC 2 Trust Service Criteria — CC7 (System Operations)
 #
@@ -31,9 +31,9 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/soc2/cc7_monitoring.yaml \
-#     --expect ALLOW
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/soc2/cc7_monitoring.yaml \
+#     --expect DENY_WITH_OVERRIDE
 # 
 #
 
@@ -64,7 +64,6 @@ spec:
   parameters:
     security:
       max_open_ingress_rules:    0    # CC7.1 — detect configuration changes introducing vulnerabilities
-      max_unencrypted_databases: 0    # CC7.2 — monitor controls for anomalies indicating failures
 
     compliance:
       max_untagged_resources:    0    # CC7.3 — all resources tagged for security event evaluation
@@ -75,7 +74,7 @@ spec:
       description: "SOC 2 CC7.1 — detect configuration changes introducing vulnerabilities"
 
     - id: cc7_anomaly_detection
-      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      expression: "unencrypted_databases <= 0"
       description: "SOC 2 CC7.2 — monitor controls for anomalies indicating failures"
 
     - id: cc7_resource_identification

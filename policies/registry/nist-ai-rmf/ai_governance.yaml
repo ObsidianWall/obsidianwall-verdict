@@ -1,4 +1,4 @@
-# policies/examples/nist-ai-rmf/ai_governance.yaml
+# policies/registry/nist-ai-rmf/ai_governance.yaml
 #
 # Template: NIST AI Risk Management Framework (AI RMF 1.0)
 #
@@ -7,17 +7,14 @@
 #   GOVERN 1.2   — Accountability is established
 #   GOVERN 4.1   — Risk-tiered oversight mechanisms
 #   MAP 1.5      — Context is established before deployment
-#   MAP 5.1      — Likelihood of AI risks is assessed
 #   MANAGE 1.3   — Human oversight is maintained
-#   MANAGE 4.1   — Risk responses are monitored
 #
 # Policy type: composite
 # Governance domains: ai_governance + resource_limits
 #
 # NIST AI RMF governance spans two domains:
-#   ai_governance   — model provenance, human oversight,
-#                     autonomous deployment controls
-#   resource_limits — GPU quota enforcement, instance limits
+#   ai_governance   — model provenance, human oversight controls
+#   resource_limits — GPU quota enforcement
 #
 # Hard DENY — AI governance is non-negotiable.
 # The AI governance lead must approve all AI and GPU deployments.
@@ -25,14 +22,14 @@
 # What to customize before using:
 #   1. Replace owner with your AI governance team
 #   2. Set limits.max_gpu_instances to your approved GPU allocation
-#      (0 means all GPU deployments require explicit approval)
+#      (0 means no GPU instances without explicit approval)
 #   3. Replace notification and approval roles
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/nist-ai-rmf/ai_governance.yaml \
-#     --expect ALLOW
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/nist-ai-rmf/ai_governance.yaml \
+#     --expect ALLOW_WITH_NOTIFICATION
 
 apiVersion: obsidianwall.io/v1
 kind: Policy
@@ -55,23 +52,23 @@ spec:
 
   parameters:
     ai:
-      allow_autonomous_deployment:    false # MANAGE 1.3 — human oversight required
-      require_human_approval:         true  # GOVERN 4.1 — risk-tiered oversight
-      max_unreviewed_deployments:     0     # GOVERN 1.1 — governance required before deploy
+      allow_autonomous_deployment:      false  # MANAGE 1.3 — human oversight required
+      require_human_approval_high_risk: true   # GOVERN 4.1 — risk-tiered oversight
+      require_prompt_logging:           true   # GOVERN 1.2 — accountability via logging
+      require_model_versioning:         true   # MAP 1.5 — context established before deploy
 
     limits:
-      max_gpu_instances: 0                  # MAP 1.5 — context established before deploy
-                                            # Set to your approved GPU allocation
-                                            # 0 means all GPU deployments require review
+      max_gpu_instances: 0    # MAP 1.5 — no GPU instances without pre-approval
+                              # Set to your approved GPU allocation if applicable
 
   conditions:
-    - id: ai_deployment_requires_governance
-      expression: "ai_gpu_workloads <= ai.max_unreviewed_deployments"
-      description: "NIST AI RMF GOVERN 1.1 — AI deployments require formal governance review"
+    - id: no_ai_workloads_without_governance
+      expression: "ai_gpu_workloads <= 0"
+      description: "NIST AI RMF GOVERN 1.1 — AI GPU workloads require formal governance review before deployment"
 
-    - id: gpu_instances_require_approval
+    - id: gpu_instances_within_approved_quota
       expression: "gpu_instance_count <= limits.max_gpu_instances"
-      description: "NIST AI RMF MAP 1.5 — GPU infrastructure context established before deploy"
+      description: "NIST AI RMF MAP 1.5 — GPU infrastructure must be within pre-approved quota"
 
   decision:
     allow: ALLOW

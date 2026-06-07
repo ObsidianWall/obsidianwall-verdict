@@ -112,21 +112,21 @@ governance:
 
 **Validate:**
 ```bash
-verdict validate --policy policies/examples/soc2/cc6_access_control.yaml
-verdict validate --policy policies/examples/soc2/cc7_monitoring.yaml
+verdict validate --policy policies/registry/soc2/cc6_access_control.yaml
+verdict validate --policy policies/registry/soc2/cc7_monitoring.yaml
 ```
 
 **Test:**
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/soc2/cc6_access_control.yaml \
-  --expect ALLOW
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/soc2/cc6_access_control.yaml \
+  --expect DENY_WITH_OVERRIDE
 
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/soc2/cc7_monitoring.yaml \
-  --expect ALLOW
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/soc2/cc7_monitoring.yaml \
+  --expect DENY_WITH_OVERRIDE
 ```
 
 **Generate audit evidence:**
@@ -134,8 +134,8 @@ verdict test \
 export OW_TELEMETRY_ENABLED=true
 
 verdict evaluate \
-  --plan   terraform_plan.json \
-  --policy policies/examples/soc2/cc6_access_control.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/soc2/cc6_access_control.yaml \
   --role   engineer
 
 verdict audit --format json

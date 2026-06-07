@@ -1,5 +1,5 @@
 
-# policies/examples/cis-benchmark/security.yaml
+# policies/registry/cis-benchmark/security.yaml
 #
 # Template: CIS Controls v8 Security Baseline
 #
@@ -29,8 +29,8 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/cis-benchmark/security.yaml \
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/cis-benchmark/security.yaml \
 #     --expect ALLOW
 #
 
@@ -60,8 +60,7 @@ spec:
   parameters:
     security:
       max_open_ingress_rules:    0    # CIS 12.2 — no unrestricted inbound rules
-      max_public_storage:        0    # CIS 3.3  — no public data exposure
-      max_unencrypted_databases: 0    # CIS 3.11 — encrypt sensitive data at rest
+      max_public_buckets:        0    # CIS 3.3  — no public data exposure
 
     compliance:
       max_untagged_resources:    0    # CIS 1.1  — all assets must be inventoried
@@ -72,11 +71,11 @@ spec:
       description: "CIS 12.2 — no unrestricted inbound access rules permitted"
 
     - id: no_public_storage
-      expression: "public_storage_buckets <= security.max_public_storage"
+      expression: "public_storage_buckets <= security.max_public_buckets"
       description: "CIS 3.3 — no publicly accessible storage resources"
 
     - id: no_unencrypted_databases
-      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      expression: "unencrypted_databases <= 0"
       description: "CIS 3.11 — all databases must be encrypted at rest"
 
     - id: asset_inventory_complete

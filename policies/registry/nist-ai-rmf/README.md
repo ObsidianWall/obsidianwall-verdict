@@ -69,24 +69,24 @@ governance:
 **Validate:**
 
 ```bash
-verdict validate --policy policies/examples/nist-ai-rmf/ai_governance.yaml
+verdict validate --policy policies/registry/nist-ai-rmf/ai_governance.yaml
 ```
 
 **Test a plan with no GPU workloads (should ALLOW):**
 
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/nist-ai-rmf/ai_governance.yaml \
-  --expect ALLOW
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/nist-ai-rmf/ai_governance.yaml \
+  --expect ALLOW_WITH_NOTIFICATION
 ```
 
 **Evaluate:**
 
 ```bash
 verdict evaluate \
-  --plan   terraform_plan.json \
-  --policy policies/examples/nist-ai-rmf/ai_governance.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/nist-ai-rmf/ai_governance.yaml \
   --role   engineer
 ```
 

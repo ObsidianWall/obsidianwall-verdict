@@ -73,24 +73,31 @@ parameters:
 **Validate:**
 
 ```bash
-verdict validate --policy policies/examples/finops-cost-control/cost.yaml
+verdict validate --policy policies/registry/finops-cost-control/cost.yaml
 ```
 
 **Test against a compliant plan:**
 
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/finops-cost-control/cost.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/finops-cost-control/cost.yaml \
   --expect ALLOW
 ```
+
+```bash
+verdict test \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/finops-cost-control/budget_strict.yaml \
+  --expect ALLOW_WITH_NOTIFICATION
+```  
 
 **Evaluate with current month spend:**
 
 ```bash
 verdict evaluate \
-  --plan          terraform_plan.json \
-  --policy        policies/examples/finops-cost-control/cost.yaml \
+  --plan          samples/terraform_plan.json \
+  --policy        policies/registry/finops-cost-control/cost.yaml \
   --current-spend 1200.00 \
   --role          engineer
 ```

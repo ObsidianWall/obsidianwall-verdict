@@ -69,24 +69,24 @@ governance:
 
 ```bash
 verdict validate \
-  --policy policies/examples/production-deployment/composite.yaml
+  --policy policies/registry/production-deployment/composite.yaml
 ```
 
 **Test a compliant production plan:**
 
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/production-deployment/composite.yaml \
-  --expect ALLOW
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/production-deployment/composite.yaml \
+  --expect DENY_WITH_OVERRIDE
 ```
 
 **Evaluate with current month spend:**
 
 ```bash
 verdict evaluate \
-  --plan          terraform_plan.json \
-  --policy        policies/examples/production-deployment/composite.yaml \
+  --plan          samples/terraform_plan.json \
+  --policy        policies/registry/production-deployment/composite.yaml \
   --current-spend 3200.00 \
   --role          engineer
 ```
@@ -97,8 +97,8 @@ verdict evaluate \
 - name: Production governance gate
   uses: obsidianwall/obsidianwall-verdict@main
   with:
-    plan:         terraform_plan.json
-    policy:       policies/examples/production-deployment/composite.yaml
+    plan:         samples/terraform_plan.json
+    policy:       policies/registry/production-deployment/composite.yaml
     role:         engineer
     fail_on_deny: "true"
 ```

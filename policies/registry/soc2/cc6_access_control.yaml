@@ -1,5 +1,5 @@
 
-# policies/examples/soc2/cc6_access_control.yaml
+# policies/registry/soc2/cc6_access_control.yaml
 #
 # Template: SOC 2 Trust Service Criteria — CC6 (Logical Access and Boundary Protection)
 #
@@ -44,9 +44,9 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/soc2/cc6_access_control.yaml \
-#     --expect ALLOW
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/soc2/cc6_access_control.yaml \
+#     --expect DENY_WITH_OVERRIDE
 #
 #
 # 
@@ -78,8 +78,7 @@ spec:
   parameters:
     security:
       max_open_ingress_rules:    0    # CC6.6 — restrict access from external sources
-      max_public_storage:        0    # CC6.7 — restrict data to authorized users only
-      max_unencrypted_databases: 0    # CC6.1 — logical access security measures in place
+      max_public_buckets:        0    # CC6.7 — restrict data to authorized users only
 
     compliance:
       max_untagged_resources:    0    # CC6.2 — all resources registered with owner attribution
@@ -90,11 +89,11 @@ spec:
       description: "SOC 2 CC6.6 — no unrestricted external access to system boundaries"
 
     - id: cc6_restrict_data_transmission
-      expression: "public_storage_buckets <= security.max_public_storage"
+      expression: "public_storage_buckets <= security.max_public_buckets"
       description: "SOC 2 CC6.7 — data transmission restricted to authorized users only"
 
     - id: cc6_logical_access_security
-      expression: "unencrypted_databases <= security.max_unencrypted_databases"
+      expression: "unencrypted_databases <= 0"
       description: "SOC 2 CC6.1 — logical access security measures protect stored data"
 
     - id: cc6_resource_registration

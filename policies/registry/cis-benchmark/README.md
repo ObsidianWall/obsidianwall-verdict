@@ -46,15 +46,15 @@ override:
 **Validate the policy:**
 
 ```bash
-verdict validate --policy policies/examples/cis-benchmark/security.yaml
+verdict validate --policy policies/registry/cis-benchmark/security.yaml
 ```
 
 **Test against a plan:**
 
 ```bash
 verdict test \
-  --plan   terraform_plan.json \
-  --policy policies/examples/cis-benchmark/security.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/cis-benchmark/security.yaml \
   --expect ALLOW
 ```
 
@@ -62,8 +62,8 @@ verdict test \
 
 ```bash
 verdict evaluate \
-  --plan   terraform_plan.json \
-  --policy policies/examples/cis-benchmark/security.yaml \
+  --plan   samples/terraform_plan.json \
+  --policy policies/registry/cis-benchmark/security.yaml \
   --role   engineer
 ```
 

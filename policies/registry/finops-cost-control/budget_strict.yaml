@@ -1,5 +1,5 @@
 
-# policies/examples/finops-cost-control/budget_strict.yaml
+# policies/registry/finops-cost-control/budget_strict.yaml
 #
 # Template: FinOps Framework — Strict Budget Enforcement
 #
@@ -21,9 +21,9 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/finops-cost-control/budget_strict.yaml \
-#     --expect ALLOW
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/finops-cost-control/budget_strict.yaml \
+#     --expect ALLOW_WITH_NOTIFICATION
 
 
 

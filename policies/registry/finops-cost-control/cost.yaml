@@ -1,5 +1,5 @@
 
-# policies/examples/finops-cost-control/cost.yaml
+# policies/registry/finops-cost-control/cost.yaml
 #
 # Template: FinOps Framework — Standard Cost Control
 #
@@ -18,8 +18,8 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/finops-cost-control/cost.yaml \
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/finops-cost-control/cost.yaml \
 #     --expect ALLOW
 
 

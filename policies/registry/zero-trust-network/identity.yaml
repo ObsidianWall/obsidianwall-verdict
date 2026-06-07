@@ -1,5 +1,5 @@
 
-# policies/examples/zero-trust-network/identity.yaml
+# policies/registry/zero-trust-network/identity.yaml
 #
 # Template: Zero Trust Architecture — Identity Controls
 #
@@ -31,10 +31,9 @@
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/zero-trust-network/identity.yaml \
-#     --expect ALLOW
-#
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/zero-trust-network/identity.yaml \
+#     --expect DENY_WITH_OVERRIDE
 #
 #
 

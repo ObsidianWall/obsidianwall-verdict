@@ -47,12 +47,17 @@ _DB_PATH = _DB_DIR / "decisions.db"
 
 def is_telemetry_enabled() -> bool:
     """
-    Returns True only if the user has explicitly
-    opted in to telemetry via environment variable.
+    Returns True unless the user has explicitly
+    opted out via environment variable.
 
-    Telemetry is opt-in and disabled by default.
+    Local decision history is enabled by default.
+    Data is written only to ~/.obsidianwall/decisions.db.
+    Nothing is transmitted remotely.
+
+    To opt out:
+        export OW_TELEMETRY_ENABLED=false
     """
-    return os.environ.get(_ENV_KEY, "false").lower() == "true"
+    return os.environ.get(_ENV_KEY, "true").lower() == "true"
 
 
 def get_db_path() -> Path:

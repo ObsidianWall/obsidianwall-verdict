@@ -1,5 +1,4 @@
-
-# policies/examples/hipaa/data_governance.yaml
+# policies/registry/hipaa/data_governance.yaml
 #
 # Template: HIPAA Security Rule — PHI Infrastructure Governance
 #
@@ -7,40 +6,34 @@
 #   § 164.312(a)(1)       — Access Control
 #   § 164.312(a)(2)(iv)   — Encryption and Decryption
 #   § 164.312(b)          — Audit Controls
-#   § 164.312(c)(1)       — Integrity
 #   § 164.312(e)(1)       — Transmission Security
 #
 # Policy type: composite
 # Governance domains: data_governance + security + compliance
 #
 # HIPAA Security Rule technical safeguards span three domains:
-#   data_governance  — PHI data handling and encryption at rest
+#   data_governance  — PHI data handling intent and classification
 #   security         — access controls and network exposure
 #   compliance       — tagging and audit trail requirements
 #
+# Encryption at rest (§ 164.312(a)(2)(iv)) is evaluated
+# directly against the infrastructure context — zero unencrypted
+# databases are permitted, with no threshold.
 #
-##
-# This policy governs infrastructure that handles Protected Health
-# Information (PHI). It enforces encryption at rest, restricted
-# access, and audit trail requirements at the deployment layer —
-# before PHI-handling infrastructure is provisioned.
-#
-# Hard DENY — HIPAA violations are not overridable by engineers.
-# Only the compliance officer can authorize exceptions with
-# documented justification.
+# Hard DENY — HIPAA violations are not self-overridable.
+# Only the compliance officer can authorize exceptions
+# with documented justification.
 #
 # What to customize before using:
 #   1. Replace owner with your HIPAA compliance team
-#   2. Replace notification roles with your compliance officer
-#      and security lead
-#   3. Review conditions against your organization's BAA requirements
+#   2. Replace notification and approval roles with your
+#      compliance officer and security lead
 #
 # How to test this template:
 #   verdict test \
-#     --plan   terraform_plan.json \
-#     --policy policies/examples/hipaa/data_governance.yaml \
-#     --expect ALLOW
-#
+#     --plan   samples/terraform_plan.json \
+#     --policy policies/registry/hipaa/data_governance.yaml \
+#     --expect DENY
 
 apiVersion: obsidianwall.io/v1
 kind: Policy
@@ -54,7 +47,7 @@ metadata:
 spec:
   policy_type: composite
   governance_domains:
-    - data_governance           # § 164.312(a)(2)(iv) — encryption
+    - data_governance           # § 164.312(a)(2)(iv) — encryption and PHI classification
     - security                  # § 164.312(a)(1), (e)(1) — access and transmission
     - compliance                # § 164.312(b) — audit controls via tagging
 
@@ -67,22 +60,26 @@ spec:
 
   parameters:
     data:
-      max_unencrypted_databases: 0    # § 164.312(a)(2)(iv) — PHI must be encrypted at rest
+      allow_pii_storage:         false  # PHI is regulated — explicit governance required
+      allow_public_data_access:  false  # § 164.312(e)(1) — no public PHI transmission
+      encryption_required:       true   # § 164.312(a)(2)(iv) — encrypt PHI at rest
+      allow_cross_region_replication: false  # PHI must stay within approved regions
+      require_data_lineage:      true   # § 164.312(b) — audit trail for PHI access
 
     security:
-      max_public_storage:        0    # § 164.312(e)(1) — no public PHI transmission
-      max_open_ingress_rules:    0    # § 164.312(a)(1) — restrict access to PHI systems
+      max_open_ingress_rules: 0  # § 164.312(a)(1) — restrict access to PHI systems
+      max_public_buckets:     0  # § 164.312(e)(1) — no publicly accessible PHI storage
 
     compliance:
-      max_untagged_resources:    0    # § 164.312(b) — all PHI resources must be tagged for audit
+      max_untagged_resources: 0  # § 164.312(b) — all PHI resources tagged for audit
 
   conditions:
     - id: phi_encryption_at_rest
-      expression: "unencrypted_databases <= data.max_unencrypted_databases"
-      description: "HIPAA § 164.312(a)(2)(iv) — PHI must be encrypted at rest"
+      expression: "unencrypted_databases <= 0"
+      description: "HIPAA § 164.312(a)(2)(iv) — PHI must be encrypted at rest, no exceptions"
 
     - id: no_public_phi_exposure
-      expression: "public_storage_buckets <= security.max_public_storage"
+      expression: "public_storage_buckets <= security.max_public_buckets"
       description: "HIPAA § 164.312(e)(1) — PHI must not be publicly accessible"
 
     - id: restricted_phi_access
@@ -116,7 +113,7 @@ spec:
 
   override:
     roles:
-      - compliance_officer
+      - compliance_officer          # Only compliance officer may authorize exceptions
     requires_approval: true
 
   actions:
