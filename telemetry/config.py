@@ -40,7 +40,7 @@ from pathlib import Path
 # TELEMETRY CONFIGURATION
 # =====================================================
 
-_ENV_KEY        = "OW_HISTORY_ENABLED"
+_ENV_KEY = "OW_HISTORY_ENABLED"
 _ENV_KEY_LEGACY = "OW_TELEMETRY_ENABLED"
 _DB_DIR = Path.home() / ".obsidianwall"
 _DB_PATH = _DB_DIR / "decisions.db"
