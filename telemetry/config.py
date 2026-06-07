@@ -40,23 +40,28 @@ from pathlib import Path
 # TELEMETRY CONFIGURATION
 # =====================================================
 
-_ENV_KEY = "OW_TELEMETRY_ENABLED"
+_ENV_KEY        = "OW_HISTORY_ENABLED"
+_ENV_KEY_LEGACY = "OW_TELEMETRY_ENABLED"
 _DB_DIR = Path.home() / ".obsidianwall"
 _DB_PATH = _DB_DIR / "decisions.db"
 
 
 def is_telemetry_enabled() -> bool:
     """
-    Returns True unless the user has explicitly
-    opted out via environment variable.
+    Returns True unless explicitly opted out.
 
-    Local decision history is enabled by default.
-    Data is written only to ~/.obsidianwall/decisions.db.
+    Governance history is enabled by default.
+    Stored only at ~/.obsidianwall/decisions.db.
     Nothing is transmitted remotely.
 
     To opt out:
+        export OW_HISTORY_ENABLED=false
+
+    Legacy variable also supported:
         export OW_TELEMETRY_ENABLED=false
     """
+    if _ENV_KEY_LEGACY in os.environ:
+        return os.environ[_ENV_KEY_LEGACY].lower() == "true"
     return os.environ.get(_ENV_KEY, "true").lower() == "true"
 
 

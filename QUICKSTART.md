@@ -167,14 +167,11 @@ your CI pipeline to catch regressions when your policy changes.
 
 -----
 
-## Step 8 — Enable governance history
+## Step 8 — Governance history
 
-Verdict can record every evaluation to a local decision history,
-which powers the `verdict audit` command.
-
-```bash
-export OW_TELEMETRY_ENABLED=true
-```
+Verdict records every evaluation to a local governance history
+at `~/.obsidianwall/decisions.db`. This is enabled by default.
+Nothing leaves your machine.
 
 After running a few evaluations:
 
@@ -182,17 +179,27 @@ After running a few evaluations:
 verdict audit
 ```
 
-You will see a governance report with domain risk scores, why
-deployments were denied, policy effectiveness, and recent decisions.
-
 For pattern analysis and recommendations:
 
 ```bash
 verdict audit --insights
 ```
 
-Decision history is stored locally at `~/.obsidianwall/decisions.db`.
-Nothing leaves your machine.
+**To opt out of local governance history:**
+
+```bash
+export OW_HISTORY_ENABLED=false
+```
+
+What is stored: decision outcomes, risk scores, policy names,
+condition results, override and approval events.
+
+What is never stored: plan contents, cost amounts, resource
+names, organization identifiers.
+
+Remote governance intelligence is a separate opt-in feature
+planned for Compass. It will never be enabled without
+explicit user action.
 
 -----
 
