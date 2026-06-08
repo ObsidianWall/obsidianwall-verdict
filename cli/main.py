@@ -7,6 +7,8 @@
 #   evaluate   Evaluate a Terraform plan against a policy
 #   validate   Validate a policy schema only
 #   audit      Governance risk summary across recorded decisions
+#   test       Assert expected governance decision
+#   sentinel   Post-deployment reality verification
 #
 # Enterprise design:
 #   Validation explicit      ← compliance requirement
@@ -23,6 +25,7 @@ import typer
 
 from audit.audit_logger import get_logger
 from cli.commands.audit import audit_app
+from cli.commands.sentinel import sentinel_app
 from cli.commands.test_command import test_command
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
@@ -36,8 +39,9 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# ── Register commands ──────────────────────────
-app.add_typer(audit_app, name="audit")
+# ── Register commands ──────────────────────────────
+app.add_typer(audit_app,     name="audit")
+app.add_typer(sentinel_app,  name="sentinel")
 app.command(name="test")(test_command)
 
 
@@ -153,11 +157,11 @@ def evaluate(
             "evaluation_started",
             extra={
                 "extra": {
-                    "plan": plan,
-                    "policy": policy,
-                    "role": role,
-                    "pricing": pricing,
-                    "region": region,
+                    "plan":          plan,
+                    "policy":        policy,
+                    "role":          role,
+                    "pricing":       pricing,
+                    "region":        region,
                     "current_spend": current_spend,
                 }
             },
@@ -210,19 +214,25 @@ def evaluate(
             json.dump(result, f, indent=2, default=str)
 
         # ---------------------------------------------
-        # STEP 5 — Record to telemetry store
-        # Only writes if OW_TELEMETRY_ENABLED=true.
-        # Silently no-ops if telemetry is disabled.
-        # Never raises — telemetry must not crash CLI.
+        # STEP 5 — Record to governance history
+        # Only writes if history is enabled.
+        # Silently no-ops if disabled.
+        # Never raises — history must not crash CLI.
+        # policy_path stored so Sentinel can reload
+        # the policy without user re-specifying it.
         # ---------------------------------------------
 
-        record_decision(result=result, plan_path=plan)
+        record_decision(
+            result=result,
+            plan_path=plan,
+            policy_path=policy,
+        )
 
         logger.info(
             "evaluation_completed",
             extra={
                 "extra": {
-                    "decision": result["decision"],
+                    "decision":    result["decision"],
                     "decision_id": result["decision_id"],
                 }
             },
@@ -284,11 +294,11 @@ def validate(
         print(
             json.dumps(
                 {
-                    "status": "valid",
-                    "policy": policy,
-                    "name": policy_obj.metadata.name,
+                    "status":  "valid",
+                    "policy":  policy,
+                    "name":    policy_obj.metadata.name,
                     "version": policy_obj.metadata.version,
-                    "owner": policy_obj.metadata.owner,
+                    "owner":   policy_obj.metadata.owner,
                 },
                 indent=2,
             )
@@ -300,7 +310,7 @@ def validate(
                 {
                     "status": "invalid",
                     "policy": policy,
-                    "error": str(e),
+                    "error":  str(e),
                 },
                 indent=2,
             )
