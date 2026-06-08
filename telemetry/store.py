@@ -48,7 +48,6 @@ from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
 
-
 # =====================================================
 # SCHEMA
 # =====================================================
@@ -217,8 +216,8 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 def record_decision(
-    result:      dict[str, Any],
-    plan_path:   str | None = None,
+    result: dict[str, Any],
+    plan_path: str | None = None,
     policy_path: str | None = None,
 ) -> bool:
     """
@@ -258,9 +257,7 @@ def record_decision(
         # Hash the plan path — never store plan contents
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(
-                plan_path.encode("utf-8")
-            ).hexdigest()[:16]
+            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
@@ -344,9 +341,9 @@ def record_decision(
 
 
 def record_override(
-    decision_id:   str,
+    decision_id: str,
     override_role: str | None,
-    approved:      bool,
+    approved: bool,
 ) -> bool:
     """
     Record an override event against a decision.
@@ -381,10 +378,10 @@ def record_override(
 
 
 def record_approval(
-    decision_id:   str,
+    decision_id: str,
     approver_role: str | None,
-    approved:      bool,
-    notes:         str | None = None,
+    approved: bool,
+    notes: str | None = None,
 ) -> bool:
     """
     Record an approval event against a decision.
@@ -427,11 +424,11 @@ def record_approval(
 
 
 def record_outcome(
-    decision_id:  str,
+    decision_id: str,
     outcome_type: str,
-    severity:     str | None = None,
-    description:  str | None = None,
-    metadata:     dict[str, Any] | None = None,
+    severity: str | None = None,
+    description: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> bool:
     """
     Record an outcome event against a governance decision.
@@ -495,10 +492,10 @@ def record_outcome(
 
 
 def _update_effectiveness(
-    conn:        sqlite3.Connection,
+    conn: sqlite3.Connection,
     policy_name: str,
-    decision:    str,
-    timestamp:   str,
+    decision: str,
+    timestamp: str,
 ) -> None:
     """
     Update running totals in policy_effectiveness.
@@ -537,12 +534,12 @@ def _update_effectiveness(
 
 
 def get_recent_decisions(
-    limit:   int        = 50,
+    limit: int = 50,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Return most recent governance decisions."""
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             "SELECT * FROM decisions ORDER BY timestamp DESC LIMIT ?",
             (limit,),
@@ -555,8 +552,8 @@ def get_recent_decisions(
 
 
 def get_policy_effectiveness(
-    policy_name: str | None  = None,
-    db_path:     Path | None = None,
+    policy_name: str | None = None,
+    db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Return policy effectiveness summaries with override counts."""
     try:
@@ -605,11 +602,11 @@ def get_policy_effectiveness(
 
 def get_decision_by_id(
     decision_id: str,
-    db_path:     Path | None = None,
+    db_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """Return a single decision by ID with outcomes."""
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             "SELECT * FROM decisions WHERE id = ?",
             (decision_id,),
@@ -641,7 +638,7 @@ def get_domain_risk_summary(
     Used by verdict audit command.
     """
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT
@@ -661,13 +658,11 @@ def get_domain_risk_summary(
 
         domain_scores: dict[str, list[int]] = {}
         total_count = len(rows)
-        deny_total  = sum(1 for r in rows if "DENY" in r["decision"])
+        deny_total = sum(1 for r in rows if "DENY" in r["decision"])
 
         for row in rows:
             try:
-                scores: dict[str, int] = json.loads(
-                    row.get("analyzer_scores") or "{}"
-                )
+                scores: dict[str, int] = json.loads(row.get("analyzer_scores") or "{}")
                 for domain, score in scores.items():
                     domain_scores.setdefault(domain, []).append(score)
             except (json.JSONDecodeError, TypeError):
@@ -675,10 +670,9 @@ def get_domain_risk_summary(
 
         return {
             "total_evaluations": total_count,
-            "total_denied":      deny_total,
-            "deny_rate":         (
-                round(deny_total / total_count * 100, 1)
-                if total_count else 0
+            "total_denied": deny_total,
+            "deny_rate": (
+                round(deny_total / total_count * 100, 1) if total_count else 0
             ),
             "domain_avg_scores": {
                 domain: round(sum(s) / len(s), 1)
@@ -699,7 +693,7 @@ def get_failed_conditions_summary(
     Powers the 'Why denied?' section of verdict audit.
     """
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT failed_conditions
@@ -718,9 +712,7 @@ def get_failed_conditions_summary(
 
         for row in rows:
             try:
-                failed: list[str] = json.loads(
-                    row.get("failed_conditions") or "[]"
-                )
+                failed: list[str] = json.loads(row.get("failed_conditions") or "[]")
                 for cid in failed:
                     condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
@@ -730,8 +722,8 @@ def get_failed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count":        count,
-                    "rate":         round(count / total * 100, 1),
+                    "count": count,
+                    "rate": round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
@@ -751,7 +743,7 @@ def get_passed_conditions_summary(
     Powers the 'Why allowed?' section of verdict audit.
     """
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT passed_conditions
@@ -770,9 +762,7 @@ def get_passed_conditions_summary(
 
         for row in rows:
             try:
-                passed: list[str] = json.loads(
-                    row.get("passed_conditions") or "[]"
-                )
+                passed: list[str] = json.loads(row.get("passed_conditions") or "[]")
                 for cid in passed:
                     condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
@@ -782,8 +772,8 @@ def get_passed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count":        count,
-                    "rate":         round(count / total * 100, 1),
+                    "count": count,
+                    "rate": round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
@@ -803,7 +793,7 @@ def get_outcome_summary(
     Powers the 'Deployment Outcomes' section of verdict audit.
     """
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT outcome_type, COUNT(*) as count
@@ -827,7 +817,7 @@ def get_outcome_correlation(
     Powers future Governance Intelligence in Compass.
     """
     try:
-        conn   = init_db(db_path)
+        conn = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT

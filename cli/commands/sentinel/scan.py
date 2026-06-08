@@ -57,10 +57,24 @@ sentinel_app = typer.Typer(
 )
 
 # ── Outcome type constants ────────────────────────────
-_OUTCOME_DEPLOYMENT_SUCCESS   = "deployment_success"
-_OUTCOME_DRIFT_DETECTED       = "drift_detected"
+#
+# Plan-comparison outcomes (Sentinel MVP — no cloud API):
+#   no_drift             — plan state unchanged, decision holds
+#   drift_detected       — conditions or risk score changed
+#   compliance_violation — previously passing conditions now failing
+#   budget_overrun       — cost risk escalated significantly
+#
+# Reserved for Sentinel with cloud API access (future):
+#   deployment_success   — deployment completed successfully
+#   deployment_failure   — deployment failed post-authorization
+#   security_incident    — security event after allowed deployment
+#   availability_event   — availability impact after deployment
+#   manual_rollback      — deployment manually rolled back
+
+_OUTCOME_NO_DRIFT = "no_drift"
+_OUTCOME_DRIFT_DETECTED = "drift_detected"
 _OUTCOME_COMPLIANCE_VIOLATION = "compliance_violation"
-_OUTCOME_BUDGET_OVERRUN       = "budget_overrun"
+_OUTCOME_BUDGET_OVERRUN = "budget_overrun"
 
 # Risk score increase above this threshold triggers drift_detected
 # even when conditions have not changed.
@@ -198,7 +212,7 @@ def scan(
             "  Provide the policy path manually:\n"
             "    verdict sentinel scan \\\n"
             "      --plan   terraform_plan.json \\\n"
-            f"      --policy <path-to-policy>\n"
+            "      --policy <path-to-policy>\n"
         )
         raise typer.Exit(code=2)
 
@@ -221,18 +235,15 @@ def scan(
         )
 
     except Exception as e:
-        typer.echo(
-            f"\n  Evaluation error during Sentinel scan.\n"
-            f"  Error: {e}\n"
-        )
+        typer.echo(f"\n  Evaluation error during Sentinel scan.\n  Error: {e}\n")
         raise typer.Exit(code=2)
 
     # ── Extract comparison data ───────────────────────
     previous_decision: str = str(previous.get("decision", ""))
-    current_decision:  str = str(current_result.get("decision", ""))
+    current_decision: str = str(current_result.get("decision", ""))
 
     previous_risk: int = int(previous.get("overall_risk_score", 0))
-    current_risk:  int = int(
+    current_risk: int = int(
         current_result.get("risk_summary", {}).get("overall_risk_score", 0)
     )
     risk_delta: int = current_risk - previous_risk
@@ -248,14 +259,10 @@ def scan(
     # Current conditions from re-evaluation
     current_trace: list[dict[str, Any]] = current_result.get("trace", [])
     current_failed: set[str] = {
-        t["condition_id"]
-        for t in current_trace
-        if not t.get("result", True)
+        t["condition_id"] for t in current_trace if not t.get("result", True)
     }
     current_passed: set[str] = {
-        t["condition_id"]
-        for t in current_trace
-        if t.get("result", True)
+        t["condition_id"] for t in current_trace if t.get("result", True)
     }
 
     # Conditions that changed state
@@ -269,21 +276,26 @@ def scan(
 
     # ── Determine outcome type ────────────────────────
     #
-    # compliance_violation: previously passing conditions now failing
-    #   This is the highest-priority outcome — governance was
-    #   satisfied before, reality has since diverged.
+    # compliance_violation: previously passing conditions now failing.
+    #   Highest priority — governance was satisfied before,
+    #   reality has since diverged.
     #
-    # drift_detected: any change in conditions or risk score
+    # budget_overrun: cost risk analyzer score increased significantly.
+    #   Indicates the plan's cost profile has grown beyond
+    #   what was previously evaluated.
+    #
+    # drift_detected: any change in conditions or risk score.
     #   Includes newly resolved conditions (improvement) and
-    #   significant risk score changes.
+    #   significant risk score changes in either direction.
     #
-    # budget_overrun: cost increased significantly (>20%)
-    #   Detected via risk score delta on cost domain.
-    #
-    # deployment_success: no drift, decision stable
+    # no_drift: plan state matches previous evaluation exactly.
+    #   Neutral — not a success assertion. Sentinel cannot know
+    #   whether a deployment succeeded without cloud API access.
+    #   deployment_success is reserved for future Sentinel versions
+    #   that can observe actual infrastructure state via cloud APIs.
 
     compliance_violation: bool = bool(new_failures)
-    drift_detected:        bool = bool(new_failures or newly_resolved) or (
+    drift_detected: bool = bool(new_failures or newly_resolved) or (
         abs(risk_delta) >= _RISK_DELTA_THRESHOLD
     )
 
@@ -291,12 +303,14 @@ def scan(
     previous_analyzer_scores: dict[str, int] = json.loads(
         previous.get("analyzer_scores") or "{}"
     )
-    current_analyzer_scores: dict[str, int] = (
-        current_result.get("risk_summary", {}).get("analyzer_scores", {})
-    )
+    current_analyzer_scores: dict[str, int] = current_result.get(
+        "risk_summary", {}
+    ).get("analyzer_scores", {})
     previous_cost_risk: int = int(previous_analyzer_scores.get("cost_analysis", 0))
-    current_cost_risk:  int = int(current_analyzer_scores.get("cost_analysis", 0))
-    budget_overrun: bool = (current_cost_risk - previous_cost_risk) >= _RISK_DELTA_THRESHOLD
+    current_cost_risk: int = int(current_analyzer_scores.get("cost_analysis", 0))
+    budget_overrun: bool = (
+        current_cost_risk - previous_cost_risk
+    ) >= _RISK_DELTA_THRESHOLD
 
     if compliance_violation:
         outcome_type = _OUTCOME_COMPLIANCE_VIOLATION
@@ -308,7 +322,10 @@ def scan(
         outcome_type = _OUTCOME_DRIFT_DETECTED
         outcome_severity = "low"
     else:
-        outcome_type = _OUTCOME_DEPLOYMENT_SUCCESS
+        # No drift detected. Using no_drift rather than deployment_success
+        # because Sentinel cannot observe whether a deployment actually
+        # occurred or succeeded without cloud API access.
+        outcome_type = _OUTCOME_NO_DRIFT
         outcome_severity = "informational"
 
     # ── Record outcome to history ─────────────────────
@@ -325,15 +342,15 @@ def scan(
             f"Current: {current_decision} (risk {current_risk}/100)."
         ),
         metadata={
-            "previous_decision":    previous_decision,
-            "current_decision":     current_decision,
-            "previous_risk_score":  previous_risk,
-            "current_risk_score":   current_risk,
-            "risk_delta":           risk_delta,
-            "new_failures":         sorted(new_failures),
-            "newly_resolved":       sorted(newly_resolved),
-            "plan_path":            plan,
-            "policy_path":          policy_path,
+            "previous_decision": previous_decision,
+            "current_decision": current_decision,
+            "previous_risk_score": previous_risk,
+            "current_risk_score": current_risk,
+            "risk_delta": risk_delta,
+            "new_failures": sorted(new_failures),
+            "newly_resolved": sorted(newly_resolved),
+            "plan_path": plan,
+            "policy_path": policy_path,
         },
     )
 
@@ -369,21 +386,21 @@ def scan(
 
 
 def _print_scan_report(
-    previous:          dict[str, Any],
-    current_result:    dict[str, Any],
+    previous: dict[str, Any],
+    current_result: dict[str, Any],
     previous_decision: str,
-    current_decision:  str,
-    previous_risk:     int,
-    current_risk:      int,
-    risk_delta:        int,
-    all_conditions:    set[str],
-    previous_failed:   set[str],
-    current_failed:    set[str],
-    new_failures:      set[str],
-    newly_resolved:    set[str],
-    outcome_type:      str,
-    plan:              str,
-    policy_path:       str,
+    current_decision: str,
+    previous_risk: int,
+    current_risk: int,
+    risk_delta: int,
+    all_conditions: set[str],
+    previous_failed: set[str],
+    current_failed: set[str],
+    new_failures: set[str],
+    newly_resolved: set[str],
+    outcome_type: str,
+    plan: str,
+    policy_path: str,
 ) -> None:
     """Render the Sentinel drift detection report."""
 
@@ -404,8 +421,14 @@ def _print_scan_report(
     typer.echo("  Decision Comparison")
     typer.echo("─" * _WIDTH)
 
-    prev_icon: str = "✅" if "ALLOW" in previous_decision and "DENY" not in previous_decision else "🚫"
-    curr_icon: str = "✅" if "ALLOW" in current_decision and "DENY" not in current_decision else "🚫"
+    prev_icon: str = (
+        "✅"
+        if "ALLOW" in previous_decision and "DENY" not in previous_decision
+        else "🚫"
+    )
+    curr_icon: str = (
+        "✅" if "ALLOW" in current_decision and "DENY" not in current_decision else "🚫"
+    )
 
     typer.echo(
         f"  Previous:  {prev_icon} {previous_decision:<28}  risk: {previous_risk}/100"
@@ -425,10 +448,10 @@ def _print_scan_report(
         typer.echo("─" * _WIDTH)
 
         for condition in sorted(all_conditions):
-            was_fail:  bool = condition in previous_failed
-            now_fail:  bool = condition in current_failed
-            is_new:    bool = condition in new_failures
-            resolved:  bool = condition in newly_resolved
+            was_fail: bool = condition in previous_failed
+            now_fail: bool = condition in current_failed
+            is_new: bool = condition in new_failures
+            resolved: bool = condition in newly_resolved
 
             prev_sym: str = "✗ FAIL" if was_fail else "✓ PASS"
             curr_sym: str = "✗ FAIL" if now_fail else "✓ PASS"
@@ -437,14 +460,10 @@ def _print_scan_report(
                 note = "  ← NEW FAILURE"
             elif resolved:
                 note = "  ← RESOLVED"
-            elif was_fail and now_fail:
-                note = "  unchanged"
             else:
                 note = "  unchanged"
 
-            typer.echo(
-                f"  {condition:<38}  {prev_sym} → {curr_sym}{note}"
-            )
+            typer.echo(f"  {condition:<38}  {prev_sym} → {curr_sym}{note}")
 
     # ── Outcome ───────────────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
@@ -452,10 +471,16 @@ def _print_scan_report(
     typer.echo("─" * _WIDTH)
 
     _OUTCOME_DISPLAY: dict[str, tuple[str, str]] = {
-        _OUTCOME_DEPLOYMENT_SUCCESS:   ("✅", "No drift detected"),
-        _OUTCOME_DRIFT_DETECTED:       ("⚠ ", "Drift detected"),
-        _OUTCOME_COMPLIANCE_VIOLATION: ("🚨", "Compliance violation — previously passing conditions now failing"),
-        _OUTCOME_BUDGET_OVERRUN:       ("💰", "Budget overrun — cost risk increased significantly"),
+        _OUTCOME_NO_DRIFT: ("✅", "No drift detected"),
+        _OUTCOME_DRIFT_DETECTED: ("⚠ ", "Drift detected"),
+        _OUTCOME_COMPLIANCE_VIOLATION: (
+            "🚨",
+            "Compliance violation — previously passing conditions now failing",
+        ),
+        _OUTCOME_BUDGET_OVERRUN: (
+            "💰",
+            "Budget overrun — cost risk increased significantly",
+        ),
     }
 
     icon, label = _OUTCOME_DISPLAY.get(outcome_type, ("ℹ ", outcome_type))

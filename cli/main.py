@@ -40,8 +40,8 @@ app = typer.Typer(
 )
 
 # ── Register commands ──────────────────────────────
-app.add_typer(audit_app,     name="audit")
-app.add_typer(sentinel_app,  name="sentinel")
+app.add_typer(audit_app, name="audit")
+app.add_typer(sentinel_app, name="sentinel")
 app.command(name="test")(test_command)
 
 
@@ -157,11 +157,11 @@ def evaluate(
             "evaluation_started",
             extra={
                 "extra": {
-                    "plan":          plan,
-                    "policy":        policy,
-                    "role":          role,
-                    "pricing":       pricing,
-                    "region":        region,
+                    "plan": plan,
+                    "policy": policy,
+                    "role": role,
+                    "pricing": pricing,
+                    "region": region,
                     "current_spend": current_spend,
                 }
             },
@@ -232,7 +232,7 @@ def evaluate(
             "evaluation_completed",
             extra={
                 "extra": {
-                    "decision":    result["decision"],
+                    "decision": result["decision"],
                     "decision_id": result["decision_id"],
                 }
             },
@@ -294,11 +294,11 @@ def validate(
         print(
             json.dumps(
                 {
-                    "status":  "valid",
-                    "policy":  policy,
-                    "name":    policy_obj.metadata.name,
+                    "status": "valid",
+                    "policy": policy,
+                    "name": policy_obj.metadata.name,
                     "version": policy_obj.metadata.version,
-                    "owner":   policy_obj.metadata.owner,
+                    "owner": policy_obj.metadata.owner,
                 },
                 indent=2,
             )
@@ -310,7 +310,7 @@ def validate(
                 {
                     "status": "invalid",
                     "policy": policy,
-                    "error":  str(e),
+                    "error": str(e),
                 },
                 indent=2,
             )
