@@ -31,6 +31,7 @@ from typing import Any, Optional
 
 import typer
 
+from cli.display import decision_icon
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.store import (
     get_domain_risk_summary,
@@ -112,7 +113,7 @@ def audit(
             "\n  Telemetry is disabled.\n"
             "  verdict audit requires decision history.\n\n"
             "  To enable:\n"
-            "    export OW_TELEMETRY_ENABLED=true\n\n"
+            "    export OW_HISTORY_ENABLED=true\n\n"
             "  What is stored locally:\n"
             "    Decision outcomes, risk scores, policy names,\n"
             "    condition results. No plan contents.\n"
@@ -304,7 +305,7 @@ def _print_audit_table(
         name_r: str = str(row.get("policy_name", ""))[:30]
         decision: str = str(row.get("decision", ""))[:22]
         score: int = int(row.get("overall_risk_score", 0))
-        icon: str = "✅" if row.get("decision") == "ALLOW" else "🚫"
+        icon: str = decision_icon(str(row.get("decision", "")))
         typer.echo(
             f"  {short_id:<12}  {name_r:<32}  {icon} {decision:<22}  {score:>5}/100"
         )

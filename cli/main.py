@@ -7,6 +7,8 @@
 #   evaluate   Evaluate a Terraform plan against a policy
 #   validate   Validate a policy schema only
 #   audit      Governance risk summary across recorded decisions
+#   test       Assert expected governance decision
+#   sentinel   Post-deployment reality verification
 #
 # Enterprise design:
 #   Validation explicit      ← compliance requirement
@@ -23,6 +25,7 @@ import typer
 
 from audit.audit_logger import get_logger
 from cli.commands.audit import audit_app
+from cli.commands.sentinel import sentinel_app
 from cli.commands.test_command import test_command
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
@@ -36,8 +39,9 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# ── Register commands ──────────────────────────
+# ── Register commands ──────────────────────────────
 app.add_typer(audit_app, name="audit")
+app.add_typer(sentinel_app, name="sentinel")
 app.command(name="test")(test_command)
 
 
@@ -210,13 +214,19 @@ def evaluate(
             json.dump(result, f, indent=2, default=str)
 
         # ---------------------------------------------
-        # STEP 5 — Record to telemetry store
-        # Only writes if OW_TELEMETRY_ENABLED=true.
-        # Silently no-ops if telemetry is disabled.
-        # Never raises — telemetry must not crash CLI.
+        # STEP 5 — Record to governance history
+        # Only writes if history is enabled.
+        # Silently no-ops if disabled.
+        # Never raises — history must not crash CLI.
+        # policy_path stored so Sentinel can reload
+        # the policy without user re-specifying it.
         # ---------------------------------------------
 
-        record_decision(result=result, plan_path=plan)
+        record_decision(
+            result=result,
+            plan_path=plan,
+            policy_path=policy,
+        )
 
         logger.info(
             "evaluation_completed",
