@@ -30,6 +30,7 @@
 #
 # Database evolution:
 #   v0.3.0  SQLite — local only (~/.obsidianwall/decisions.db)
+#   v0.4.0  Added policy_path column for Sentinel verification
 #   Compass PostgreSQL (Supabase) — hosted, multi-tenant
 #
 # Location:
@@ -46,6 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
+
 
 # =====================================================
 # SCHEMA
@@ -75,7 +77,8 @@ CREATE TABLE IF NOT EXISTS decisions (
     passed_conditions   TEXT,
     analyzer_scores     TEXT,
     pricing_mode        TEXT,
-    region              TEXT
+    region              TEXT,
+    policy_path         TEXT
 );
 
 -- Override events.
@@ -108,13 +111,13 @@ CREATE TABLE IF NOT EXISTS approvals (
 -- Schema defined now. Populated by Sentinel v0.4.0.
 --
 -- outcome_type values:
---   deployment_success    → deployment completed
+--   deployment_success    → deployment completed, no drift
 --   deployment_failure    → deployment failed after authorization
 --   budget_overrun        → actual cost exceeded estimate
 --   security_incident     → security event after allowed deployment
---   compliance_violation  → compliance failure after allowed deployment
+--   compliance_violation  → previously passing conditions now failing
 --   availability_event    → availability impact after deployment
---   drift_detected        → resource drifted from declared state
+--   drift_detected        → infrastructure drifted from declared state
 --
 -- Correlating decisions with outcomes enables:
 --   "92% of cost denials that were overridden
@@ -148,6 +151,38 @@ CREATE TABLE IF NOT EXISTS policy_effectiveness (
 );
 """
 
+# =====================================================
+# MIGRATIONS
+# =====================================================
+
+# Each migration is a single SQL statement.
+# Applied in order on every init_db() call.
+# Idempotent — OperationalError means already applied.
+_MIGRATIONS: list[str] = [
+    # v0.4.0: Store policy path for Sentinel verification.
+    # Sentinel loads the policy path from the stored decision
+    # to re-evaluate the current plan without requiring the
+    # user to re-specify the policy on the command line.
+    "ALTER TABLE decisions ADD COLUMN policy_path TEXT",
+]
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """
+    Apply incremental schema migrations to an existing database.
+
+    Safe to run on every init_db() call — each migration is
+    guarded by a try/except on OperationalError, which fires
+    when the column already exists. This makes each migration
+    idempotent regardless of the database version.
+    """
+    for migration in _MIGRATIONS:
+        try:
+            conn.execute(migration)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Already applied — safe to continue
+
 
 # =====================================================
 # DATABASE INITIALIZATION
@@ -156,8 +191,8 @@ CREATE TABLE IF NOT EXISTS policy_effectiveness (
 
 def init_db(db_path: Path | None = None) -> sqlite3.Connection:
     """
-    Initialize the SQLite database and create schema
-    if it does not exist.
+    Initialize the SQLite database, create schema if needed,
+    and apply any pending migrations.
 
     Args:
         db_path: optional path override (for testing)
@@ -172,6 +207,7 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(_SCHEMA)
     conn.commit()
+    _run_migrations(conn)
     return conn
 
 
@@ -181,23 +217,29 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 def record_decision(
-    result: dict[str, Any],
-    plan_path: str | None = None,
+    result:      dict[str, Any],
+    plan_path:   str | None = None,
+    policy_path: str | None = None,
 ) -> bool:
     """
     Write a governance decision to the local store.
     Covers telemetry layers 1 and 2.
 
-    Only writes if telemetry is enabled.
+    Only writes if governance history is enabled.
     Never writes plan contents — only a SHA-256
     hash of the plan path is stored.
 
+    The policy_path is stored as-is and used by Sentinel
+    to re-evaluate the current plan against the same policy
+    without requiring the user to re-specify it.
+
     Args:
-        result:    complete verdict evaluate result dict
-        plan_path: path to the Terraform plan file
+        result:      complete verdict evaluate result dict
+        plan_path:   path to the Terraform plan file
+        policy_path: path to the policy YAML file
 
     Returns:
-        True if written, False if telemetry disabled
+        True if written, False if history disabled
         or write failed
     """
     if not is_telemetry_enabled():
@@ -216,7 +258,9 @@ def record_decision(
         # Hash the plan path — never store plan contents
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
+            plan_hash = hashlib.sha256(
+                plan_path.encode("utf-8")
+            ).hexdigest()[:16]
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
@@ -239,7 +283,8 @@ def record_decision(
                 override_possible, requires_approval,
                 user_role, plan_hash, total_findings,
                 failed_conditions, passed_conditions,
-                analyzer_scores, pricing_mode, region
+                analyzer_scores, pricing_mode, region,
+                policy_path
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?,
@@ -248,7 +293,8 @@ def record_decision(
                 ?, ?,
                 ?, ?, ?,
                 ?, ?,
-                ?, ?, ?
+                ?, ?, ?,
+                ?
             )
             """,
             (
@@ -272,6 +318,7 @@ def record_decision(
                 analyzer_scores,
                 result.get("pricing_mode", "table"),
                 None,
+                policy_path,
             ),
         )
 
@@ -287,7 +334,7 @@ def record_decision(
         return True
 
     except Exception:
-        # Telemetry must never crash the CLI
+        # Governance history must never crash the CLI
         return False
 
 
@@ -297,9 +344,9 @@ def record_decision(
 
 
 def record_override(
-    decision_id: str,
+    decision_id:   str,
     override_role: str | None,
-    approved: bool,
+    approved:      bool,
 ) -> bool:
     """
     Record an override event against a decision.
@@ -334,10 +381,10 @@ def record_override(
 
 
 def record_approval(
-    decision_id: str,
+    decision_id:   str,
     approver_role: str | None,
-    approved: bool,
-    notes: str | None = None,
+    approved:      bool,
+    notes:         str | None = None,
 ) -> bool:
     """
     Record an approval event against a decision.
@@ -380,25 +427,27 @@ def record_approval(
 
 
 def record_outcome(
-    decision_id: str,
+    decision_id:  str,
     outcome_type: str,
-    severity: str | None = None,
-    description: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    severity:     str | None = None,
+    description:  str | None = None,
+    metadata:     dict[str, Any] | None = None,
 ) -> bool:
     """
     Record an outcome event against a governance decision.
     Telemetry layers 4 and 5.
 
-    Called by Sentinel after deployment observation.
-    Can also be called manually via verdict outcome command
-    in a future release.
+    Called by Sentinel after observing reality against
+    a previous governance decision.
 
     outcome_type values:
-        deployment_success, deployment_failure,
-        budget_overrun, security_incident,
-        compliance_violation, availability_event,
-        drift_detected
+        deployment_success   — no drift, decision still holds
+        deployment_failure   — deployment failed post-authorization
+        budget_overrun       — cost exceeded estimate
+        security_incident    — security event after allowed deployment
+        compliance_violation — previously passing conditions now failing
+        availability_event   — availability impact after deployment
+        drift_detected       — infrastructure drifted from declared state
 
     Args:
         decision_id:  UUID of the original governance decision
@@ -408,7 +457,7 @@ def record_outcome(
         metadata:     domain-specific outcome data (JSON-serializable)
 
     Returns:
-        True if written, False if telemetry disabled or failed
+        True if written, False if history disabled or failed
     """
     if not is_telemetry_enabled():
         return False
@@ -446,10 +495,10 @@ def record_outcome(
 
 
 def _update_effectiveness(
-    conn: sqlite3.Connection,
+    conn:        sqlite3.Connection,
     policy_name: str,
-    decision: str,
-    timestamp: str,
+    decision:    str,
+    timestamp:   str,
 ) -> None:
     """
     Update running totals in policy_effectiveness.
@@ -483,17 +532,17 @@ def _update_effectiveness(
 
 
 # =====================================================
-# READ — for verdict audit, history, effectiveness
+# READ — for verdict audit, sentinel, effectiveness
 # =====================================================
 
 
 def get_recent_decisions(
-    limit: int = 50,
+    limit:   int        = 50,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Return most recent governance decisions."""
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             "SELECT * FROM decisions ORDER BY timestamp DESC LIMIT ?",
             (limit,),
@@ -506,8 +555,8 @@ def get_recent_decisions(
 
 
 def get_policy_effectiveness(
-    policy_name: str | None = None,
-    db_path: Path | None = None,
+    policy_name: str | None  = None,
+    db_path:     Path | None = None,
 ) -> list[dict[str, Any]]:
     """Return policy effectiveness summaries with override counts."""
     try:
@@ -517,8 +566,8 @@ def get_policy_effectiveness(
                 """
                 SELECT
                     pe.*,
-                    COUNT(DISTINCT o.id) as override_count,
-                    COUNT(DISTINCT a.id) as approval_count,
+                    COUNT(DISTINCT o.id)  as override_count,
+                    COUNT(DISTINCT a.id)  as approval_count,
                     COUNT(DISTINCT oc.id) as outcome_count
                 FROM policy_effectiveness pe
                 LEFT JOIN decisions d  ON d.policy_name = pe.policy_name
@@ -535,8 +584,8 @@ def get_policy_effectiveness(
                 """
                 SELECT
                     pe.*,
-                    COUNT(DISTINCT o.id) as override_count,
-                    COUNT(DISTINCT a.id) as approval_count,
+                    COUNT(DISTINCT o.id)  as override_count,
+                    COUNT(DISTINCT a.id)  as approval_count,
                     COUNT(DISTINCT oc.id) as outcome_count
                 FROM policy_effectiveness pe
                 LEFT JOIN decisions d  ON d.policy_name = pe.policy_name
@@ -556,11 +605,11 @@ def get_policy_effectiveness(
 
 def get_decision_by_id(
     decision_id: str,
-    db_path: Path | None = None,
+    db_path:     Path | None = None,
 ) -> dict[str, Any] | None:
     """Return a single decision by ID with outcomes."""
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             "SELECT * FROM decisions WHERE id = ?",
             (decision_id,),
@@ -572,7 +621,6 @@ def get_decision_by_id(
 
         result = dict(row)
 
-        # Include outcomes if any exist
         outcomes_cursor = conn.execute(
             "SELECT * FROM outcomes WHERE decision_id = ? ORDER BY timestamp",
             (decision_id,),
@@ -593,7 +641,7 @@ def get_domain_risk_summary(
     Used by verdict audit command.
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT
@@ -613,11 +661,13 @@ def get_domain_risk_summary(
 
         domain_scores: dict[str, list[int]] = {}
         total_count = len(rows)
-        deny_total = sum(1 for r in rows if "DENY" in r["decision"])
+        deny_total  = sum(1 for r in rows if "DENY" in r["decision"])
 
         for row in rows:
             try:
-                scores: dict[str, int] = json.loads(row.get("analyzer_scores") or "{}")
+                scores: dict[str, int] = json.loads(
+                    row.get("analyzer_scores") or "{}"
+                )
                 for domain, score in scores.items():
                     domain_scores.setdefault(domain, []).append(score)
             except (json.JSONDecodeError, TypeError):
@@ -625,9 +675,10 @@ def get_domain_risk_summary(
 
         return {
             "total_evaluations": total_count,
-            "total_denied": deny_total,
-            "deny_rate": (
-                round(deny_total / total_count * 100, 1) if total_count else 0
+            "total_denied":      deny_total,
+            "deny_rate":         (
+                round(deny_total / total_count * 100, 1)
+                if total_count else 0
             ),
             "domain_avg_scores": {
                 domain: round(sum(s) / len(s), 1)
@@ -646,16 +697,9 @@ def get_failed_conditions_summary(
     """
     Aggregate failed condition counts across all decisions.
     Powers the 'Why denied?' section of verdict audit.
-
-    Returns a list of dicts sorted by failure count descending:
-        [{"condition_id": "budget_check", "count": 5, "rate": 83.3}]
-
-    rate is the percentage of total evaluations in which
-    this condition failed — not just evaluations where
-    conditions were checked.
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT failed_conditions
@@ -674,7 +718,9 @@ def get_failed_conditions_summary(
 
         for row in rows:
             try:
-                failed: list[str] = json.loads(row.get("failed_conditions") or "[]")
+                failed: list[str] = json.loads(
+                    row.get("failed_conditions") or "[]"
+                )
                 for cid in failed:
                     condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
@@ -684,8 +730,8 @@ def get_failed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count": count,
-                    "rate": round(count / total * 100, 1),
+                    "count":        count,
+                    "rate":         round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
@@ -703,15 +749,9 @@ def get_passed_conditions_summary(
     """
     Aggregate passed condition counts across all decisions.
     Powers the 'Why allowed?' section of verdict audit.
-
-    Returns a list of dicts sorted by pass count descending:
-        [{"condition_id": "budget_check", "count": 10, "rate": 100.0}]
-
-    rate is the percentage of total evaluations in which
-    this condition passed.
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT passed_conditions
@@ -730,7 +770,9 @@ def get_passed_conditions_summary(
 
         for row in rows:
             try:
-                passed: list[str] = json.loads(row.get("passed_conditions") or "[]")
+                passed: list[str] = json.loads(
+                    row.get("passed_conditions") or "[]"
+                )
                 for cid in passed:
                     condition_counts[cid] = condition_counts.get(cid, 0) + 1
             except (json.JSONDecodeError, TypeError):
@@ -740,8 +782,8 @@ def get_passed_conditions_summary(
             [
                 {
                     "condition_id": cid,
-                    "count": count,
-                    "rate": round(count / total * 100, 1),
+                    "count":        count,
+                    "rate":         round(count / total * 100, 1),
                 }
                 for cid, count in condition_counts.items()
             ],
@@ -758,15 +800,10 @@ def get_outcome_summary(
 ) -> list[dict[str, Any]]:
     """
     Return outcome type counts across all recorded outcomes.
-    Empty until Sentinel v0.4.0 starts recording outcomes.
-
     Powers the 'Deployment Outcomes' section of verdict audit.
-
-    Returns a list of dicts sorted by frequency descending:
-        [{"outcome_type": "budget_overrun", "count": 3}]
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT outcome_type, COUNT(*) as count
@@ -788,15 +825,9 @@ def get_outcome_correlation(
     """
     Correlate governance decisions with outcomes.
     Powers future Governance Intelligence in Compass.
-
-    Example result:
-        "budget policy DENY overridden 91% of the time,
-         budget_overrun outcome in 73% of those cases"
-
-    Empty until Sentinel v0.4.0 populates the outcomes table.
     """
     try:
-        conn = init_db(db_path)
+        conn   = init_db(db_path)
         cursor = conn.execute(
             """
             SELECT
