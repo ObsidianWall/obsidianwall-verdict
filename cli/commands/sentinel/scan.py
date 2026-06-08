@@ -41,6 +41,7 @@ from typing import Any, Optional
 
 import typer
 
+from cli.display import decision_icon
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
@@ -421,14 +422,8 @@ def _print_scan_report(
     typer.echo("  Decision Comparison")
     typer.echo("─" * _WIDTH)
 
-    prev_icon: str = (
-        "✅"
-        if "ALLOW" in previous_decision and "DENY" not in previous_decision
-        else "🚫"
-    )
-    curr_icon: str = (
-        "✅" if "ALLOW" in current_decision and "DENY" not in current_decision else "🚫"
-    )
+    prev_icon: str = decision_icon(previous_decision)
+    curr_icon: str = decision_icon(current_decision)
 
     typer.echo(
         f"  Previous:  {prev_icon} {previous_decision:<28}  risk: {previous_risk}/100"
