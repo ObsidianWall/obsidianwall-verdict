@@ -31,6 +31,7 @@ from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
+from notifications import dispatch_notifications
 from telemetry.store import record_decision
 
 app = typer.Typer(
@@ -226,6 +227,19 @@ def evaluate(
             result=result,
             plan_path=plan,
             policy_path=policy,
+        )
+
+        # ---------------------------------------------
+        # STEP 5b — Dispatch notifications
+        # Routes pending notifications to configured
+        # channels (email, Slack).
+        # Silently no-ops if no channels are configured.
+        # Never raises — notifications must not crash CLI.
+        # ---------------------------------------------
+
+        dispatch_notifications(
+            notification_manifest=result.get("notification_manifest", {}),
+            decision_id=result.get("decision_id", ""),
         )
 
         logger.info(
