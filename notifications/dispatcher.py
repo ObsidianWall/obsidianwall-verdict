@@ -12,17 +12,15 @@
 #
 # Architecture boundary:
 # This dispatcher is the ONLY place that calls channel senders.
-# Channel senders (email.py, slack.py) never call each other.
-# The orchestrator never calls channel senders directly.
+# Channel senders (email.py, slack.py, teams.py) never call
+# each other. The orchestrator never calls channel senders directly.
 #
-# Sentinel integration:
-# The dispatcher can also be called for outcome-based
-# notifications when Sentinel detects compliance violations
-# or drift. The manifest structure is the same.
+# Supported channels:
+#   email   OW_SMTP_HOST + OW_SMTP_USER + OW_SMTP_PASS + OW_NOTIFICATION_TO
+#   slack   OW_SLACK_WEBHOOK_URL
+#   teams   OW_TEAMS_WEBHOOK_URL
 #
-# Channel configuration (silent no-op if unconfigured):
-#   Email: OW_SMTP_HOST + OW_SMTP_USER + OW_SMTP_PASS + OW_NOTIFICATION_TO
-#   Slack: OW_SLACK_WEBHOOK_URL
+# All channels are opt-in. Unconfigured channels silently skip.
 
 from __future__ import annotations
 
@@ -31,18 +29,21 @@ from typing import Any
 from audit.audit_logger import get_logger
 from notifications.channels.email import send_email
 from notifications.channels.slack import send_slack
+from notifications.channels.teams import send_teams
 from notifications.config import (
     get_slack_webhook_url,
     get_smtp_config,
+    get_teams_webhook_url,
     is_email_configured,
     is_slack_configured,
+    is_teams_configured,
 )
 
 logger = get_logger()
 
 # Dispatch status constants
-_STATUS_SENT    = "sent"
-_STATUS_FAILED  = "failed"
+_STATUS_SENT = "sent"
+_STATUS_FAILED = "failed"
 _STATUS_SKIPPED = "skipped_not_configured"
 
 
@@ -65,6 +66,8 @@ def dispatch_notifications(
     If no channels are configured, all notifications are
     marked as skipped_not_configured and the function
     returns immediately without network calls.
+
+    Supported channels: email, slack, teams.
 
     Args:
         notification_manifest:  complete notification manifest
@@ -93,30 +96,29 @@ def dispatch_notifications(
     # environment variable reads.
     email_configured: bool = is_email_configured()
     slack_configured: bool = is_slack_configured()
+    teams_configured: bool = is_teams_configured()
 
     # If nothing is configured, mark all as skipped and return
-    if not email_configured and not slack_configured:
-        skipped = [
-            {**n, "dispatch_status": _STATUS_SKIPPED}
-            for n in notifications
-        ]
+    if not email_configured and not slack_configured and not teams_configured:
+        skipped = [{**n, "dispatch_status": _STATUS_SKIPPED} for n in notifications]
         return {
             **notification_manifest,
-            "notifications":    skipped,
+            "notifications": skipped,
             "dispatch_summary": {
-                "sent":    0,
-                "failed":  0,
+                "sent": 0,
+                "failed": 0,
                 "skipped": len(skipped),
             },
             "dispatch_status": "skipped",
         }
 
     smtp_config: dict[str, Any] = get_smtp_config() if email_configured else {}
-    webhook_url: str            = get_slack_webhook_url() if slack_configured else ""
+    slack_url: str = get_slack_webhook_url() if slack_configured else ""
+    teams_url: str = get_teams_webhook_url() if teams_configured else ""
 
-    sent_count:   int = 0
+    sent_count: int = 0
     failed_count: int = 0
-    skip_count:   int = 0
+    skip_count: int = 0
 
     updated_notifications: list[dict[str, Any]] = []
 
@@ -131,66 +133,35 @@ def dispatch_notifications(
                     updated["dispatch_status"] = (
                         _STATUS_SENT if success else _STATUS_FAILED
                     )
-                    if success:
-                        sent_count += 1
-                        logger.info(
-                            "notification_sent",
-                            extra={
-                                "extra": {
-                                    "channel":     "email",
-                                    "role":        notification.get("target_role"),
-                                    "decision":    notification.get("decision"),
-                                    "decision_id": decision_id,
-                                }
-                            },
-                        )
-                    else:
-                        failed_count += 1
-                        logger.warning(
-                            "notification_failed",
-                            extra={
-                                "extra": {
-                                    "channel":     "email",
-                                    "role":        notification.get("target_role"),
-                                    "decision_id": decision_id,
-                                }
-                            },
-                        )
+                    _log_result(success, "email", notification, decision_id)
+                    sent_count += success
+                    failed_count += not success
                 else:
                     updated["dispatch_status"] = _STATUS_SKIPPED
                     skip_count += 1
 
             elif channel == "slack":
                 if slack_configured:
-                    success = send_slack(notification, webhook_url)
+                    success = send_slack(notification, slack_url)
                     updated["dispatch_status"] = (
                         _STATUS_SENT if success else _STATUS_FAILED
                     )
-                    if success:
-                        sent_count += 1
-                        logger.info(
-                            "notification_sent",
-                            extra={
-                                "extra": {
-                                    "channel":     "slack",
-                                    "role":        notification.get("target_role"),
-                                    "decision":    notification.get("decision"),
-                                    "decision_id": decision_id,
-                                }
-                            },
-                        )
-                    else:
-                        failed_count += 1
-                        logger.warning(
-                            "notification_failed",
-                            extra={
-                                "extra": {
-                                    "channel":     "slack",
-                                    "role":        notification.get("target_role"),
-                                    "decision_id": decision_id,
-                                }
-                            },
-                        )
+                    _log_result(success, "slack", notification, decision_id)
+                    sent_count += success
+                    failed_count += not success
+                else:
+                    updated["dispatch_status"] = _STATUS_SKIPPED
+                    skip_count += 1
+
+            elif channel == "teams":
+                if teams_configured:
+                    success = send_teams(notification, teams_url)
+                    updated["dispatch_status"] = (
+                        _STATUS_SENT if success else _STATUS_FAILED
+                    )
+                    _log_result(success, "teams", notification, decision_id)
+                    sent_count += success
+                    failed_count += not success
                 else:
                     updated["dispatch_status"] = _STATUS_SKIPPED
                     skip_count += 1
@@ -208,9 +179,9 @@ def dispatch_notifications(
                 "notification_dispatch_error",
                 extra={
                     "extra": {
-                        "channel":     channel,
-                        "role":        notification.get("target_role"),
-                        "error":       str(exc),
+                        "channel": channel,
+                        "role": notification.get("target_role"),
+                        "error": str(exc),
                         "decision_id": decision_id,
                     }
                 },
@@ -220,8 +191,8 @@ def dispatch_notifications(
 
     # ── Dispatch summary ──────────────────────────────
     dispatch_summary: dict[str, int] = {
-        "sent":    sent_count,
-        "failed":  failed_count,
+        "sent": sent_count,
+        "failed": failed_count,
         "skipped": skip_count,
     }
 
@@ -230,9 +201,9 @@ def dispatch_notifications(
             "notification_dispatch_complete",
             extra={
                 "extra": {
-                    "sent":        sent_count,
-                    "failed":      failed_count,
-                    "skipped":     skip_count,
+                    "sent": sent_count,
+                    "failed": failed_count,
+                    "skipped": skip_count,
                     "decision_id": decision_id,
                 }
             },
@@ -251,7 +222,44 @@ def dispatch_notifications(
 
     return {
         **notification_manifest,
-        "notifications":    updated_notifications,
+        "notifications": updated_notifications,
         "dispatch_summary": dispatch_summary,
-        "dispatch_status":  top_status,
+        "dispatch_status": top_status,
     }
+
+
+# =====================================================
+# HELPERS
+# =====================================================
+
+
+def _log_result(
+    success: bool,
+    channel: str,
+    notification: dict[str, Any],
+    decision_id: str,
+) -> None:
+    """Log send success or failure for a single notification."""
+    if success:
+        logger.info(
+            "notification_sent",
+            extra={
+                "extra": {
+                    "channel": channel,
+                    "role": notification.get("target_role"),
+                    "decision": notification.get("decision"),
+                    "decision_id": decision_id,
+                }
+            },
+        )
+    else:
+        logger.warning(
+            "notification_failed",
+            extra={
+                "extra": {
+                    "channel": channel,
+                    "role": notification.get("target_role"),
+                    "decision_id": decision_id,
+                }
+            },
+        )

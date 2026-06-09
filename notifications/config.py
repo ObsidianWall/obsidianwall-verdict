@@ -18,6 +18,9 @@
 # Slack configuration:
 #   OW_SLACK_WEBHOOK_URL  Slack incoming webhook URL
 #
+# Teams configuration:
+#   OW_TEAMS_WEBHOOK_URL  Microsoft Teams incoming webhook URL
+#
 # MVP note on email addressing:
 #   The notification manifest uses role names (budget_owner,
 #   engineering_lead) not email addresses. For MVP, all email
@@ -30,16 +33,17 @@ from __future__ import annotations
 import os
 from typing import Any
 
-_SMTP_HOST_KEY     = "OW_SMTP_HOST"
-_SMTP_PORT_KEY     = "OW_SMTP_PORT"
-_SMTP_USER_KEY     = "OW_SMTP_USER"
-_SMTP_PASS_KEY     = "OW_SMTP_PASS"
-_NOTIFY_FROM_KEY   = "OW_NOTIFICATION_FROM"
-_NOTIFY_TO_KEY     = "OW_NOTIFICATION_TO"
+_SMTP_HOST_KEY = "OW_SMTP_HOST"
+_SMTP_PORT_KEY = "OW_SMTP_PORT"
+_SMTP_USER_KEY = "OW_SMTP_USER"
+_SMTP_PASS_KEY = "OW_SMTP_PASS"
+_NOTIFY_FROM_KEY = "OW_NOTIFICATION_FROM"
+_NOTIFY_TO_KEY = "OW_NOTIFICATION_TO"
 _SLACK_WEBHOOK_KEY = "OW_SLACK_WEBHOOK_URL"
+_TEAMS_WEBHOOK_KEY = "OW_TEAMS_WEBHOOK_URL"
 
 _DEFAULT_FROM_ADDRESS = "verdict@obsidianwall.io"
-_DEFAULT_SMTP_PORT    = 587
+_DEFAULT_SMTP_PORT = 587
 
 
 def get_smtp_config() -> dict[str, Any]:
@@ -50,12 +54,12 @@ def get_smtp_config() -> dict[str, Any]:
     Empty strings indicate unconfigured values.
     """
     return {
-        "host":         os.environ.get(_SMTP_HOST_KEY, ""),
-        "port":         int(os.environ.get(_SMTP_PORT_KEY, str(_DEFAULT_SMTP_PORT))),
-        "user":         os.environ.get(_SMTP_USER_KEY, ""),
-        "password":     os.environ.get(_SMTP_PASS_KEY, ""),
+        "host": os.environ.get(_SMTP_HOST_KEY, ""),
+        "port": int(os.environ.get(_SMTP_PORT_KEY, str(_DEFAULT_SMTP_PORT))),
+        "user": os.environ.get(_SMTP_USER_KEY, ""),
+        "password": os.environ.get(_SMTP_PASS_KEY, ""),
         "from_address": os.environ.get(_NOTIFY_FROM_KEY, _DEFAULT_FROM_ADDRESS),
-        "to_address":   os.environ.get(_NOTIFY_TO_KEY, ""),
+        "to_address": os.environ.get(_NOTIFY_TO_KEY, ""),
     }
 
 
@@ -67,12 +71,7 @@ def is_email_configured() -> bool:
     Port and from_address have safe defaults.
     """
     cfg = get_smtp_config()
-    return bool(
-        cfg["host"]
-        and cfg["user"]
-        and cfg["password"]
-        and cfg["to_address"]
-    )
+    return bool(cfg["host"] and cfg["user"] and cfg["password"] and cfg["to_address"])
 
 
 def get_slack_webhook_url() -> str:
@@ -83,3 +82,13 @@ def get_slack_webhook_url() -> str:
 def is_slack_configured() -> bool:
     """Return True if the Slack webhook URL is set."""
     return bool(get_slack_webhook_url())
+
+
+def get_teams_webhook_url() -> str:
+    """Return the Teams incoming webhook URL, or empty string."""
+    return os.environ.get(_TEAMS_WEBHOOK_KEY, "")
+
+
+def is_teams_configured() -> bool:
+    """Return True if the Teams webhook URL is set."""
+    return bool(get_teams_webhook_url())

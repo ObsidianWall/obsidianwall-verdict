@@ -48,21 +48,23 @@ def send_email(
         Never raises.
     """
     try:
-        subject:  str = notification.get("subject", "ObsidianWall Governance Notification")
-        body:     str = notification.get("body", "")
-        role:     str = notification.get("target_role", "unknown")
+        subject: str = notification.get(
+            "subject", "ObsidianWall Governance Notification"
+        )
+        body: str = notification.get("body", "")
+        role: str = notification.get("target_role", "unknown")
         decision: str = notification.get("decision", "")
-        policy:   str = notification.get("policy", "")
+        policy: str = notification.get("policy", "")
 
         from_addr: str = smtp_config.get("from_address", "verdict@obsidianwall.io")
-        to_addr:   str = smtp_config.get("to_address", "")
+        to_addr: str = smtp_config.get("to_address", "")
 
         if not to_addr:
             return False
 
         msg = MIMEMultipart()
-        msg["From"]    = from_addr
-        msg["To"]      = to_addr
+        msg["From"] = from_addr
+        msg["To"] = to_addr
         msg["Subject"] = subject
 
         # Prepend role context to body.
