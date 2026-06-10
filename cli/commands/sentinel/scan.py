@@ -46,6 +46,7 @@ from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
+from notifications import dispatch_notifications
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.store import (
     get_decision_by_id,
@@ -72,10 +73,10 @@ sentinel_app = typer.Typer(
 #   availability_event   — availability impact after deployment
 #   manual_rollback      — deployment manually rolled back
 
-_OUTCOME_NO_DRIFT = "no_drift"
-_OUTCOME_DRIFT_DETECTED = "drift_detected"
+_OUTCOME_NO_DRIFT             = "no_drift"
+_OUTCOME_DRIFT_DETECTED       = "drift_detected"
 _OUTCOME_COMPLIANCE_VIOLATION = "compliance_violation"
-_OUTCOME_BUDGET_OVERRUN = "budget_overrun"
+_OUTCOME_BUDGET_OVERRUN       = "budget_overrun"
 
 # Risk score increase above this threshold triggers drift_detected
 # even when conditions have not changed.
@@ -235,16 +236,18 @@ def scan(
             user_role=role,
         )
 
-    except Exception as e:
-        typer.echo(f"\n  Evaluation error during Sentinel scan.\n  Error: {e}\n")
+    except Exception as exception:
+        typer.echo(
+            f"\n  Evaluation error during Sentinel scan.\n  Error: {exception}\n"
+        )
         raise typer.Exit(code=2)
 
     # ── Extract comparison data ───────────────────────
     previous_decision: str = str(previous.get("decision", ""))
-    current_decision: str = str(current_result.get("decision", ""))
+    current_decision:  str = str(current_result.get("decision", ""))
 
     previous_risk: int = int(previous.get("overall_risk_score", 0))
-    current_risk: int = int(
+    current_risk:  int = int(
         current_result.get("risk_summary", {}).get("overall_risk_score", 0)
     )
     risk_delta: int = current_risk - previous_risk
@@ -260,15 +263,19 @@ def scan(
     # Current conditions from re-evaluation
     current_trace: list[dict[str, Any]] = current_result.get("trace", [])
     current_failed: set[str] = {
-        t["condition_id"] for t in current_trace if not t.get("result", True)
+        trace_entry["condition_id"]
+        for trace_entry in current_trace
+        if not trace_entry.get("result", True)
     }
     current_passed: set[str] = {
-        t["condition_id"] for t in current_trace if t.get("result", True)
+        trace_entry["condition_id"]
+        for trace_entry in current_trace
+        if trace_entry.get("result", True)
     }
 
     # Conditions that changed state
-    new_failures: set[str] = current_failed - previous_failed
-    newly_resolved: set[str] = previous_failed - current_failed
+    new_failures:    set[str] = current_failed - previous_failed
+    newly_resolved:  set[str] = previous_failed - current_failed
 
     # All conditions seen across both evaluations
     all_conditions: set[str] = (
@@ -308,25 +315,25 @@ def scan(
         "risk_summary", {}
     ).get("analyzer_scores", {})
     previous_cost_risk: int = int(previous_analyzer_scores.get("cost_analysis", 0))
-    current_cost_risk: int = int(current_analyzer_scores.get("cost_analysis", 0))
+    current_cost_risk:  int = int(current_analyzer_scores.get("cost_analysis", 0))
     budget_overrun: bool = (
         current_cost_risk - previous_cost_risk
     ) >= _RISK_DELTA_THRESHOLD
 
     if compliance_violation:
-        outcome_type = _OUTCOME_COMPLIANCE_VIOLATION
+        outcome_type     = _OUTCOME_COMPLIANCE_VIOLATION
         outcome_severity = "high"
     elif budget_overrun:
-        outcome_type = _OUTCOME_BUDGET_OVERRUN
+        outcome_type     = _OUTCOME_BUDGET_OVERRUN
         outcome_severity = "medium"
     elif drift_detected:
-        outcome_type = _OUTCOME_DRIFT_DETECTED
+        outcome_type     = _OUTCOME_DRIFT_DETECTED
         outcome_severity = "low"
     else:
         # No drift detected. Using no_drift rather than deployment_success
         # because Sentinel cannot observe whether a deployment actually
         # occurred or succeeded without cloud API access.
-        outcome_type = _OUTCOME_NO_DRIFT
+        outcome_type     = _OUTCOME_NO_DRIFT
         outcome_severity = "informational"
 
     # ── Record outcome to history ─────────────────────
@@ -343,17 +350,37 @@ def scan(
             f"Current: {current_decision} (risk {current_risk}/100)."
         ),
         metadata={
-            "previous_decision": previous_decision,
-            "current_decision": current_decision,
+            "previous_decision":   previous_decision,
+            "current_decision":    current_decision,
             "previous_risk_score": previous_risk,
-            "current_risk_score": current_risk,
-            "risk_delta": risk_delta,
-            "new_failures": sorted(new_failures),
-            "newly_resolved": sorted(newly_resolved),
-            "plan_path": plan,
-            "policy_path": policy_path,
+            "current_risk_score":  current_risk,
+            "risk_delta":          risk_delta,
+            "new_failures":        sorted(new_failures),
+            "newly_resolved":      sorted(newly_resolved),
+            "plan_path":           plan,
+            "policy_path":         policy_path,
         },
     )
+
+    # ── Dispatch outcome notifications ───────────────
+    # Notify policy stakeholders when drift or violation
+    # is detected. Reuses the same notification targets
+    # (roles and channels) defined in the policy governance
+    # configuration. Silent no-op when no channels configured.
+
+    if outcome_type != _OUTCOME_NO_DRIFT:
+        _dispatch_outcome_notifications(
+            outcome_type=outcome_type,
+            outcome_severity=outcome_severity,
+            policy_name=str(previous.get("policy_name", "")),
+            previous_decision=previous_decision,
+            current_decision=current_decision,
+            previous_risk=previous_risk,
+            current_risk=current_risk,
+            new_failures=new_failures,
+            decision_id=str(previous.get("id", "")),
+            existing_manifest=current_result.get("notification_manifest", {}),
+        )
 
     # ── Print scan report ─────────────────────────────
     _print_scan_report(
@@ -387,26 +414,26 @@ def scan(
 
 
 def _print_scan_report(
-    previous: dict[str, Any],
-    current_result: dict[str, Any],
+    previous:          dict[str, Any],
+    current_result:    dict[str, Any],
     previous_decision: str,
-    current_decision: str,
-    previous_risk: int,
-    current_risk: int,
-    risk_delta: int,
-    all_conditions: set[str],
-    previous_failed: set[str],
-    current_failed: set[str],
-    new_failures: set[str],
-    newly_resolved: set[str],
-    outcome_type: str,
-    plan: str,
-    policy_path: str,
+    current_decision:  str,
+    previous_risk:     int,
+    current_risk:      int,
+    risk_delta:        int,
+    all_conditions:    set[str],
+    previous_failed:   set[str],
+    current_failed:    set[str],
+    new_failures:      set[str],
+    newly_resolved:    set[str],
+    outcome_type:      str,
+    plan:              str,
+    policy_path:       str,
 ) -> None:
     """Render the Sentinel drift detection report."""
 
-    short_id: str = str(previous.get("id", ""))[:8]
-    timestamp: str = str(previous.get("timestamp", ""))[:19].replace("T", " ")
+    short_id:    str = str(previous.get("id", ""))[:8]
+    timestamp:   str = str(previous.get("timestamp", ""))[:19].replace("T", " ")
     policy_name: str = str(previous.get("policy_name", ""))
 
     typer.echo("\n" + "─" * _WIDTH)
@@ -422,19 +449,19 @@ def _print_scan_report(
     typer.echo("  Decision Comparison")
     typer.echo("─" * _WIDTH)
 
-    prev_icon: str = decision_icon(previous_decision)
-    curr_icon: str = decision_icon(current_decision)
+    previous_icon: str = decision_icon(previous_decision)
+    current_icon:  str = decision_icon(current_decision)
 
     typer.echo(
-        f"  Previous:  {prev_icon} {previous_decision:<28}  risk: {previous_risk}/100"
+        f"  Previous:  {previous_icon} {previous_decision:<28}  risk: {previous_risk}/100"
     )
     typer.echo(
-        f"  Current:   {curr_icon} {current_decision:<28}  risk: {current_risk}/100"
+        f"  Current:   {current_icon} {current_decision:<28}  risk: {current_risk}/100"
     )
 
-    delta_str: str = f"+{risk_delta}" if risk_delta > 0 else str(risk_delta)
+    risk_delta_string: str = f"+{risk_delta}" if risk_delta > 0 else str(risk_delta)
     if risk_delta != 0:
-        typer.echo(f"  Risk delta: {delta_str}")
+        typer.echo(f"  Risk delta: {risk_delta_string}")
 
     # ── Condition comparison ──────────────────────────
     if all_conditions:
@@ -443,43 +470,49 @@ def _print_scan_report(
         typer.echo("─" * _WIDTH)
 
         for condition in sorted(all_conditions):
-            was_fail: bool = condition in previous_failed
-            now_fail: bool = condition in current_failed
-            is_new: bool = condition in new_failures
-            resolved: bool = condition in newly_resolved
+            was_failing: bool = condition in previous_failed
+            is_failing:  bool = condition in current_failed
+            is_new:      bool = condition in new_failures
+            is_resolved: bool = condition in newly_resolved
 
-            prev_sym: str = "✗ FAIL" if was_fail else "✓ PASS"
-            curr_sym: str = "✗ FAIL" if now_fail else "✓ PASS"
+            previous_symbol: str = "✗ FAIL" if was_failing else "✓ PASS"
+            current_symbol:  str = "✗ FAIL" if is_failing  else "✓ PASS"
 
             if is_new:
                 note = "  ← NEW FAILURE"
-            elif resolved:
+            elif is_resolved:
                 note = "  ← RESOLVED"
             else:
                 note = "  unchanged"
 
-            typer.echo(f"  {condition:<38}  {prev_sym} → {curr_sym}{note}")
+            typer.echo(
+                f"  {condition:<38}  {previous_symbol} → {current_symbol}{note}"
+            )
 
-    # ── Outcome ───────────────────────────────────────
+    # ── Sentinel observation ──────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
-    typer.echo("  Outcome")
+    typer.echo("  Sentinel Observation")
     typer.echo("─" * _WIDTH)
 
     _OUTCOME_DISPLAY: dict[str, tuple[str, str]] = {
-        _OUTCOME_NO_DRIFT: ("✅", "No drift detected"),
-        _OUTCOME_DRIFT_DETECTED: ("⚠ ", "Drift detected"),
+        _OUTCOME_NO_DRIFT: (
+            "✅", "No drift detected"
+        ),
+        _OUTCOME_DRIFT_DETECTED: (
+            "⚠ ", "Drift detected"
+        ),
         _OUTCOME_COMPLIANCE_VIOLATION: (
-            "🚨",
-            "Compliance violation — previously passing conditions now failing",
+            "🚨", "Compliance violation — previously passing conditions now failing"
         ),
         _OUTCOME_BUDGET_OVERRUN: (
-            "💰",
-            "Budget overrun — cost risk increased significantly",
+            "💰", "Budget overrun — cost risk increased significantly"
         ),
     }
 
-    icon, label = _OUTCOME_DISPLAY.get(outcome_type, ("ℹ ", outcome_type))
-    typer.echo(f"  {icon} {label}")
+    outcome_icon, outcome_label = _OUTCOME_DISPLAY.get(
+        outcome_type, ("ℹ ", outcome_type)
+    )
+    typer.echo(f"  {outcome_icon} {outcome_label}")
     typer.echo(f"  Recorded: {outcome_type}")
 
     if new_failures:
@@ -493,3 +526,98 @@ def _print_scan_report(
             typer.echo(f"    ✓ {condition}")
 
     typer.echo("\n" + "─" * _WIDTH + "\n")
+
+
+# =====================================================
+# OUTCOME NOTIFICATION DISPATCHER
+# =====================================================
+
+
+def _dispatch_outcome_notifications(
+    outcome_type:      str,
+    outcome_severity:  str,
+    policy_name:       str,
+    previous_decision: str,
+    current_decision:  str,
+    previous_risk:     int,
+    current_risk:      int,
+    new_failures:      set[str],
+    decision_id:       str,
+    existing_manifest: dict[str, Any],
+) -> None:
+    """
+    Dispatch Sentinel outcome notifications to policy stakeholders.
+
+    Reuses the same notification targets (roles and channels)
+    defined in the policy governance configuration. Builds
+    Sentinel-specific subject and body content so stakeholders
+    receive a clear explanation of what Sentinel observed.
+
+    Only called when outcome_type is not no_drift.
+    Silent no-op if no channels are configured.
+    Never raises.
+    """
+    existing_notifications: list[dict[str, Any]] = existing_manifest.get(
+        "notifications", []
+    )
+    if not existing_notifications:
+        return
+
+    _OUTCOME_SUBJECTS: dict[str, str] = {
+        _OUTCOME_COMPLIANCE_VIOLATION: (
+            "[ObsidianWall Sentinel] Compliance Violation Detected"
+        ),
+        _OUTCOME_DRIFT_DETECTED: (
+            "[ObsidianWall Sentinel] Governance Drift Detected"
+        ),
+        _OUTCOME_BUDGET_OVERRUN: (
+            "[ObsidianWall Sentinel] Budget Overrun Detected"
+        ),
+    }
+
+    _OUTCOME_PRIORITY: dict[str, str] = {
+        _OUTCOME_COMPLIANCE_VIOLATION: "urgent",
+        _OUTCOME_DRIFT_DETECTED:       "high",
+        _OUTCOME_BUDGET_OVERRUN:       "high",
+    }
+
+    subject:  str = _OUTCOME_SUBJECTS.get(
+        outcome_type, "[ObsidianWall Sentinel] Governance Alert"
+    )
+    priority: str = _OUTCOME_PRIORITY.get(outcome_type, "high")
+
+    failure_detail: str = (
+        f"\nNew failures: {', '.join(sorted(new_failures))}"
+        if new_failures else ""
+    )
+
+    notification_body: str = (
+        f"Sentinel detected: {outcome_type}\n\n"
+        f"Policy:            {policy_name}\n"
+        f"Previous decision: {previous_decision} (risk {previous_risk}/100)\n"
+        f"Current decision:  {current_decision} (risk {current_risk}/100)"
+        f"{failure_detail}"
+    )
+
+    sentinel_notifications: list[dict[str, Any]] = [
+        {
+            **existing_notification,
+            "subject":         subject,
+            "body":            notification_body,
+            "priority":        priority,
+            "decision":        outcome_type,
+            "requires_action": outcome_type == _OUTCOME_COMPLIANCE_VIOLATION,
+            "dispatch_status": "pending",
+        }
+        for existing_notification in existing_notifications
+    ]
+
+    dispatch_notifications(
+        notification_manifest={
+            "notifications_triggered": True,
+            "notification_count":      len(sentinel_notifications),
+            "notifications":           sentinel_notifications,
+            "dispatch_status":         "pending",
+        },
+        decision_id=decision_id,
+    )
