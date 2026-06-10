@@ -70,13 +70,13 @@ def is_email_configured() -> bool:
     Requires: host, user, password, and to_address.
     Port and from_address have safe defaults.
     """
-    cfg = get_smtp_config()
+    smtp_config = get_smtp_config()
     return bool(
-        cfg["host"] 
-        and cfg["user"] 
-        and cfg["password"] 
-        and cfg["to_address"]
-        and cfg["from_address"]
+        smtp_config["host"] 
+        and smtp_config["user"] 
+        and smtp_config["password"] 
+        and smtp_config["to_address"]
+        and smtp_config["from_address"]
     )
 
 
