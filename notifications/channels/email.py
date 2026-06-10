@@ -48,16 +48,16 @@ def send_email(
         Never raises.
     """
     try:
-        subject:  str = notification.get(
+        subject: str = notification.get(
             "subject", "ObsidianWall Governance Notification"
         )
-        body:     str = notification.get("body", "")
-        role:     str = notification.get("target_role", "unknown")
+        body: str = notification.get("body", "")
+        role: str = notification.get("target_role", "unknown")
         decision: str = notification.get("decision", "")
-        policy:   str = notification.get("policy", "")
+        policy: str = notification.get("policy", "")
 
         from_address: str = smtp_config.get("from_address", "")
-        to_address:   str = smtp_config.get("to_address", "")
+        to_address: str = smtp_config.get("to_address", "")
 
         if not from_address:
             return False
@@ -66,8 +66,8 @@ def send_email(
             return False
 
         email_message = MIMEMultipart()
-        email_message["From"]    = from_address
-        email_message["To"]      = to_address
+        email_message["From"] = from_address
+        email_message["To"] = to_address
         email_message["Subject"] = subject
 
         # Prepend role context to body.
@@ -84,9 +84,9 @@ def send_email(
 
         email_message.attach(MIMEText(full_body, "plain"))
 
-        host:     str = smtp_config.get("host", "")
-        port:     int = int(smtp_config.get("port", 587))
-        user:     str = smtp_config.get("user", "")
+        host: str = smtp_config.get("host", "")
+        port: int = int(smtp_config.get("port", 587))
+        user: str = smtp_config.get("user", "")
         password: str = smtp_config.get("password", "")
 
         with smtplib.SMTP(host, port, timeout=10) as smtp_server:

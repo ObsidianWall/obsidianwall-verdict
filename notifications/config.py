@@ -72,9 +72,9 @@ def is_email_configured() -> bool:
     """
     smtp_config = get_smtp_config()
     return bool(
-        smtp_config["host"] 
-        and smtp_config["user"] 
-        and smtp_config["password"] 
+        smtp_config["host"]
+        and smtp_config["user"]
+        and smtp_config["password"]
         and smtp_config["to_address"]
         and smtp_config["from_address"]
     )
