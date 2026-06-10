@@ -12,7 +12,7 @@
 #   OW_SMTP_PORT          SMTP port (default: 587)
 #   OW_SMTP_USER          SMTP username / login
 #   OW_SMTP_PASS          SMTP password
-#   OW_NOTIFICATION_FROM  Sender address (default: verdict@obsidianwall.io)
+#   OW_NOTIFICATION_FROM  Sender address (required — no default)
 #   OW_NOTIFICATION_TO    Recipient address (all notifications)
 #
 # Slack configuration:
@@ -42,7 +42,7 @@ _NOTIFY_TO_KEY = "OW_NOTIFICATION_TO"
 _SLACK_WEBHOOK_KEY = "OW_SLACK_WEBHOOK_URL"
 _TEAMS_WEBHOOK_KEY = "OW_TEAMS_WEBHOOK_URL"
 
-_DEFAULT_FROM_ADDRESS = "verdict@obsidianwall.io"
+_DEFAULT_FROM_ADDRESS = ""  # must be set via OW_NOTIFICATION_FROM
 _DEFAULT_SMTP_PORT = 587
 
 
@@ -70,8 +70,14 @@ def is_email_configured() -> bool:
     Requires: host, user, password, and to_address.
     Port and from_address have safe defaults.
     """
-    cfg = get_smtp_config()
-    return bool(cfg["host"] and cfg["user"] and cfg["password"] and cfg["to_address"])
+    smtp_config = get_smtp_config()
+    return bool(
+        smtp_config["host"]
+        and smtp_config["user"]
+        and smtp_config["password"]
+        and smtp_config["to_address"]
+        and smtp_config["from_address"]
+    )
 
 
 def get_slack_webhook_url() -> str:

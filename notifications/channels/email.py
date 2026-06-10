@@ -56,16 +56,19 @@ def send_email(
         decision: str = notification.get("decision", "")
         policy: str = notification.get("policy", "")
 
-        from_addr: str = smtp_config.get("from_address", "verdict@obsidianwall.io")
-        to_addr: str = smtp_config.get("to_address", "")
+        from_address: str = smtp_config.get("from_address", "")
+        to_address: str = smtp_config.get("to_address", "")
 
-        if not to_addr:
+        if not from_address:
             return False
 
-        msg = MIMEMultipart()
-        msg["From"] = from_addr
-        msg["To"] = to_addr
-        msg["Subject"] = subject
+        if not to_address:
+            return False
+
+        email_message = MIMEMultipart()
+        email_message["From"] = from_address
+        email_message["To"] = to_address
+        email_message["Subject"] = subject
 
         # Prepend role context to body.
         # MVP: one recipient address receives all role notifications.
@@ -79,19 +82,19 @@ def send_email(
             f"{body}"
         )
 
-        msg.attach(MIMEText(full_body, "plain"))
+        email_message.attach(MIMEText(full_body, "plain"))
 
         host: str = smtp_config.get("host", "")
         port: int = int(smtp_config.get("port", 587))
         user: str = smtp_config.get("user", "")
         password: str = smtp_config.get("password", "")
 
-        with smtplib.SMTP(host, port, timeout=10) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(user, password)
-            server.send_message(msg)
+        with smtplib.SMTP(host, port, timeout=10) as smtp_server:
+            smtp_server.ehlo()
+            smtp_server.starttls()
+            smtp_server.ehlo()
+            smtp_server.login(user, password)
+            smtp_server.send_message(email_message)
 
         return True
 
