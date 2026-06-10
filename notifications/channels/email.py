@@ -56,10 +56,10 @@ def send_email(
         decision: str = notification.get("decision", "")
         policy: str = notification.get("policy", "")
 
-        from_addr: str = smtp_config.get("from_address", "verdict@obsidianwall.io")
+        from_addr: str = smtp_config.get("from_address", "")
         to_addr: str = smtp_config.get("to_address", "")
 
-        if not to_addr:
+        if not from_addr:
             return False
 
         msg = MIMEMultipart()
