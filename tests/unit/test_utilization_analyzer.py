@@ -509,28 +509,39 @@ class TestAnalyzeUtilization:
         finding_types = [f["type"] for f in result["findings"]]
         assert "gpu_instance_in_dev_environment" in finding_types
 
+    
+    
+       # In test_utilization_analyzer.py, replace test_detects_cost_anomaly:
+
     def test_detects_cost_anomaly(self) -> None:
         """Resource costing significantly more than average triggers anomaly."""
+        # 4 cheap resources + 1 expensive
+        # average = (4×1 + 100) / 5 = 20.8
+        # threshold = 20.8 × 3 = 62.4
+        # expensive (100) > threshold (62.4) → anomaly triggered
+
         resources = [
-            _make_resource("aws_instance", "cheap_a", instance_type="t3.micro"),
-            _make_resource("aws_instance", "cheap_b", instance_type="t3.micro"),
-            _make_resource("aws_instance", "expensive", instance_type="t3.micro"),
-        ]
+           _make_resource("aws_instance", f"cheap_{i}", instance_type="t3.micro")
+           for i in range(4)
+        ] + [_make_resource("aws_instance", "expensive", instance_type="t3.micro")]
+        
         cost_breakdown = [
-            {"resource": "cheap_a",   "estimated_cost": 5.0},
-            {"resource": "cheap_b",   "estimated_cost": 5.0},
-            {"resource": "expensive", "estimated_cost": 500.0},
-        ]
+            {"resource": f"cheap_{i}", "estimated_cost": 1.0}
+            for i in range(4)
+        ] + [{"resource": "expensive", "estimated_cost": 100.0}]
+     
         context = _make_context(
             resources,
             environment="production",
-            estimated_cost=510.0,
+            estimated_cost=104.0,
             cost_breakdown=cost_breakdown,
         )
         result = analyze_utilization(context)
-
+        
         finding_types = [f["type"] for f in result["findings"]]
         assert "cost_anomaly" in finding_types
+
+
 
     def test_no_cost_anomaly_for_single_resource(self) -> None:
         """Cost anomaly detection requires more than one resource."""
