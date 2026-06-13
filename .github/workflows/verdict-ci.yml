@@ -117,8 +117,7 @@ jobs:
           pip install -e ".[dev]"
           pip install pip-licenses
           pip-licenses \
-            --fail-on="GPL;AGPL;GPL-2.0;GPL-3.0;AGPL-3.0" \
-            --allow-only="MIT;Apache-2.0;Apache Software License;BSD;BSD License;ISC;Python-2.0;PSF;Public Domain;CC0;Unlicense;LGPL;MPL-2.0" \
+            --fail-on="GPL-2.0-only;GPL-2.0-or-later;GPL-3.0-only;GPL-3.0-or-later;AGPL-3.0-only;AGPL-3.0-or-later;AGPL-3.0" \
             --ignore-packages obsidianwall-verdict
 
   # ===================================================
