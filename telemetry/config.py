@@ -50,19 +50,19 @@ def is_telemetry_enabled() -> bool:
     """
     Returns True unless explicitly opted out.
 
-    Governance history is enabled by default.
-    Stored only at ~/.obsidianwall/decisions.db.
-    Nothing is transmitted remotely.
+    OW_HISTORY_ENABLED takes precedence when set.
+    Falls back to legacy OW_TELEMETRY_ENABLED for
+    backward compatibility.
+    Defaults to True — opt-out model.
 
     To opt out:
         export OW_HISTORY_ENABLED=false
-
-    Legacy variable also supported:
-        export OW_TELEMETRY_ENABLED=false
     """
+    if _ENV_KEY in os.environ:
+        return os.environ[_ENV_KEY].lower() == "true"
     if _ENV_KEY_LEGACY in os.environ:
         return os.environ[_ENV_KEY_LEGACY].lower() == "true"
-    return os.environ.get(_ENV_KEY, "true").lower() == "true"
+    return True
 
 
 def get_db_path() -> Path:
