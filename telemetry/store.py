@@ -219,6 +219,7 @@ def record_decision(
     result: dict[str, Any],
     plan_path: str | None = None,
     policy_path: str | None = None,
+    db_path: Path | None = None,
 ) -> bool:
     """
     Write a governance decision to the local store.
@@ -268,7 +269,7 @@ def record_decision(
 
         analyzer_scores = json.dumps(risk_summary.get("analyzer_scores", {}))
 
-        conn = init_db()
+        conn = init_db(db_path)
 
         conn.execute(
             """
@@ -344,6 +345,7 @@ def record_override(
     decision_id: str,
     override_role: str | None,
     approved: bool,
+    db_path: Path | None = None,
 ) -> bool:
     """
     Record an override event against a decision.
@@ -353,7 +355,7 @@ def record_override(
         return False
 
     try:
-        conn = init_db()
+        conn = init_db(db_path)
         conn.execute(
             """
             INSERT INTO overrides (
@@ -382,6 +384,7 @@ def record_approval(
     approver_role: str | None,
     approved: bool,
     notes: str | None = None,
+    db_path: Path | None = None,
 ) -> bool:
     """
     Record an approval event against a decision.
@@ -391,7 +394,7 @@ def record_approval(
         return False
 
     try:
-        conn = init_db()
+        conn = init_db(db_path)
         conn.execute(
             """
             INSERT INTO approvals (
@@ -429,6 +432,7 @@ def record_outcome(
     severity: str | None = None,
     description: str | None = None,
     metadata: dict[str, Any] | None = None,
+    db_path: Path | None = None,
 ) -> bool:
     """
     Record an outcome event against a governance decision.
@@ -460,7 +464,7 @@ def record_outcome(
         return False
 
     try:
-        conn = init_db()
+        conn = init_db(db_path)
         conn.execute(
             """
             INSERT INTO outcomes (
