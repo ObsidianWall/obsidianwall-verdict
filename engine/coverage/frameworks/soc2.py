@@ -1,6 +1,18 @@
 # engine/coverage/frameworks/soc2.py
+#
+# Purpose:
+# SOC 2 Trust Service Criteria control mappings for the
+# coverage engine. Maps policy condition keywords to
+# specific SOC 2 common criteria and category-specific
+# controls.
+#
+# Reference: AICPA Trust Services Criteria
 
-SOC2_CONTROLS = {
+from __future__ import annotations
+
+from typing import Any
+
+SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     "CC6.1": {
         "title": "Logical Access Controls",
         "description": (
@@ -9,8 +21,13 @@ SOC2_CONTROLS = {
             "against threats from sources outside the system."
         ),
         "keywords": [
-            "access_control", "authentication", "mfa",
-            "rbac", "firewall", "ingress", "network_security",
+            "access_control",
+            "authentication",
+            "mfa",
+            "rbac",
+            "firewall",
+            "ingress",
+            "network_security",
             "open_ingress",
         ],
     },
@@ -22,8 +39,11 @@ SOC2_CONTROLS = {
             "registered and authorized."
         ),
         "keywords": [
-            "credential", "user_access", "provisioning",
-            "authorization", "identity",
+            "credential",
+            "user_access",
+            "provisioning",
+            "authorization",
+            "identity",
         ],
     },
     "CC6.3": {
@@ -33,7 +53,10 @@ SOC2_CONTROLS = {
             "to authorized transactions."
         ),
         "keywords": [
-            "rbac", "role", "permission", "least_privilege",
+            "rbac",
+            "role",
+            "permission",
+            "least_privilege",
             "role_based",
         ],
     },
@@ -45,9 +68,15 @@ SOC2_CONTROLS = {
             "internet and other external networks."
         ),
         "keywords": [
-            "network", "segmentation", "firewall", "ingress",
-            "egress", "nsg", "security_group",
-            "open_ingress_rules", "public",
+            "network",
+            "segmentation",
+            "firewall",
+            "ingress",
+            "egress",
+            "nsg",
+            "security_group",
+            "open_ingress_rules",
+            "public",
         ],
     },
     "CC6.7": {
@@ -57,8 +86,15 @@ SOC2_CONTROLS = {
             "transmission and at rest."
         ),
         "keywords": [
-            "encrypt", "tls", "ssl", "kms", "key_vault",
-            "unencrypt", "at_rest", "in_transit",
+            "encrypt",
+            "tls",
+            "ssl",
+            "kms",
+            "key_vault",
+            "unencrypt",
+            "at_rest",
+            "in_transit",
+            "ssl_not_enforced",
         ],
     },
     "CC7.1": {
@@ -68,8 +104,12 @@ SOC2_CONTROLS = {
             "and monitoring procedures."
         ),
         "keywords": [
-            "monitor", "log", "alert", "audit",
-            "logging", "detection",
+            "monitor",
+            "log",
+            "alert",
+            "audit",
+            "logging",
+            "detection",
         ],
     },
     "CC7.2": {
@@ -79,7 +119,10 @@ SOC2_CONTROLS = {
             "and reported."
         ),
         "keywords": [
-            "anomaly", "detection", "alert", "incident",
+            "anomaly",
+            "detection",
+            "alert",
+            "incident",
             "threat",
         ],
     },
@@ -91,8 +134,12 @@ SOC2_CONTROLS = {
             "and implements changes."
         ),
         "keywords": [
-            "change", "approval", "governance", "policy",
-            "override", "authorized",
+            "change",
+            "approval",
+            "governance",
+            "policy",
+            "override",
+            "authorized",
         ],
     },
     "CC9.1": {
@@ -102,8 +149,13 @@ SOC2_CONTROLS = {
             "risk mitigation activities."
         ),
         "keywords": [
-            "risk", "mitigation", "budget", "cost",
-            "overrun", "threshold",
+            "risk",
+            "mitigation",
+            "budget",
+            "cost",
+            "overrun",
+            "threshold",
+            "versioning_disabled",
         ],
     },
     "A1.1": {
@@ -113,8 +165,11 @@ SOC2_CONTROLS = {
             "are monitored."
         ),
         "keywords": [
-            "availability", "performance", "uptime",
-            "capacity", "utilization",
+            "availability",
+            "performance",
+            "uptime",
+            "capacity",
+            "utilization",
         ],
     },
     "C1.1": {
@@ -124,8 +179,12 @@ SOC2_CONTROLS = {
             "during storage."
         ),
         "keywords": [
-            "confidential", "classification", "sensitive",
-            "private", "public_storage", "unencrypted",
+            "confidential",
+            "classification",
+            "sensitive",
+            "private",
+            "public_storage",
+            "unencrypted",
         ],
     },
     "PI1.1": {
@@ -135,8 +194,12 @@ SOC2_CONTROLS = {
             "as required."
         ),
         "keywords": [
-            "pii", "personal", "privacy", "data_inventory",
-            "phi", "sensitive_data",
+            "pii",
+            "personal",
+            "privacy",
+            "data_inventory",
+            "phi",
+            "sensitive_data",
         ],
     },
 }

@@ -1,6 +1,23 @@
 # engine/coverage/frameworks/hipaa.py
+#
+# Purpose:
+# HIPAA Security Rule control mappings for the coverage
+# engine. Maps policy condition keywords to specific
+# HIPAA technical and administrative safeguards.
+#
+# Each control entry defines the keywords the coverage
+# engine searches for in policy condition identifiers
+# and expressions. A match means the policy addresses
+# that control.
+#
+# Reference: 45 CFR § 164.312 (Technical Safeguards)
+#            45 CFR § 164.308 (Administrative Safeguards)
 
-HIPAA_CONTROLS = {
+from __future__ import annotations
+
+from typing import Any
+
+HIPAA_CONTROLS: dict[str, dict[str, Any]] = {
     "164.312(a)(1)": {
         "title": "Access Control",
         "description": (
@@ -9,9 +26,16 @@ HIPAA_CONTROLS = {
             "to authorized users."
         ),
         "keywords": [
-            "mfa", "authentication", "rbac", "role_based",
-            "privileged", "access_control", "least_privilege",
-            "iam", "identity", "authorization",
+            "mfa",
+            "authentication",
+            "rbac",
+            "role_based",
+            "privileged",
+            "access_control",
+            "least_privilege",
+            "iam",
+            "identity",
+            "authorization",
         ],
     },
     "164.312(a)(2)(iv)": {
@@ -21,8 +45,13 @@ HIPAA_CONTROLS = {
             "electronic protected health information."
         ),
         "keywords": [
-            "encrypt", "unencrypt", "kms", "key_vault",
-            "at_rest", "decryption", "cipher",
+            "encrypt",
+            "unencrypt",
+            "kms",
+            "key_vault",
+            "at_rest",
+            "decryption",
+            "cipher",
         ],
     },
     "164.312(b)": {
@@ -33,8 +62,13 @@ HIPAA_CONTROLS = {
             "in information systems that contain ePHI."
         ),
         "keywords": [
-            "audit", "log", "logging", "monitoring",
-            "trail", "record", "retention",
+            "audit",
+            "log",
+            "logging",
+            "monitoring",
+            "trail",
+            "record",
+            "retention",
         ],
     },
     "164.312(c)(1)": {
@@ -44,8 +78,13 @@ HIPAA_CONTROLS = {
             "from improper alteration or destruction."
         ),
         "keywords": [
-            "integrity", "checksum", "hash", "tamper",
-            "immutable", "versioning",
+            "integrity",
+            "checksum",
+            "hash",
+            "tamper",
+            "immutable",
+            "versioning",
+            "versioning_disabled",
         ],
     },
     "164.312(d)": {
@@ -55,8 +94,11 @@ HIPAA_CONTROLS = {
             "entity seeking access is who they claim to be."
         ),
         "keywords": [
-            "mfa", "multi_factor", "authentication",
-            "identity_verification", "certificate",
+            "mfa",
+            "multi_factor",
+            "authentication",
+            "identity_verification",
+            "certificate",
         ],
     },
     "164.312(e)(1)": {
@@ -67,8 +109,14 @@ HIPAA_CONTROLS = {
             "transmitted over electronic communications networks."
         ),
         "keywords": [
-            "tls", "ssl", "transit", "transmission",
-            "https", "secure_transport", "in_transit",
+            "tls",
+            "ssl",
+            "transit",
+            "transmission",
+            "https",
+            "secure_transport",
+            "in_transit",
+            "ssl_not_enforced",
         ],
     },
     "164.312(e)(2)(ii)": {
@@ -79,8 +127,12 @@ HIPAA_CONTROLS = {
             "appropriate."
         ),
         "keywords": [
-            "encrypt", "tls", "ssl", "transit_encryption",
+            "encrypt",
+            "tls",
+            "ssl",
+            "transit_encryption",
             "secure_channel",
+            "ssl_not_enforced",
         ],
     },
     "164.308(a)(1)": {
@@ -90,7 +142,9 @@ HIPAA_CONTROLS = {
             "detect, contain, and correct security violations."
         ),
         "keywords": [
-            "security_policy", "risk_analysis", "risk_management",
+            "security_policy",
+            "risk_analysis",
+            "risk_management",
             "security_measures",
         ],
     },
@@ -101,8 +155,10 @@ HIPAA_CONTROLS = {
             "electronic protected health information."
         ),
         "keywords": [
-            "workforce_access", "access_management",
-            "user_access", "provisioning",
+            "workforce_access",
+            "access_management",
+            "user_access",
+            "provisioning",
         ],
     },
     "164.308(a)(5)": {
@@ -112,7 +168,9 @@ HIPAA_CONTROLS = {
             "for all workforce members."
         ),
         "keywords": [
-            "training", "awareness", "security_training",
+            "training",
+            "awareness",
+            "security_training",
         ],
     },
 }

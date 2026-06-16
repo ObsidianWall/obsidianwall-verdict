@@ -1,6 +1,18 @@
-# engine/coverage/frameworks/cis_controls.py
 
-CIS_CONTROLS = {
+# engine/coverage/frameworks/cis_controls.py
+#
+# Purpose:
+# CIS Controls v8 mappings for the coverage engine.
+# Maps policy condition keywords to specific CIS
+# safeguards.
+#
+# Reference: Center for Internet Security Controls v8
+
+from __future__ import annotations
+
+from typing import Any
+
+CIS_CONTROLS: dict[str, dict[str, Any]] = {
     "CIS.1": {
         "title": "Inventory and Control of Enterprise Assets",
         "description": (
@@ -8,8 +20,11 @@ CIS_CONTROLS = {
             "to the infrastructure."
         ),
         "keywords": [
-            "inventory", "asset", "resource_count",
-            "untagged", "tagging",
+            "inventory",
+            "asset",
+            "resource_count",
+            "untagged",
+            "tagging",
         ],
     },
     "CIS.3": {
@@ -20,9 +35,15 @@ CIS_CONTROLS = {
             "and dispose of data."
         ),
         "keywords": [
-            "encrypt", "unencrypt", "data_protection",
-            "classification", "sensitive", "public_storage",
-            "storage", "kms",
+            "encrypt",
+            "unencrypt",
+            "data_protection",
+            "classification",
+            "sensitive",
+            "public_storage",
+            "storage",
+            "kms",
+            "versioning_disabled",
         ],
     },
     "CIS.4": {
@@ -32,8 +53,12 @@ CIS_CONTROLS = {
             "of enterprise assets and software."
         ),
         "keywords": [
-            "config", "hardening", "baseline", "secure_config",
-            "misconfiguration", "default",
+            "config",
+            "hardening",
+            "baseline",
+            "secure_config",
+            "misconfiguration",
+            "default",
         ],
     },
     "CIS.5": {
@@ -43,8 +68,12 @@ CIS_CONTROLS = {
             "authorization to credentials for user accounts."
         ),
         "keywords": [
-            "account", "mfa", "privileged", "service_account",
-            "credential", "password",
+            "account",
+            "mfa",
+            "privileged",
+            "service_account",
+            "credential",
+            "password",
         ],
     },
     "CIS.6": {
@@ -54,8 +83,13 @@ CIS_CONTROLS = {
             "and revoke access credentials and privileges."
         ),
         "keywords": [
-            "access", "rbac", "privilege", "least_privilege",
-            "role", "authorization", "iam",
+            "access",
+            "rbac",
+            "privilege",
+            "least_privilege",
+            "role",
+            "authorization",
+            "iam",
         ],
     },
     "CIS.8": {
@@ -66,8 +100,12 @@ CIS_CONTROLS = {
             "or recover from an attack."
         ),
         "keywords": [
-            "log", "audit", "logging", "monitoring",
-            "retention", "trail",
+            "log",
+            "audit",
+            "logging",
+            "monitoring",
+            "retention",
+            "trail",
         ],
     },
     "CIS.12": {
@@ -78,9 +116,15 @@ CIS_CONTROLS = {
             "exploiting network services."
         ),
         "keywords": [
-            "network", "firewall", "ingress", "egress",
-            "segmentation", "open_ingress", "nsg",
-            "security_group", "port",
+            "network",
+            "firewall",
+            "ingress",
+            "egress",
+            "segmentation",
+            "open_ingress",
+            "nsg",
+            "security_group",
+            "port",
         ],
     },
     "CIS.13": {
@@ -91,8 +135,11 @@ CIS_CONTROLS = {
             "and defense."
         ),
         "keywords": [
-            "monitor", "network_monitor", "detection",
-            "threat", "intrusion",
+            "monitor",
+            "network_monitor",
+            "detection",
+            "threat",
+            "intrusion",
         ],
     },
     "CIS.16": {
@@ -102,7 +149,9 @@ CIS_CONTROLS = {
             "developed, hosted, or acquired software."
         ),
         "keywords": [
-            "application", "software", "vulnerability",
+            "application",
+            "software",
+            "vulnerability",
             "secure_coding",
         ],
     },
@@ -114,7 +163,9 @@ CIS_CONTROLS = {
             "exploiting weaknesses."
         ),
         "keywords": [
-            "penetration", "pentest", "vulnerability_scan",
+            "penetration",
+            "pentest",
+            "vulnerability_scan",
             "assessment",
         ],
     },

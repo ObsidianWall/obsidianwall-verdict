@@ -1,6 +1,17 @@
 # engine/coverage/frameworks/nist_ai_rmf.py
+#
+# Purpose:
+# NIST AI Risk Management Framework mappings for the
+# coverage engine. Maps policy condition keywords to
+# specific NIST AI RMF functions and categories.
+#
+# Reference: NIST AI 100-1 (AI Risk Management Framework)
 
-NIST_AI_RMF_CONTROLS = {
+from __future__ import annotations
+
+from typing import Any
+
+NIST_AI_RMF_CONTROLS: dict[str, dict[str, Any]] = {
     "GOVERN-1.1": {
         "title": "AI Policies and Procedures",
         "description": (
@@ -9,8 +20,11 @@ NIST_AI_RMF_CONTROLS = {
             "measuring, and managing of AI risks are in place."
         ),
         "keywords": [
-            "ai_policy", "ai_governance", "ai_approval",
-            "ai_authorized", "governance",
+            "ai_policy",
+            "ai_governance",
+            "ai_approval",
+            "ai_authorized",
+            "governance",
         ],
     },
     "GOVERN-1.2": {
@@ -21,8 +35,11 @@ NIST_AI_RMF_CONTROLS = {
             "responsible, and trained for AI risk management."
         ),
         "keywords": [
-            "ai_accountability", "ai_owner", "ai_oversight",
-            "human_review", "ai_responsible",
+            "ai_accountability",
+            "ai_owner",
+            "ai_oversight",
+            "human_review",
+            "ai_responsible",
         ],
     },
     "GOVERN-4.1": {
@@ -32,7 +49,9 @@ NIST_AI_RMF_CONTROLS = {
             "that considers and communicates AI risk."
         ),
         "keywords": [
-            "ai_risk", "risk_management", "ai_assessment",
+            "ai_risk",
+            "risk_management",
+            "ai_assessment",
         ],
     },
     "GOVERN-5.1": {
@@ -43,7 +62,9 @@ NIST_AI_RMF_CONTROLS = {
             "from third-party software and data."
         ),
         "keywords": [
-            "ai_deployment", "ai_authorized", "ai_workload",
+            "ai_deployment",
+            "ai_authorized",
+            "ai_workload",
             "ai_governance_required",
         ],
     },
@@ -54,8 +75,10 @@ NIST_AI_RMF_CONTROLS = {
             "related to the AI system."
         ),
         "keywords": [
-            "ai_classification", "ai_inventory",
-            "ai_workloads", "ai_gpu_workloads",
+            "ai_classification",
+            "ai_inventory",
+            "ai_workloads",
+            "ai_gpu_workloads",
             "gpu_instance_count",
         ],
     },
@@ -66,7 +89,9 @@ NIST_AI_RMF_CONTROLS = {
             "understood and assessed."
         ),
         "keywords": [
-            "ai_impact", "impact_assessment", "ai_risk_score",
+            "ai_impact",
+            "impact_assessment",
+            "ai_risk_score",
         ],
     },
     "MAP-5.1": {
@@ -77,7 +102,9 @@ NIST_AI_RMF_CONTROLS = {
             "are estimated."
         ),
         "keywords": [
-            "ai_harm", "ai_likelihood", "ai_magnitude",
+            "ai_harm",
+            "ai_likelihood",
+            "ai_magnitude",
         ],
     },
     "MEASURE-1.1": {
@@ -87,7 +114,9 @@ NIST_AI_RMF_CONTROLS = {
             "monitoring AI risks are selected."
         ),
         "keywords": [
-            "ai_evaluation", "ai_benchmark", "ai_metric",
+            "ai_evaluation",
+            "ai_benchmark",
+            "ai_metric",
             "ai_monitor",
         ],
     },
@@ -98,7 +127,9 @@ NIST_AI_RMF_CONTROLS = {
             "it meets the intended purpose and objectives."
         ),
         "keywords": [
-            "ai_test", "ai_validation", "model_test",
+            "ai_test",
+            "ai_validation",
+            "model_test",
         ],
     },
     "MANAGE-1.1": {
@@ -108,8 +139,11 @@ NIST_AI_RMF_CONTROLS = {
             "is established and followed."
         ),
         "keywords": [
-            "ai_risk_treatment", "ai_mitigation",
-            "ai_control", "ai_safeguard",
+            "ai_risk_treatment",
+            "ai_mitigation",
+            "ai_control",
+            "ai_safeguard",
+            "ai_guardrails",
         ],
     },
     "MANAGE-2.2": {
@@ -120,7 +154,9 @@ NIST_AI_RMF_CONTROLS = {
             "are targeted to the urgency of the situation."
         ),
         "keywords": [
-            "ai_incident", "ai_response", "ai_rollback",
+            "ai_incident",
+            "ai_response",
+            "ai_rollback",
             "model_incident",
         ],
     },
@@ -131,8 +167,11 @@ NIST_AI_RMF_CONTROLS = {
             "evaluated and efforts are informed by feedback."
         ),
         "keywords": [
-            "ai_monitor", "post_deployment", "ai_drift",
-            "model_drift", "ai_observation",
+            "ai_monitor",
+            "post_deployment",
+            "ai_drift",
+            "model_drift",
+            "ai_observation",
         ],
     },
 }
