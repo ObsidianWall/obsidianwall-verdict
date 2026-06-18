@@ -51,20 +51,20 @@ console = Console()
 _SEPARATOR = "─" * 64
 
 _BASE_SIMULATE_CONTEXT: dict[str, Any] = {
-    "resources":                 [],
-    "open_ingress_rules":        0,
-    "public_storage_buckets":    0,
-    "unencrypted_databases":     0,
-    "ssl_not_enforced_count":    0,
+    "resources": [],
+    "open_ingress_rules": 0,
+    "public_storage_buckets": 0,
+    "unencrypted_databases": 0,
+    "ssl_not_enforced_count": 0,
     "versioning_disabled_count": 0,
-    "untagged_resource_count":   0,
-    "total_resource_count":      0,
-    "compute_instance_count":    0,
-    "gpu_instance_count":        0,
-    "ai_gpu_workloads":          0,
-    "estimated_cost":            0.0,
-    "current_spend":             0.0,
-    "pricing_mode":              "simulate",
+    "untagged_resource_count": 0,
+    "total_resource_count": 0,
+    "compute_instance_count": 0,
+    "gpu_instance_count": 0,
+    "ai_gpu_workloads": 0,
+    "estimated_cost": 0.0,
+    "current_spend": 0.0,
+    "pricing_mode": "simulate",
 }
 
 
@@ -123,13 +123,11 @@ def _parse_set_overrides(
             )
 
         key, raw_value = entry.split("=", 1)
-        key       = key.strip()
+        key = key.strip()
         raw_value = raw_value.strip()
 
         if not key:
-            raise ValueError(
-                f"Invalid --set entry: '{entry}'. Key cannot be empty."
-            )
+            raise ValueError(f"Invalid --set entry: '{entry}'. Key cannot be empty.")
 
         overrides[key] = _parse_set_value(raw_value)
 
@@ -222,10 +220,10 @@ def _display_simulate_result(
     console.print(_SEPARATOR)
 
     decision_icon = {
-        "ALLOW":                    "✅",
-        "ALLOW_WITH_NOTIFICATION":  "✅",
-        "DENY_WITH_OVERRIDE":       "⚠️ ",
-        "DENY":                     "🚫",
+        "ALLOW": "✅",
+        "ALLOW_WITH_NOTIFICATION": "✅",
+        "DENY_WITH_OVERRIDE": "⚠️ ",
+        "DENY": "🚫",
     }.get(decision, "❓")
 
     console.print(f"  {decision_icon}  {decision}")
@@ -333,9 +331,7 @@ def simulate(
         )
 
     except Exception as evaluation_error:
-        console.print(
-            f"[red]Simulation failed: {evaluation_error}[/red]"
-        )
+        console.print(f"[red]Simulation failed: {evaluation_error}[/red]")
         raise typer.Exit(code=1)
 
     # ── Display result ────────────────────────────────
