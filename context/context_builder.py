@@ -87,9 +87,9 @@ def build_context(
     # flow through to the evaluation context automatically.
     # Any new keys added to a translator require no changes here.
     context: dict[str, Any] = dict(parsed_context)
-    context["estimated_cost"]  = cost_data["estimated_cost"]
-    context["cost_breakdown"]  = cost_data["cost_breakdown"]
-    context["current_spend"]   = current_spend
-    context["pricing_mode"]    = pricing_mode
+    context["estimated_cost"] = cost_data["estimated_cost"]
+    context["cost_breakdown"] = cost_data["cost_breakdown"]
+    context["current_spend"] = current_spend
+    context["pricing_mode"] = pricing_mode
 
     return context

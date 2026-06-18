@@ -1,4 +1,3 @@
-
 # engine/coverage/frameworks/cis_controls.py
 #
 # Purpose:
@@ -16,8 +15,7 @@ CIS_CONTROLS: dict[str, dict[str, Any]] = {
     "CIS.1": {
         "title": "Inventory and Control of Enterprise Assets",
         "description": (
-            "Actively manage all enterprise assets connected "
-            "to the infrastructure."
+            "Actively manage all enterprise assets connected to the infrastructure."
         ),
         "keywords": [
             "inventory",

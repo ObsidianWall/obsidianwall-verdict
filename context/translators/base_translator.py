@@ -75,9 +75,7 @@ class BaseTranslator(ABC):
             FileNotFoundError: if plan_path does not exist
             ValueError:        if plan format is invalid
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement parse()"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} must implement parse()")
 
     @property
     @abstractmethod
@@ -114,15 +112,15 @@ class BaseTranslator(ABC):
         and override only the keys they detect.
         """
         return {
-            "resources":                 [],
-            "open_ingress_rules":        0,
-            "public_storage_buckets":    0,
-            "unencrypted_databases":     0,
-            "ssl_not_enforced_count":    0,
+            "resources": [],
+            "open_ingress_rules": 0,
+            "public_storage_buckets": 0,
+            "unencrypted_databases": 0,
+            "ssl_not_enforced_count": 0,
             "versioning_disabled_count": 0,
-            "untagged_resource_count":   0,
-            "total_resource_count":      0,
-            "compute_instance_count":    0,
-            "gpu_instance_count":        0,
-            "ai_gpu_workloads":          0,
+            "untagged_resource_count": 0,
+            "total_resource_count": 0,
+            "compute_instance_count": 0,
+            "gpu_instance_count": 0,
+            "ai_gpu_workloads": 0,
         }

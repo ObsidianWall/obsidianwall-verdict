@@ -71,8 +71,7 @@ NIST_AI_RMF_CONTROLS: dict[str, dict[str, Any]] = {
     "MAP-1.1": {
         "title": "AI System Categorization",
         "description": (
-            "Context is established for framing risks "
-            "related to the AI system."
+            "Context is established for framing risks related to the AI system."
         ),
         "keywords": [
             "ai_classification",
@@ -85,8 +84,7 @@ NIST_AI_RMF_CONTROLS: dict[str, dict[str, Any]] = {
     "MAP-2.1": {
         "title": "Impact Assessment",
         "description": (
-            "The potential impact of the AI system is "
-            "understood and assessed."
+            "The potential impact of the AI system is understood and assessed."
         ),
         "keywords": [
             "ai_impact",
@@ -110,8 +108,7 @@ NIST_AI_RMF_CONTROLS: dict[str, dict[str, Any]] = {
     "MEASURE-1.1": {
         "title": "AI Evaluation Methods",
         "description": (
-            "Approaches and metrics for measuring and "
-            "monitoring AI risks are selected."
+            "Approaches and metrics for measuring and monitoring AI risks are selected."
         ),
         "keywords": [
             "ai_evaluation",

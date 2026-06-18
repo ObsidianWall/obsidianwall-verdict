@@ -49,8 +49,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     "CC6.3": {
         "title": "Role-Based Access",
         "description": (
-            "Role-based access controls limit user access "
-            "to authorized transactions."
+            "Role-based access controls limit user access to authorized transactions."
         ),
         "keywords": [
             "rbac",
@@ -82,8 +81,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     "CC6.7": {
         "title": "Data Encryption",
         "description": (
-            "Encryption is used to protect data during "
-            "transmission and at rest."
+            "Encryption is used to protect data during transmission and at rest."
         ),
         "keywords": [
             "encrypt",
@@ -115,8 +113,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     "CC7.2": {
         "title": "Anomaly Detection",
         "description": (
-            "Anomalies and security incidents are identified "
-            "and reported."
+            "Anomalies and security incidents are identified and reported."
         ),
         "keywords": [
             "anomaly",
@@ -145,8 +142,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     "CC9.1": {
         "title": "Risk Mitigation",
         "description": (
-            "The entity identifies, selects, and develops "
-            "risk mitigation activities."
+            "The entity identifies, selects, and develops risk mitigation activities."
         ),
         "keywords": [
             "risk",
@@ -160,10 +156,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     },
     "A1.1": {
         "title": "Availability — Performance Monitoring",
-        "description": (
-            "Availability and performance of the system "
-            "are monitored."
-        ),
+        "description": ("Availability and performance of the system are monitored."),
         "keywords": [
             "availability",
             "performance",
@@ -174,10 +167,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     },
     "C1.1": {
         "title": "Confidentiality — Data Classification",
-        "description": (
-            "Confidential information is protected "
-            "during storage."
-        ),
+        "description": ("Confidential information is protected during storage."),
         "keywords": [
             "confidential",
             "classification",
@@ -189,10 +179,7 @@ SOC2_CONTROLS: dict[str, dict[str, Any]] = {
     },
     "PI1.1": {
         "title": "Privacy — Data Inventory",
-        "description": (
-            "Personal information is collected and stored "
-            "as required."
-        ),
+        "description": ("Personal information is collected and stored as required."),
         "keywords": [
             "pii",
             "personal",

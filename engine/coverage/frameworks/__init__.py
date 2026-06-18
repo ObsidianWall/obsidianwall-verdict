@@ -1,4 +1,3 @@
-
 # engine/coverage/frameworks/__init__.py
 #
 # Compliance framework control mappings for the coverage
@@ -23,10 +22,10 @@ from engine.coverage.frameworks.nist_ai_rmf import NIST_AI_RMF_CONTROLS
 from engine.coverage.frameworks.soc2 import SOC2_CONTROLS
 
 FRAMEWORK_REGISTRY: dict[str, dict] = {
-    "hipaa":        HIPAA_CONTROLS,
-    "soc2":         SOC2_CONTROLS,
-    "cis":          CIS_CONTROLS,
-    "nist_ai_rmf":  NIST_AI_RMF_CONTROLS,
+    "hipaa": HIPAA_CONTROLS,
+    "soc2": SOC2_CONTROLS,
+    "cis": CIS_CONTROLS,
+    "nist_ai_rmf": NIST_AI_RMF_CONTROLS,
 }
 
 __all__ = [

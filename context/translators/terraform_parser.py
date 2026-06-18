@@ -126,7 +126,7 @@ def _count_open_ingress_rules(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type == "azurerm_network_security_group":
@@ -143,8 +143,7 @@ def _count_open_ingress_rules(
             if (
                 values.get("direction") == "Inbound"
                 and values.get("access") == "Allow"
-                and values.get("source_address_prefix")
-                in _OPEN_INGRESS_SOURCE_VALUES
+                and values.get("source_address_prefix") in _OPEN_INGRESS_SOURCE_VALUES
             ):
                 count += 1
 
@@ -155,9 +154,7 @@ def _count_open_ingress_rules(
                     count += 1
 
         if resource_type == "aws_vpc_security_group_ingress_rule":
-            cidr_block = values.get("cidr_ipv4", "") or values.get(
-                "cidr_ipv6", ""
-            )
+            cidr_block = values.get("cidr_ipv4", "") or values.get("cidr_ipv6", "")
             if cidr_block in ("0.0.0.0/0", "::/0"):
                 count += 1
 
@@ -175,7 +172,7 @@ def _count_public_storage(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type == "azurerm_storage_account":
@@ -210,7 +207,7 @@ def _count_unencrypted_databases(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type in ("azurerm_sql_database", "azurerm_mssql_database"):
@@ -256,7 +253,7 @@ def _count_ssl_not_enforced(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type in (
@@ -275,9 +272,7 @@ def _count_ssl_not_enforced(
                 count += 1
 
         if resource_type == "azurerm_storage_account":
-            minimum_tls_version: str = values.get(
-                "min_tls_version", "TLS1_0"
-            )
+            minimum_tls_version: str = values.get("min_tls_version", "TLS1_0")
             if minimum_tls_version in ("TLS1_0", "TLS1_1"):
                 count += 1
 
@@ -317,13 +312,11 @@ def _count_versioning_disabled(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type == "azurerm_storage_account":
-            blob_properties: dict[str, Any] = values.get(
-                "blob_properties", {}
-            )
+            blob_properties: dict[str, Any] = values.get("blob_properties", {})
             if isinstance(blob_properties, dict):
                 if blob_properties.get("versioning_enabled") is not True:
                     count += 1
@@ -371,9 +364,7 @@ def _count_untagged_resources(
     """
 
     return sum(
-        1
-        for resource in resources
-        if not resource.get("values", {}).get("tags")
+        1 for resource in resources if not resource.get("values", {}).get("tags")
     )
 
 
@@ -395,9 +386,7 @@ def _count_compute_instances(
     )
 
     return sum(
-        1
-        for resource in resources
-        if resource.get("type") in compute_resource_types
+        1 for resource in resources if resource.get("type") in compute_resource_types
     )
 
 
@@ -417,7 +406,7 @@ def _count_gpu_instances(
     count: int = 0
 
     for resource in resources:
-        resource_type: str     = resource.get("type", "")
+        resource_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if resource_type in _AZURE_COMPUTE_RESOURCE_TYPES:
@@ -518,8 +507,8 @@ def parse_terraform_plan(
     parsed_resources: list[dict[str, Any]] = []
 
     for resource in raw_resources:
-        resource_type: str | None       = resource.get("type")
-        resource_name: str | None       = resource.get("name")
+        resource_type: str | None = resource.get("type")
+        resource_name: str | None = resource.get("name")
         resource_values: dict[str, Any] = resource.get("values", {})
 
         if resource_type is None or resource_name is None:
@@ -527,30 +516,30 @@ def parse_terraform_plan(
 
         parsed_resources.append(
             {
-                "type":   resource_type,
-                "name":   resource_name,
+                "type": resource_type,
+                "name": resource_name,
                 "values": resource_values,
             }
         )
 
     return {
         # Core resource list
-        "resources":                 parsed_resources,
+        "resources": parsed_resources,
         # Security domain context keys
-        "open_ingress_rules":        _count_open_ingress_rules(parsed_resources),
-        "public_storage_buckets":    _count_public_storage(parsed_resources),
-        "unencrypted_databases":     _count_unencrypted_databases(parsed_resources),
-        "ssl_not_enforced_count":    _count_ssl_not_enforced(parsed_resources),
+        "open_ingress_rules": _count_open_ingress_rules(parsed_resources),
+        "public_storage_buckets": _count_public_storage(parsed_resources),
+        "unencrypted_databases": _count_unencrypted_databases(parsed_resources),
+        "ssl_not_enforced_count": _count_ssl_not_enforced(parsed_resources),
         "versioning_disabled_count": _count_versioning_disabled(parsed_resources),
         # Compliance domain context keys
-        "untagged_resource_count":   _count_untagged_resources(parsed_resources),
-        "total_resource_count":      len(parsed_resources),
+        "untagged_resource_count": _count_untagged_resources(parsed_resources),
+        "total_resource_count": len(parsed_resources),
         # Resource limits domain context keys
-        "compute_instance_count":    _count_compute_instances(parsed_resources),
-        "gpu_instance_count":        _count_gpu_instances(parsed_resources),
+        "compute_instance_count": _count_compute_instances(parsed_resources),
+        "gpu_instance_count": _count_gpu_instances(parsed_resources),
         # AI governance domain context key
         # Semantically distinct from gpu_instance_count —
         # treats GPU instances as AI deployment signals,
         # not infrastructure sizing concerns.
-        "ai_gpu_workloads":          _count_ai_gpu_workloads(parsed_resources),
+        "ai_gpu_workloads": _count_ai_gpu_workloads(parsed_resources),
     }

@@ -83,8 +83,7 @@ def _load_cloudformation_resource_type_map() -> dict[str, str]:
     """
     if not _RESOURCE_TYPE_MAP_PATH.exists():
         raise FileNotFoundError(
-            f"CloudFormation resource type map not found: "
-            f"{_RESOURCE_TYPE_MAP_PATH}"
+            f"CloudFormation resource type map not found: {_RESOURCE_TYPE_MAP_PATH}"
         )
 
     with _RESOURCE_TYPE_MAP_PATH.open(encoding="utf-8") as config_file:
@@ -92,8 +91,7 @@ def _load_cloudformation_resource_type_map() -> dict[str, str]:
 
     if not isinstance(config, dict):
         raise ValueError(
-            f"Invalid CloudFormation resource type map: "
-            f"{_RESOURCE_TYPE_MAP_PATH}"
+            f"Invalid CloudFormation resource type map: {_RESOURCE_TYPE_MAP_PATH}"
         )
 
     flattened_type_map: dict[str, str] = {}
@@ -131,9 +129,7 @@ _CLOUDFORMATION_TO_TERRAFORM_RESOURCE_TYPE_MAP: dict[str, str] = (
     _load_cloudformation_resource_type_map()
 )
 
-_AWS_GPU_INSTANCE_TYPE_PREFIXES: tuple[str, ...] = (
-    _load_gpu_instance_type_prefixes()
-)
+_AWS_GPU_INSTANCE_TYPE_PREFIXES: tuple[str, ...] = _load_gpu_instance_type_prefixes()
 
 # =====================================================
 # COMPUTE RESOURCE TYPES (after CF→TF normalization)
@@ -177,9 +173,7 @@ def _load_template(plan_path: str) -> dict[str, Any]:
     path = Path(plan_path)
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"CloudFormation template not found: {plan_path}"
-        )
+        raise FileNotFoundError(f"CloudFormation template not found: {plan_path}")
 
     raw_content: str = path.read_text(encoding="utf-8")
 
@@ -240,8 +234,8 @@ def _extract_resources(
         if not isinstance(resource_definition, dict):
             continue
 
-        cloudformation_type: str    = resource_definition.get("Type", "")
-        properties: dict[str, Any]  = resource_definition.get("Properties", {})
+        cloudformation_type: str = resource_definition.get("Type", "")
+        properties: dict[str, Any] = resource_definition.get("Properties", {})
 
         if not cloudformation_type:
             continue
@@ -271,9 +265,9 @@ def _extract_resources(
 
         normalized_resources.append(
             {
-                "type":     terraform_type,
-                "name":     logical_resource_id,
-                "values":   {**properties, "tags": normalized_tags},
+                "type": terraform_type,
+                "name": logical_resource_id,
+                "values": {**properties, "tags": normalized_tags},
                 "_cf_type": cloudformation_type,
             }
         )
@@ -297,26 +291,26 @@ def _count_open_ingress_rules(
     count: int = 0
 
     for resource in resources:
-        terraform_type: str    = resource.get("type", "")
+        terraform_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if terraform_type == "aws_security_group":
             for ingress_rule in values.get("SecurityGroupIngress", []):
                 if not isinstance(ingress_rule, dict):
                     continue
-                cidr_ip: str   = ingress_rule.get("CidrIp", "")
+                cidr_ip: str = ingress_rule.get("CidrIp", "")
                 cidr_ipv6: str = ingress_rule.get("CidrIpv6", "")
                 if (
-                    cidr_ip   in _OPEN_INGRESS_CIDR_RANGES
+                    cidr_ip in _OPEN_INGRESS_CIDR_RANGES
                     or cidr_ipv6 in _OPEN_INGRESS_CIDR_RANGES
                 ):
                     count += 1
 
         if terraform_type == "aws_vpc_security_group_ingress_rule":
-            cidr_ip   = values.get("CidrIp", "")
+            cidr_ip = values.get("CidrIp", "")
             cidr_ipv6 = values.get("CidrIpv6", "")
             if (
-                cidr_ip   in _OPEN_INGRESS_CIDR_RANGES
+                cidr_ip in _OPEN_INGRESS_CIDR_RANGES
                 or cidr_ipv6 in _OPEN_INGRESS_CIDR_RANGES
             ):
                 count += 1
@@ -337,7 +331,7 @@ def _count_public_storage(
         if resource.get("type") != "aws_s3_bucket":
             continue
 
-        values: dict[str, Any]              = resource.get("values", {})
+        values: dict[str, Any] = resource.get("values", {})
         public_access_block: dict[str, Any] = values.get(
             "PublicAccessBlockConfiguration", {}
         )
@@ -348,9 +342,9 @@ def _count_public_storage(
 
         fully_blocked: bool = all(
             [
-                public_access_block.get("BlockPublicAcls")      is True,
-                public_access_block.get("BlockPublicPolicy")     is True,
-                public_access_block.get("IgnorePublicAcls")      is True,
+                public_access_block.get("BlockPublicAcls") is True,
+                public_access_block.get("BlockPublicPolicy") is True,
+                public_access_block.get("IgnorePublicAcls") is True,
                 public_access_block.get("RestrictPublicBuckets") is True,
             ]
         )
@@ -371,7 +365,7 @@ def _count_unencrypted_databases(
     count: int = 0
 
     for resource in resources:
-        terraform_type: str    = resource.get("type", "")
+        terraform_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if terraform_type in ("aws_db_instance", "aws_rds_cluster"):
@@ -379,9 +373,7 @@ def _count_unencrypted_databases(
                 count += 1
 
         if terraform_type == "aws_dynamodb_table":
-            sse_specification: dict[str, Any] = values.get(
-                "SSESpecification", {}
-            )
+            sse_specification: dict[str, Any] = values.get("SSESpecification", {})
             if not isinstance(sse_specification, dict):
                 count += 1
             elif sse_specification.get("SSEEnabled") is not True:
@@ -419,7 +411,7 @@ def _count_ssl_not_enforced(
     count: int = 0
 
     for resource in resources:
-        terraform_type: str    = resource.get("type", "")
+        terraform_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if terraform_type == "aws_lb_listener":
@@ -466,7 +458,7 @@ def _count_versioning_disabled(
     count: int = 0
 
     for resource in resources:
-        terraform_type: str    = resource.get("type", "")
+        terraform_type: str = resource.get("type", "")
         values: dict[str, Any] = resource.get("values", {})
 
         if terraform_type == "aws_s3_bucket":
@@ -503,9 +495,7 @@ def _count_untagged_resources(
     Domain: compliance
     """
     return sum(
-        1
-        for resource in resources
-        if not resource.get("values", {}).get("tags")
+        1 for resource in resources if not resource.get("values", {}).get("tags")
     )
 
 
@@ -544,9 +534,7 @@ def _count_gpu_instances(
         if resource.get("type") != "aws_instance":
             continue
 
-        instance_type: str = resource.get("values", {}).get(
-            "InstanceType", ""
-        )
+        instance_type: str = resource.get("values", {}).get("InstanceType", "")
         if any(
             instance_type.startswith(prefix)
             for prefix in _AWS_GPU_INSTANCE_TYPE_PREFIXES
@@ -669,29 +657,29 @@ class CloudFormationParser(BaseTranslator):
             FileNotFoundError: if plan_path does not exist
             ValueError:        if template format is invalid
         """
-        template: dict[str, Any]        = _load_template(plan_path)
+        template: dict[str, Any] = _load_template(plan_path)
         resources: list[dict[str, Any]] = _extract_resources(template)
 
         return {
             # Core resource list
-            "resources":                 resources,
+            "resources": resources,
             # Security domain context keys
-            "open_ingress_rules":        _count_open_ingress_rules(resources),
-            "public_storage_buckets":    _count_public_storage(resources),
-            "unencrypted_databases":     _count_unencrypted_databases(resources),
-            "ssl_not_enforced_count":    _count_ssl_not_enforced(resources),
+            "open_ingress_rules": _count_open_ingress_rules(resources),
+            "public_storage_buckets": _count_public_storage(resources),
+            "unencrypted_databases": _count_unencrypted_databases(resources),
+            "ssl_not_enforced_count": _count_ssl_not_enforced(resources),
             "versioning_disabled_count": _count_versioning_disabled(resources),
             # Compliance domain context keys
-            "untagged_resource_count":   _count_untagged_resources(resources),
-            "total_resource_count":      len(resources),
+            "untagged_resource_count": _count_untagged_resources(resources),
+            "total_resource_count": len(resources),
             # Resource limits domain context keys
-            "compute_instance_count":    _count_compute_instances(resources),
-            "gpu_instance_count":        _count_gpu_instances(resources),
+            "compute_instance_count": _count_compute_instances(resources),
+            "gpu_instance_count": _count_gpu_instances(resources),
             # AI governance domain context key
             # Semantically distinct from gpu_instance_count —
             # treats GPU instances as AI deployment signals,
             # not infrastructure sizing concerns.
-            "ai_gpu_workloads":          _count_ai_gpu_workloads(resources),
+            "ai_gpu_workloads": _count_ai_gpu_workloads(resources),
         }
 
 
