@@ -13,6 +13,7 @@ output/
 # virtual environments
 .venv/
 verdict_venv/
+owv-venv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
