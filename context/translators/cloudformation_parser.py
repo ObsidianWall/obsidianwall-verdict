@@ -605,6 +605,8 @@ def is_cloudformation_template(plan_path: str) -> bool:
             )
 
     except Exception:
+        # Intentionally swallow detection/parsing errors and fall
+        # back to the Terraform parser by returning False.
         pass
 
     return False

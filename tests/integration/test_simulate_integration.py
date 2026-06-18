@@ -114,6 +114,7 @@ class TestSimulateIntegration:
             "--policy", _AI_POLICY_PATH,
             "--output", output_file,
         ])
+        assert result.exit_code == 0
         assert Path(output_file).exists()
         with open(output_file) as result_file:
             data = json.load(result_file)

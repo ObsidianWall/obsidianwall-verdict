@@ -203,7 +203,6 @@ def _display_simulate_result(
         if key != "resources"
         and key != "pricing_mode"
         and value != 0
-        and value != 0.0
         and value != []
     }
 
