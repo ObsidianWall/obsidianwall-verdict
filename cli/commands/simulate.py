@@ -200,10 +200,7 @@ def _display_simulate_result(
     non_default_keys = {
         key: value
         for key, value in context.items()
-        if key != "resources"
-        and key != "pricing_mode"
-        and value != 0
-        and value != []
+        if key != "resources" and key != "pricing_mode" and value != 0 and value != []
     }
 
     if non_default_keys:
