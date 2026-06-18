@@ -1,0 +1,82 @@
+
+# context/translators/terraform_resource_classification.yaml
+#
+# Resource classification data for the Terraform parser.
+#
+# Purpose:
+#   Centralizes the hardware and resource type classifications
+#   used to detect GPU instances, compute resources, and open
+#   ingress sources across Azure and AWS.
+#
+# Maintenance:
+#   Add new entries here when Azure or AWS releases new VM
+#   sizes, instance types, or resource types. No Python code
+#   changes required — the parser loads this file at import
+#   time.
+
+
+# Azure VM sizes equipped with GPU hardware.
+# Add new entries when Azure releases new GPU-accelerated
+# VM size families.
+azure_gpu_vm_sizes:
+  - "Standard_NC6"          # NVIDIA K80
+  - "Standard_NC12"         # NVIDIA K80
+  - "Standard_NC24"         # NVIDIA K80
+  - "Standard_NC6s_v3"      # NVIDIA V100
+  - "Standard_NC12s_v3"     # NVIDIA V100
+  - "Standard_NC24s_v3"     # NVIDIA V100
+  - "Standard_ND6s"         # NVIDIA P40
+  - "Standard_ND12s"        # NVIDIA P40
+  - "Standard_ND24s"        # NVIDIA P40
+  - "Standard_NV6"          # NVIDIA M60
+  - "Standard_NV12"         # NVIDIA M60
+  - "Standard_NV24"         # NVIDIA M60
+  - "Standard_NV6s_v2"      # NVIDIA M60
+  - "Standard_NV12s_v2"     # NVIDIA M60
+  - "Standard_NV24s_v2"     # NVIDIA M60
+
+
+# AWS EC2 instance type prefixes equipped with GPU hardware.
+# Add new entries when AWS releases new GPU instance families.
+aws_gpu_instance_type_prefixes:
+  - "p2."     # NVIDIA K80
+  - "p3."     # NVIDIA V100
+  - "p4."     # NVIDIA A100
+  - "p5."     # NVIDIA H100
+  - "g3."     # NVIDIA M60
+  - "g4dn."   # NVIDIA T4
+  - "g5."     # NVIDIA A10G
+  - "inf1."   # AWS Inferentia
+  - "inf2."   # AWS Inferentia2
+  - "trn1."   # AWS Trainium
+
+
+# Azure Terraform resource types classified as compute.
+# Add new entries when new Azure compute resource types
+# need to be counted toward compute_instance_count.
+azure_compute_resource_types:
+  - "azurerm_virtual_machine"
+  - "azurerm_linux_virtual_machine"
+  - "azurerm_windows_virtual_machine"
+  - "azurerm_virtual_machine_scale_set"
+
+
+# AWS Terraform resource types classified as compute.
+# Add new entries when new AWS compute resource types
+# need to be counted toward compute_instance_count.
+aws_compute_resource_types:
+  - "aws_instance"
+  - "aws_launch_template"
+  - "aws_autoscaling_group"
+
+
+# Source address values that indicate unrestricted
+# inbound network access ("open to the world").
+# Used to detect open ingress rules across both
+# Azure network security rules and AWS security groups.
+open_ingress_source_values:
+  - "*"
+  - "Internet"
+  - "0.0.0.0/0"
+  - "::/0"
+  - "Any"

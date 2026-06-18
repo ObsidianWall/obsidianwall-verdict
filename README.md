@@ -1,22 +1,21 @@
-
 # ObsidianWall Verdict
 
 **Pre-deployment infrastructure governance.**
-Evaluate Terraform plans against governance policies before deployment executes —
-catching budget overruns, policy violations, and compliance failures
-before they become incidents.
+Evaluate Terraform plans and CloudFormation templates against governance policies
+before deployment executes — catching budget overruns, policy violations, and
+compliance failures before they become incidents.
 
 [![CI](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml/badge.svg)](https://github.com/obsidianwall/obsidianwall-verdict/actions/workflows/verdict-ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![obsidianwall.com](https://img.shields.io/badge/platform-obsidianwall.com-5ac4f0.svg)](https://obsidianwall.com)
 
----
+-----
 
 ## What it does
 
-Verdict sits between `terraform plan` and `terraform apply`. It takes a
-Terraform plan and a policy file, evaluates the plan deterministically
+Verdict sits between your infrastructure plan and deployment. It takes a
+Terraform plan JSON or CloudFormation template, evaluates it deterministically
 against your governance policies, and produces a decision — with a full
 audit trail, risk score, stakeholder notifications, and explainability
 built in.
@@ -46,7 +45,7 @@ $ verdict evaluate \
 No AI guessing. No approximations. Every decision is deterministic,
 reproducible, and attributable to a human-authored policy.
 
----
+-----
 
 ## Quickstart
 
@@ -106,13 +105,17 @@ spec:
 **Evaluate a plan**
 
 ```bash
-# Generate your Terraform plan
+# Terraform
 terraform plan -out=tfplan
 terraform show -json tfplan > terraform_plan.json
-
-# Run governance evaluation
 verdict evaluate \
   --plan   terraform_plan.json \
+  --policy policies/cost/budget.yaml \
+  --role   engineer
+
+# CloudFormation — auto-detected, no --format flag needed
+verdict evaluate \
+  --plan   template.yaml \
   --policy policies/cost/budget.yaml \
   --role   engineer
 ```
@@ -120,13 +123,14 @@ verdict evaluate \
 Verdict returns exit code `0` on ALLOW and non-zero on DENY,
 blocking CI/CD pipelines automatically.
 
----
+-----
 
 ## Commands
 
 ### verdict evaluate
 
-Evaluate a Terraform plan against a governance policy.
+Evaluate a Terraform plan or CloudFormation template against a governance policy.
+Plan format is auto-detected from file content — no `--format` flag required.
 
 ```bash
 verdict evaluate \
@@ -136,17 +140,137 @@ verdict evaluate \
   --current-spend 30.0
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--plan` | Path to Terraform plan JSON |
-| `--policy` | Path to policy YAML file |
-| `--role` | Role of the user triggering the deployment |
-| `--current-spend` | Spend already incurred this month (default: 0.0) |
-| `--pricing` | `table` (default, offline) or `live` (Azure Retail API) |
-| `--region` | Cloud region for live pricing (default: eastus) |
-| `--output` | Path to write the audit artifact (default: output/result.json) |
+|Flag             |Description                                                       |
+|-----------------|------------------------------------------------------------------|
+|`--plan`         |Path to Terraform plan JSON or CloudFormation template (JSON/YAML)|
+|`--policy`       |Path to policy YAML file                                          |
+|`--role`         |Role of the user triggering the deployment                        |
+|`--current-spend`|Spend already incurred this month (default: 0.0)                  |
+|`--pricing`      |`table` (default, offline) or `live` (Azure Retail API)           |
+|`--region`       |Cloud region for live pricing (default: eastus)                   |
+|`--output`       |Path to write the audit artifact (default: output/result.json)    |
 
----
+-----
+
+### verdict coverage
+
+Map a policy’s conditions to a compliance framework. Reports which framework
+controls are addressed by your policy conditions and which controls are missing.
+
+```bash
+verdict coverage \
+  --policy    policies/ai_governance/basic_ai_governance.yaml \
+  --framework nist_ai_rmf
+```
+
+```
+────────────────────────────────────────────────────────────────
+  ObsidianWall — Compliance Coverage Report
+────────────────────────────────────────────────────────────────
+
+  Policy:     basic_ai_governance_verdict
+  Framework:  NIST AI Risk Management Framework
+  Coverage:   16.7%  (2 of 12 controls)
+
+  Covered Controls
+────────────────────────────────────────────────────────────────
+  ✅  GOVERN-1.1             AI Policies and Procedures
+               → gpu_governance_check
+  ✅  MAP-1.1                AI System Categorization
+               → gpu_governance_check
+
+  Missing Controls
+────────────────────────────────────────────────────────────────
+  ❌  GOVERN-1.2             Accountability for AI Risk
+  ❌  MANAGE-1.1             AI Risk Treatment
+  ...
+
+  10 control(s) not addressed. Add conditions covering the
+  missing areas to improve coverage.
+────────────────────────────────────────────────────────────────
+```
+
+|Flag         |Description                                                |
+|-------------|-----------------------------------------------------------|
+|`--policy`   |Path to policy YAML file                                   |
+|`--framework`|Compliance framework: `hipaa`, `soc2`, `cis`, `nist_ai_rmf`|
+
+**Supported frameworks:**
+
+|Framework    |Controls                                                     |
+|-------------|-------------------------------------------------------------|
+|`hipaa`      |HIPAA Security Rule — Technical and Administrative Safeguards|
+|`soc2`       |SOC 2 Trust Service Criteria                                 |
+|`cis`        |CIS Controls v8                                              |
+|`nist_ai_rmf`|NIST AI Risk Management Framework                            |
+
+-----
+
+### verdict simulate
+
+Evaluate a policy against synthetic context values. No Terraform plan or
+CloudFormation template required. Use this to test policies while writing
+them, calibrate thresholds, onboard teams, or assert expected decisions in CI.
+
+```bash
+verdict simulate \
+  --policy policies/cost/basic_budget.yaml \
+  --set estimated_cost=150
+
+verdict simulate \
+  --policy policies/ai_governance/basic_ai_governance.yaml \
+  --set ai_gpu_workloads=2
+```
+
+```
+────────────────────────────────────────────────────────────────
+  ObsidianWall Verdict — Simulate
+────────────────────────────────────────────────────────────────
+
+  Context
+────────────────────────────────────────────────────────────────
+  ai_gpu_workloads                 2
+
+  Decision
+────────────────────────────────────────────────────────────────
+  🚫  DENY
+
+  Technical Risk:    0/100
+  Governance Risk:   critical
+  Reason:            conditions failed hard deny
+
+────────────────────────────────────────────────────────────────
+```
+
+Technical Risk and Governance Risk are shown as separate dimensions.
+A governance DENY at Technical Risk 0 means a policy condition failed —
+not that infrastructure is misconfigured. Both dimensions are needed
+to understand the full governance picture.
+
+|Flag      |Description                                       |
+|----------|--------------------------------------------------|
+|`--policy`|Path to policy YAML file                          |
+|`--set`   |Set a context key. Repeatable. Format: `key=value`|
+|`--role`  |Role of the user (default: engineer)              |
+|`--output`|Optional path to write simulation result JSON     |
+
+Exit codes: `0` ALLOW or ALLOW_WITH_NOTIFICATION, `1` DENY or DENY_WITH_OVERRIDE.
+
+-----
+
+### verdict sentinel scan
+
+Verify that reality stayed aligned with the governance decision after deployment.
+Compares the current plan state against the previous governance decision and
+reports whether drift has occurred.
+
+```bash
+verdict sentinel scan --plan terraform_plan.json
+```
+
+Outcome types: `no_drift`, `drift_detected`, `compliance_violation`, `budget_overrun`.
+
+-----
 
 ### verdict validate
 
@@ -161,7 +285,7 @@ verdict validate --policy policies/cost/budget.yaml
 Returns a JSON object with `status: valid` or `status: invalid` and
 the error if the policy fails validation.
 
----
+-----
 
 ### verdict test
 
@@ -185,34 +309,17 @@ verdict test \
   Actual:   DENY_WITH_OVERRIDE
 ```
 
-If the decision does not match, Verdict tells you what failed and why:
-
-```
-  ✗ Test failed
-
-  Policy:   policies/cost/budget.yaml
-  Plan:     terraform_plan.json
-  Expected: DENY
-  Actual:   DENY_WITH_OVERRIDE
-
-  Risk score:  75/100
-  Severity:    critical
-
-  Failed conditions:
-    ✗ budget_check
-```
-
-| Flag | Description |
-|------|-------------|
-| `--plan` | Path to Terraform plan JSON |
-| `--policy` | Path to policy YAML file |
-| `--expect` | Expected decision (see governance decisions table) |
-| `--role` | Role of the user (default: engineer) |
-| `--verbose` | Show full evaluation output on failure |
+|Flag       |Description                                       |
+|-----------|--------------------------------------------------|
+|`--plan`   |Path to Terraform plan JSON                       |
+|`--policy` |Path to policy YAML file                          |
+|`--expect` |Expected decision (see governance decisions table)|
+|`--role`   |Role of the user (default: engineer)              |
+|`--verbose`|Show full evaluation output on failure            |
 
 Exit codes: `0` pass, `1` fail, `2` evaluation error.
 
----
+-----
 
 ### verdict audit
 
@@ -248,65 +355,19 @@ verdict audit
   Network / Topology        [███░░░░░░░░░]   25.0/100  low
   Architecture              [░░░░░░░░░░░░]    0.0/100  informational
   Utilization               [░░░░░░░░░░░░]    0.0/100  informational
-
-────────────────────────────────────────────────────────────────────────
-  Why Decisions Were Made
-────────────────────────────────────────────────────────────────────────
-
-  Failed conditions  (why deployments were DENIED)
-  Condition                                 Failures    Rate
-  ────────────────────────────────────────  ────────  ──────
-  budget_check                                     8   66.7%
-
-────────────────────────────────────────────────────────────────────────
-  Policy Effectiveness
-────────────────────────────────────────────────────────────────────────
-  Policy                    Evals  Denied  Overrides  Override%   Deny%
-  basic_budget_verdict         12       8          2      25.0%   66.7%
 ```
 
-**Add `--insights` to get a governance interpretation:**
-
-```bash
-verdict audit --insights
-```
-
-This adds two sections at the end — Governance Insights (what patterns
-the data shows) and Recommendations (what to do about them):
-
-```
-────────────────────────────────────────────────────────────────────────
-  Governance Insights
-────────────────────────────────────────────────────────────────────────
-  ⚠  'basic_budget_verdict' has a 25.0% override rate.
-     Policy may not reflect deployment reality.
-  ℹ  Cost is the highest risk domain (avg score: 50/100).
-  ℹ  'budget_check' is the most frequently failed condition
-     (8 failures, 66.7% of evaluations).
-
-────────────────────────────────────────────────────────────────────────
-  Recommendations
-────────────────────────────────────────────────────────────────────────
-  1. Review 'basic_budget_verdict' threshold — consider whether
-     the policy limit reflects realistic deployment patterns.
-  2. Review Cost governance policies.
-     This domain is driving the most aggregate risk.
-  3. Review 'budget_check' condition — it is responsible for
-     66.7% of all denials.
-```
-
-| Flag | Description |
-|------|-------------|
-| `--insights` | Include governance insights and recommendations |
-| `--policy` | Filter to a specific policy name |
-| `--limit` | Number of recent decisions to show (default: 50) |
-| `--format` | `table` (default) or `json` |
+|Flag        |Description                                     |
+|------------|------------------------------------------------|
+|`--insights`|Include governance insights and recommendations |
+|`--policy`  |Filter to a specific policy name                |
+|`--limit`   |Number of recent decisions to show (default: 50)|
+|`--format`  |`table` (default) or `json`                     |
 
 **Decision history is stored locally at `~/.obsidianwall/decisions.db`.**
-Nothing leaves your machine. Remote telemetry is not implemented yet —
-that is planned for v0.5.0 with explicit opt-in.
+Nothing leaves your machine.
 
----
+-----
 
 ## GitHub Actions
 
@@ -318,7 +379,7 @@ name: Infrastructure Governance
 
 on:
   pull_request:
-    paths: ["**.tf", "**.tfvars"]
+    paths: ["**.tf", "**.tfvars", "**.yaml", "**.json"]
 
 jobs:
   governance:
@@ -351,22 +412,22 @@ jobs:
 
 ### Action outputs
 
-| Output | Description |
-|--------|-------------|
-| `decision` | `ALLOW` / `ALLOW_WITH_NOTIFICATION` / `ALLOW_WITH_APPROVAL_REQUIRED` / `DENY_WITH_OVERRIDE` / `DENY` |
-| `conditions_passed` | `true` or `false` |
-| `risk_score` | Integer 0–100 |
-| `effective_severity` | `informational` / `low` / `medium` / `high` / `critical` |
-| `decision_id` | UUID for audit trail correlation |
+|Output              |Description                                                                                         |
+|--------------------|----------------------------------------------------------------------------------------------------|
+|`decision`          |`ALLOW` / `ALLOW_WITH_NOTIFICATION` / `ALLOW_WITH_APPROVAL_REQUIRED` / `DENY_WITH_OVERRIDE` / `DENY`|
+|`conditions_passed` |`true` or `false`                                                                                   |
+|`risk_score`        |Integer 0–100                                                                                       |
+|`effective_severity`|`informational` / `low` / `medium` / `high` / `critical`                                            |
+|`decision_id`       |UUID for audit trail correlation                                                                    |
 
----
+-----
 
 ## How it works
 
 ```
-Terraform plan
+Infrastructure plan (Terraform JSON or CloudFormation YAML/JSON)
       ↓
-Translation Layer     Parses plan, estimates cost
+Translation Layer     Auto-detects format, parses plan, estimates cost
       ↓
 Policy loader         Loads and validates the policy YAML
       ↓
@@ -391,34 +452,34 @@ Every stage is deterministic. Analyzers are advisory — they inform
 the risk score but never override the condition evaluation.
 The condition evaluation alone determines the governance decision.
 
----
+-----
 
 ## Enforcement modes
 
-| Mode | How | What it blocks |
-|------|-----|----------------|
-| **CI/CD pipeline** | GitHub Actions with `fail_on_deny: true` | `terraform apply` never runs on DENY |
-| **IAM access controls** | Azure Entra ID / AWS IAM restricts engineer credentials to read-only | Direct deployment from local machines impossible |
-| **Standalone manual** | Run `verdict evaluate` before `terraform apply` | Governance guidance, audit trail, budget owner notification |
+|Mode                   |How                                                                 |What it blocks                                             |
+|-----------------------|--------------------------------------------------------------------|-----------------------------------------------------------|
+|**CI/CD pipeline**     |GitHub Actions with `fail_on_deny: true`                            |`terraform apply` never runs on DENY                       |
+|**IAM access controls**|Azure Entra ID / AWS IAM restricts engineer credentials to read-only|Direct deployment from local machines impossible           |
+|**Standalone manual**  |Run `verdict evaluate` before `terraform apply`                     |Governance guidance, audit trail, budget owner notification|
 
 For hard technical enforcement, integrate Verdict into your CI/CD pipeline
-and restrict cloud credentials so only the pipeline's service principal
+and restrict cloud credentials so only the pipeline’s service principal
 can apply infrastructure. Engineers with read-only credentials cannot
 deploy directly even if they skip Verdict locally.
 
----
+-----
 
 ## Governance decisions
 
-| Decision | Meaning |
-|----------|---------|
-| `ALLOW` | All conditions passed. Deployment authorized. |
-| `ALLOW_WITH_NOTIFICATION` | Conditions passed but stakeholders are notified. |
-| `ALLOW_WITH_APPROVAL_REQUIRED` | Conditions passed but formal approval is required. |
-| `DENY_WITH_OVERRIDE` | Conditions failed. An authorized role may override. |
-| `DENY` | Conditions failed. No override permitted. Hard block. |
+|Decision                      |Meaning                                              |
+|------------------------------|-----------------------------------------------------|
+|`ALLOW`                       |All conditions passed. Deployment authorized.        |
+|`ALLOW_WITH_NOTIFICATION`     |Conditions passed but stakeholders are notified.     |
+|`ALLOW_WITH_APPROVAL_REQUIRED`|Conditions passed but formal approval is required.   |
+|`DENY_WITH_OVERRIDE`          |Conditions failed. An authorized role may override.  |
+|`DENY`                        |Conditions failed. No override permitted. Hard block.|
 
----
+-----
 
 ## Policy DSL
 
@@ -452,34 +513,18 @@ spec:
 Policies declare which governance domain they enforce. Verdict validates
 conditions against the declared domain and rejects mismatches.
 
-| Domain | What it governs |
-|--------|----------------|
-| `cost` | Budget spend enforcement |
-| `security` | Security posture — open ingress, public storage, encryption |
-| `compliance` | Tagging, naming, regulatory requirements |
-| `resource_limits` | Instance counts, GPU limits, sizing |
-| `network` | Network topology, segmentation, public exposure |
-| `identity` | IAM, MFA, privileged access |
-| `data_governance` | PII handling, encryption, data residency |
-| `resilience` | Availability, DR, replica counts |
-| `ai_governance` | AI system controls, model provenance, GPU workloads |
-| `composite` | Coordinates multiple domains in one policy |
-
-### Composite policies
-
-A composite policy governs multiple domains simultaneously and produces
-a single governance decision. Every domain used must be declared
-explicitly — Verdict enforces this and rejects any condition that
-references an undeclared domain.
-
-```yaml
-spec:
-  policy_type: composite
-  governance_domains:
-    - cost
-    - security
-    - compliance
-```
+|Domain           |What it governs                                            |
+|-----------------|-----------------------------------------------------------|
+|`cost`           |Budget spend enforcement                                   |
+|`security`       |Security posture — open ingress, public storage, encryption|
+|`compliance`     |Tagging, naming, regulatory requirements                   |
+|`resource_limits`|Instance counts, GPU limits, sizing                        |
+|`network`        |Network topology, segmentation, public exposure            |
+|`identity`       |IAM, MFA, privileged access                                |
+|`data_governance`|PII handling, encryption, data residency                   |
+|`resilience`     |Availability, DR, replica counts                           |
+|`ai_governance`  |AI system controls, model provenance, GPU workloads        |
+|`composite`      |Coordinates multiple domains in one policy                 |
 
 ### Condition expressions
 
@@ -498,7 +543,7 @@ Supported operators: `<=`, `>=`, `<`, `>`, `==`
 Supported arithmetic: `+`
 Context resolution: dot-notation for nested parameters (`budget.amount`)
 
----
+-----
 
 ## Audit artifact
 
@@ -533,7 +578,7 @@ Every evaluation produces a complete audit artifact:
 The artifact is written to `output/result.json` and printed to stdout.
 It is suitable for storage in an audit log, S3 bucket, or compliance system.
 
----
+-----
 
 ## Doctrine
 
@@ -559,7 +604,7 @@ engine, and explainability pipeline all use intelligence to inform the
 governance process. The boundary is authority: intelligence informs,
 policy governs.
 
----
+-----
 
 ## Architecture
 
@@ -572,7 +617,8 @@ assurance platform.
 │                                                     │
 │  engine/       deterministic evaluation pipeline    │
 │  schemas/      policy DSL and typed contracts       │
-│  context/      Translation Layer (plan parsing)     │
+│  context/      Translation Layer (Terraform +       │
+│                CloudFormation auto-detection)        │
 │  telemetry/    local decision history (SQLite)      │
 │  audit/        structured audit logging             │
 │  cli/          command-line interface               │
@@ -598,7 +644,7 @@ assurance platform.
 └─────────────────────────────────────────────────────┘
 ```
 
----
+-----
 
 ## Telemetry
 
@@ -611,20 +657,22 @@ export OW_TELEMETRY_ENABLED=true
 ```
 
 **What is stored:**
+
 - Decision outcomes, risk scores, policy names
 - Which conditions passed and which failed
 - Override and approval events
 
 **What is never stored:**
+
 - Plan contents or resource configurations
 - Cost amounts or budget values
 - Resource names or identifiers
 - Organization or team identifiers
 
 Telemetry powers `verdict audit`. Without it, `verdict audit` has no
-data to read. Remote telemetry with explicit opt-in is planned for v0.5.0.
+data to read.
 
----
+-----
 
 ## Development
 
@@ -645,7 +693,7 @@ verdict evaluate \
   --role   engineer
 ```
 
-**Test suite:** 101 tests — unit, integration, and pipeline.
+**Test suite:** 737 tests — unit and integration.
 
 ```bash
 pytest tests/unit/        # unit tests
@@ -666,7 +714,7 @@ policies/
   composite/      multi-domain coordination
 ```
 
----
+-----
 
 ## License
 
@@ -679,11 +727,11 @@ commercial or non-commercial. Attribution required.
 Built on ObsidianWall — the programmable assurance platform.
 [obsidianwall.com](https://obsidianwall.com)
 
----
+-----
 
 ## Built by
 
 Aisha I. — [obsidianwall.com](https://obsidianwall.com)
 
-> *"Organizations that design for programmable assurance now
-> will not need to retrofit later."*
+> *“Organizations that design for programmable assurance now
+> will not need to retrofit later.”*

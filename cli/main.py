@@ -25,7 +25,9 @@ import typer
 
 from audit.audit_logger import get_logger
 from cli.commands.audit import audit_app
+from cli.commands.coverage import coverage
 from cli.commands.sentinel import sentinel_app
+from cli.commands.simulate import simulate
 from cli.commands.test_command import test_command
 from context.context_builder import build_context
 from engine.orchestrator import PolicyOrchestrator
@@ -43,6 +45,8 @@ app = typer.Typer(
 # ── Register commands ──────────────────────────────
 app.add_typer(audit_app, name="audit")
 app.add_typer(sentinel_app, name="sentinel")
+app.command(name="coverage")(coverage)
+app.command(name="simulate")(simulate)
 app.command(name="test")(test_command)
 
 

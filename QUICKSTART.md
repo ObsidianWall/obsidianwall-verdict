@@ -19,10 +19,13 @@ verdict --version
 
 -----
 
-## Step 2 — Generate a Terraform plan
+## Step 2 — Generate an infrastructure plan
 
-Verdict evaluates Terraform plans before deployment. You need a plan
-in JSON format.
+Verdict evaluates Terraform plans and CloudFormation templates before
+deployment. Plan format is auto-detected from file content — no
+`--format` flag required.
+
+**Terraform:**
 
 ```bash
 terraform init
@@ -30,7 +33,17 @@ terraform plan -out=tfplan
 terraform show -json tfplan > terraform_plan.json
 ```
 
-If you do not have a Terraform project handy, use the sample plan
+**CloudFormation:**
+
+Pass your CloudFormation template directly — JSON or YAML both work:
+
+```bash
+verdict evaluate \
+  --plan   template.yaml \
+  --policy policies/cost/budget.yaml
+```
+
+If you do not have a project handy, use the sample plan
 included in the repository:
 
 ```bash
@@ -143,10 +156,98 @@ verdict validate --policy policies/my-budget.yaml
 
 -----
 
-## Step 7 — Test your policy
+## Step 7 — Simulate policy decisions
 
-Before wiring a policy into CI/CD, write a test to confirm it
-behaves correctly:
+Before connecting a policy to a real infrastructure plan, simulate
+decisions against synthetic context values to understand how the
+policy behaves at different thresholds.
+
+```bash
+# What happens when estimated cost is low?
+verdict simulate \
+  --policy policies/my-budget.yaml \
+  --set estimated_cost=100
+
+# What happens when it exceeds the budget?
+verdict simulate \
+  --policy policies/my-budget.yaml \
+  --set estimated_cost=5000
+```
+
+```
+  🚫  DENY
+
+  Technical Risk:    0/100
+  Governance Risk:   medium
+  Reason:            conditions failed hard deny
+```
+
+Technical Risk and Governance Risk are shown as separate dimensions.
+A DENY at Technical Risk 0 means a policy condition failed — not
+that infrastructure is misconfigured.
+
+Use simulate to:
+
+- Calibrate thresholds before deploying a policy to CI/CD
+- Onboard engineers to understand what a policy evaluates
+- Write CI tests that assert expected decisions without a real plan
+
+-----
+
+## Step 8 — Check compliance coverage
+
+After writing a policy, check how much of a compliance framework
+it actually covers:
+
+```bash
+verdict coverage \
+  --policy  policies/my-budget.yaml \
+  --framework hipaa
+```
+
+```
+────────────────────────────────────────────────────────────────
+  ObsidianWall — Compliance Coverage Report
+────────────────────────────────────────────────────────────────
+
+  Policy:     my-budget
+  Framework:  HIPAA Security Rule
+  Coverage:   20.0%  (2 of 10 controls)
+
+  Covered Controls
+────────────────────────────────────────────────────────────────
+  ✅  164.308(a)(1)          Security Management Process
+               → budget_check
+
+  Missing Controls
+────────────────────────────────────────────────────────────────
+  ❌  164.312(a)(1)          Access Control
+  ❌  164.312(e)(1)          Transmission Security
+  ...
+
+  8 control(s) not addressed.
+────────────────────────────────────────────────────────────────
+```
+
+This answers the question most governance tools cannot: *does this
+policy actually cover the framework it claims to address, and what
+is missing?*
+
+**Supported frameworks:**
+
+|Framework                        |Flag         |
+|---------------------------------|-------------|
+|HIPAA Security Rule              |`hipaa`      |
+|SOC 2 Trust Service Criteria     |`soc2`       |
+|CIS Controls v8                  |`cis`        |
+|NIST AI Risk Management Framework|`nist_ai_rmf`|
+
+-----
+
+## Step 9 — Test your policy
+
+Write tests to confirm your policy behaves correctly and catch
+regressions when policies change:
 
 ```bash
 # Test that a known-compliant plan is allowed
@@ -167,7 +268,7 @@ your CI pipeline to catch regressions when your policy changes.
 
 -----
 
-## Step 8 — Governance history
+## Step 10 — Governance history
 
 Verdict records every evaluation to a local governance history
 at `~/.obsidianwall/decisions.db`. This is enabled by default.
@@ -197,13 +298,9 @@ condition results, override and approval events.
 What is never stored: plan contents, cost amounts, resource
 names, organization identifiers.
 
-Remote governance intelligence is a separate opt-in feature
-planned for Compass. It will never be enabled without
-explicit user action.
-
 -----
 
-## Step 9 — Wire into GitHub Actions
+## Step 11 — Wire into GitHub Actions
 
 Add Verdict as a governance gate in your CI/CD pipeline:
 
@@ -213,7 +310,7 @@ name: Infrastructure Governance
 
 on:
   pull_request:
-    paths: ["**.tf", "**.tfvars"]
+    paths: ["**.tf", "**.tfvars", "**.yaml", "**.json"]
 
 jobs:
   governance:
@@ -243,7 +340,7 @@ can proceed.
 
 -----
 
-## Step 10 — For compliance frameworks
+## Step 12 — For compliance frameworks
 
 If you need governance aligned to a specific compliance standard,
 start with the example templates:
@@ -260,21 +357,25 @@ start with the example templates:
 Each template directory contains a README explaining the compliance
 mapping and exactly what to customize.
 
+After writing a compliance policy, run `verdict coverage` to verify
+how much of the framework your conditions actually address and what
+controls are still missing.
+
 -----
 
 ## Where to save your policies
 
 Verdict accepts any file path for `--policy`. The convention is to
-keep policies alongside your Terraform code:
+keep policies alongside your infrastructure code:
 
 ```
-your-terraform-repo/
-  main.tf
-  variables.tf
+your-infra-repo/
+  main.tf                   ← Terraform
+  template.yaml             ← or CloudFormation
   terraform_plan.json
   policies/
-    budget.yaml           ← your customized policy
-    production.yaml       ← your production composite policy
+    budget.yaml             ← your customized policy
+    production.yaml         ← your production composite policy
 ```
 
 This keeps governance policy version-controlled alongside the
