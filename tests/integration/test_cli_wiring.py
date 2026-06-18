@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 from cli.main import app
 
 
-runner = CliRunner(mix_stderr=False)
+runner = CliRunner()
 
 class TestCliWiring:
 
