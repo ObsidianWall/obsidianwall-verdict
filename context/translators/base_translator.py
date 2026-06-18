@@ -1,4 +1,4 @@
-# context/base_translator.py
+# context/translators/base_translator.py
 #
 # Purpose:
 # Abstract base interface for the Translation Layer.
@@ -12,10 +12,10 @@
 # a Terraform-specific monolith.
 #
 # Current implementations:
-#   terraform_parser.py    → Terraform JSON plan
+#   terraform_parser.py       → Terraform JSON plan
+#   cloudformation_parser.py  → AWS CloudFormation
 #
 # Planned implementations:
-#   cloudformation_parser.py  → AWS CloudFormation
 #   bicep_parser.py           → Azure Bicep
 #   pulumi_parser.py          → Pulumi state
 #   cdktf_parser.py           → CDK for Terraform
@@ -27,15 +27,17 @@
 #   and policy conditions expect.
 #
 # Standard context keys (all translators must produce):
-#   resources               list[dict]  — parsed resources
-#   open_ingress_rules      int         — security domain
-#   public_storage_buckets  int         — security domain
-#   unencrypted_databases   int         — security domain
-#   untagged_resource_count int         — compliance domain
-#   total_resource_count    int         — compliance domain
-#   compute_instance_count  int         — resource_limits domain
-#   gpu_instance_count      int         — resource_limits domain
-#   ai_gpu_workloads        int         — ai_governance domain
+#   resources                 list[dict]  — parsed resources
+#   open_ingress_rules        int         — security domain
+#   public_storage_buckets    int         — security domain
+#   unencrypted_databases     int         — security domain
+#   ssl_not_enforced_count    int         — security domain (transmission)
+#   versioning_disabled_count int         — security domain (integrity)
+#   untagged_resource_count   int         — compliance domain
+#   total_resource_count      int         — compliance domain
+#   compute_instance_count    int         — resource_limits domain
+#   gpu_instance_count        int         — resource_limits domain
+#   ai_gpu_workloads          int         — ai_governance domain
 
 from __future__ import annotations
 
@@ -114,6 +116,8 @@ class BaseTranslator(ABC):
             "open_ingress_rules": 0,
             "public_storage_buckets": 0,
             "unencrypted_databases": 0,
+            "ssl_not_enforced_count": 0,
+            "versioning_disabled_count": 0,
             "untagged_resource_count": 0,
             "total_resource_count": 0,
             "compute_instance_count": 0,
