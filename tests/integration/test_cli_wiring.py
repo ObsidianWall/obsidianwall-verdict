@@ -12,10 +12,11 @@
 import pytest
 from typer.testing import CliRunner
 
+
 from cli.main import app
 
-runner = CliRunner()
 
+runner = CliRunner(mix_stderr=False)
 
 class TestCliWiring:
 
@@ -48,13 +49,13 @@ class TestCliWiring:
         assert result.exit_code == 0
 
     def test_coverage_command_registered(self):
-        result = runner.invoke(app, ["coverage", "--help"])
+        result = runner.invoke(app, ["coverage", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
         assert "--policy" in result.output
         assert "--framework" in result.output
 
     def test_simulate_command_registered(self):
-        result = runner.invoke(app, ["simulate", "--help"])
+        result = runner.invoke(app, ["simulate", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
         assert "--policy" in result.output
         assert "--set" in result.output
