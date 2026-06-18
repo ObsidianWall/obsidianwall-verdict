@@ -8,14 +8,30 @@
 # - Command not registered with app.command()
 # - Import errors in command modules
 
+import re
 import pytest
 from typer.testing import CliRunner
-
 
 from cli.main import app
 
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+    """
+    Strip ANSI escape codes from CLI output.
+
+    Rich emits ANSI colour codes in CI environments even when
+    color=False is passed to runner.invoke(), because Rich has
+    its own terminal detection layer. Flag names like --plan are
+    split into \x1b[..]-\x1b[0m\x1b[..-plan\x1b[0m, making a
+    plain string search for '--plan' fail.
+
+    Stripping ANSI before asserting is the portable fix.
+    """
+    return re.compile(r"\x1b\[[0-9;]*m").sub("", text)
+
 
 class TestCliWiring:
 
@@ -29,15 +45,17 @@ class TestCliWiring:
         assert "Verdict" in result.output or "verdict" in result.output.lower()
 
     def test_evaluate_command_registered(self):
-        result = runner.invoke(app, ["evaluate", "--help"], color=False)
+        result = runner.invoke(app, ["evaluate", "--help"])
         assert result.exit_code == 0
-        assert "--plan" in result.output
-        assert "--policy" in result.output
+        clean = _strip_ansi(result.output)
+        assert "--plan" in clean
+        assert "--policy" in clean
 
     def test_validate_command_registered(self):
-        result = runner.invoke(app, ["validate", "--help"], color=False)
+        result = runner.invoke(app, ["validate", "--help"])
         assert result.exit_code == 0
-        assert "--policy" in result.output
+        clean = _strip_ansi(result.output)
+        assert "--policy" in clean
 
     def test_audit_command_registered(self):
         result = runner.invoke(app, ["audit", "--help"])
@@ -48,16 +66,18 @@ class TestCliWiring:
         assert result.exit_code == 0
 
     def test_coverage_command_registered(self):
-        result = runner.invoke(app, ["coverage", "--help"], env={"COLUMNS": "200"}, color=False)
+        result = runner.invoke(app, ["coverage", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        assert "--policy" in result.output
-        assert "--framework" in result.output
+        clean = _strip_ansi(result.output)
+        assert "--policy" in clean
+        assert "--framework" in clean
 
     def test_simulate_command_registered(self):
-        result = runner.invoke(app, ["simulate", "--help"], env={"COLUMNS": "200"}, color=False)
+        result = runner.invoke(app, ["simulate", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        assert "--policy" in result.output
-        assert "--set" in result.output
+        clean = _strip_ansi(result.output)
+        assert "--policy" in clean
+        assert "--set" in clean
 
     def test_test_command_registered(self):
         result = runner.invoke(app, ["test", "--help"])
