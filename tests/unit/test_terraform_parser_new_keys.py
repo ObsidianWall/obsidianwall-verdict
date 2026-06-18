@@ -9,7 +9,6 @@
 #
 # Tests cover both Azure and AWS resource types.
 
-import pytest
 
 from context.translators.terraform_parser import (
     _count_ssl_not_enforced,
