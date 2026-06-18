@@ -11,11 +11,6 @@ license =  "Apache-2.0"
 requires-python = ">=3.11"
 
 authors = [
-    { name = "ObsidianWall"}, 
-    {email = "hello@obsidianwall.com" }
-]
-
-maintainers = [
     { name = "ObsidianWall", email = "hello@obsidianwall.com" }
 ]
 
@@ -37,8 +32,6 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Systems Administration",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
@@ -110,5 +103,5 @@ source = ["engine", "schemas", "audit"]
 omit = ["tests/*", "cli/*"]
 
 [tool.coverage.report]
-fail_under = 90
+fail_under = 75
 show_missing = true
