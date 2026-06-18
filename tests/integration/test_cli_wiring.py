@@ -1,4 +1,3 @@
-
 # tests/integration/test_cli_wiring.py
 #
 # Verifies that all CLI commands are correctly registered
@@ -30,13 +29,13 @@ class TestCliWiring:
         assert "Verdict" in result.output or "verdict" in result.output.lower()
 
     def test_evaluate_command_registered(self):
-        result = runner.invoke(app, ["evaluate", "--help"])
+        result = runner.invoke(app, ["evaluate", "--help"], color=False)
         assert result.exit_code == 0
         assert "--plan" in result.output
         assert "--policy" in result.output
 
     def test_validate_command_registered(self):
-        result = runner.invoke(app, ["validate", "--help"])
+        result = runner.invoke(app, ["validate", "--help"], color=False)
         assert result.exit_code == 0
         assert "--policy" in result.output
 
@@ -49,13 +48,13 @@ class TestCliWiring:
         assert result.exit_code == 0
 
     def test_coverage_command_registered(self):
-        result = runner.invoke(app, ["coverage", "--help"], env={"COLUMNS": "200"})
+        result = runner.invoke(app, ["coverage", "--help"], env={"COLUMNS": "200"}, color=False)
         assert result.exit_code == 0
         assert "--policy" in result.output
         assert "--framework" in result.output
 
     def test_simulate_command_registered(self):
-        result = runner.invoke(app, ["simulate", "--help"], env={"COLUMNS": "200"})
+        result = runner.invoke(app, ["simulate", "--help"], env={"COLUMNS": "200"}, color=False)
         assert result.exit_code == 0
         assert "--policy" in result.output
         assert "--set" in result.output
