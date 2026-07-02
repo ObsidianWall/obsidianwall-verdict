@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from telemetry.config import get_db_dir, is_telemetry_enabled
@@ -73,11 +74,12 @@ def show_first_run_notice_if_needed() -> None:
         file=sys.stderr,
     )
 
+    # Write the marker so the notice only appears once.
+    # Non-fatal if the write fails — the notice may appear
+    # again on the next run, which is acceptable. It must
+    # never prevent the CLI from continuing.
+
     try:
         marker.touch()
     except OSError:
-        # Non-fatal — if we can't write the marker,
-        # the notice may show again next run. That is
-        # an acceptable failure mode; it must never
-        # block the CLI.
         pass
