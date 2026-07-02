@@ -11,9 +11,9 @@
 #                trufflehog + license compliance
 # - test:        pytest with coverage enforcement
 #                matrix: Python 3.11, 3.12, 3.13
-# - action-test: integration test — exercises the full
-#                GitHub Action against a real sample plan
-# - build:       package build verification
+# - action-test: integration test — exercises Verdict CLI
+#                against real sample files using local install
+# - build:       package build verification + wheel check
 #
 # Security controls (secure-by-design):
 # - ruff          → style and lint enforcement
@@ -26,6 +26,9 @@
 #                   that would create legal exposure for enterprise adopters
 # - scoped perms  → contents: read only on all jobs
 # - pinned SHAs   → all actions pinned to exact commit SHA
+#
+# Note: PyPI publish is handled by release.yml on main.
+# This file does NOT publish to PyPI.
 
 name: ObsidianWall Verdict CI
 
@@ -178,15 +181,24 @@ jobs:
   # against real sample files using a local install.
   #
   # Why local install instead of `uses: ./`:
-  #   `uses: ./` triggers action.yml which installs from
-  #   PyPI. During dev/pre-release, the current PyPI
-  #   version may not include data files (e.g. YAML maps)
-  #   added in the current commit. Installing from the
-  #   local checkout ensures the integration test always
-  #   runs against the actual code being reviewed.
+  #   `uses: ./` triggers action.yml which runs
+  #   `pip install obsidianwall-verdict` from PyPI.
+  #   During development, the current PyPI version lags
+  #   behind the code in this commit — e.g. data files
+  #   added in this PR are missing from the published
+  #   package. Local install ensures we always test the
+  #   actual code being reviewed, not a stale release.
+  #
+  # Why --output instead of parsing stdout:
+  #   `verdict evaluate` writes structured NDJSON log
+  #   lines to stdout alongside the final JSON artifact.
+  #   Parsing stdout with json.load() fails because it
+  #   hits a log line before the artifact.
+  #   --output writes a clean, artifact-only JSON file.
+  #   We parse from that file instead.
   #
   # Tests:
-  # - Governance decision produced correctly
+  # - Governance decision produced correctly (DENY)
   # - Risk score computed and non-zero
   # - Decision ID issued for audit trail
   # ===================================================
@@ -209,8 +221,8 @@ jobs:
 
       - name: Install Verdict from local repo
         # Local install ensures data files (YAML maps, etc.)
-        # present in the current commit are available at runtime.
-        # This avoids the PyPI version lag during development.
+        # present in this commit are available at runtime.
+        # Avoids the PyPI version lag described above.
         run: |
           pip install -e .
 
@@ -219,53 +231,65 @@ jobs:
         run: |
           set +e
 
+          # --output writes a clean JSON artifact to a dedicated file.
+          # All console output (structured logs, telemetry notice)
+          # goes to verdict_logs.txt for display only — not for parsing.
           verdict evaluate \
             --plan   samples/terraform_plan.json \
             --policy policies/cost/basic_budget.yaml \
             --role   engineer \
-            > /tmp/verdict_output.txt
+            --output /tmp/verdict_result.json \
+            > /tmp/verdict_logs.txt 2>&1
 
           EXIT_CODE=$?
 
-          # Always surface output in CI logs
-          # regardless of governance decision
-          # Show structured logs (stderr went to console directly)
-          # Show JSON artifact from stdout capture
-          echo "=== Verdict JSON Artifact ==="
-          cat /tmp/verdict_output.txt
+          # Surface all console output in CI logs
+          echo "=== Verdict console output ==="
+          cat /tmp/verdict_logs.txt
 
-          # Parse governance outputs from JSON artifact
+          # Surface the clean JSON artifact
+          echo "=== Verdict JSON artifact ==="
+          cat /tmp/verdict_result.json
+
+          # Parse from the clean artifact file — not from stdout.
+          # stdout is mixed log lines + artifact and fails json.load().
           DECISION=$(python3 -c "
-          import json, sys
-          try:
-              data = json.load(open('/tmp/verdict_output.txt'))
-              print(data.get('decision', ''))
-          except Exception:
-              print('')
-          " 2>/dev/null || echo "")
+import json, sys
+try:
+    data = json.load(open('/tmp/verdict_result.json'))
+    print(data.get('decision', ''))
+except Exception as e:
+    print(f'PARSE_ERROR: {e}', file=sys.stderr)
+    print('')
+" 2>/dev/null || echo "")
 
           RISK=$(python3 -c "
-          import json
-          try:
-              data = json.load(open('/tmp/verdict_output.txt'))
-              print(data.get('risk_summary', {}).get('overall_risk_score', 0))
-          except Exception:
-              print('0')
-          " 2>/dev/null || echo "0")
+import json
+try:
+    data = json.load(open('/tmp/verdict_result.json'))
+    print(data.get('risk_summary', {}).get('overall_risk_score', 0))
+except Exception:
+    print('0')
+" 2>/dev/null || echo "0")
 
           DECISION_ID=$(python3 -c "
-          import json
-          try:
-              data = json.load(open('/tmp/verdict_output.txt'))
-              print(data.get('decision_id', ''))
-          except Exception:
-              print('')
-          " 2>/dev/null || echo "")
+import json
+try:
+    data = json.load(open('/tmp/verdict_result.json'))
+    print(data.get('decision_id', ''))
+except Exception:
+    print('')
+" 2>/dev/null || echo "")
 
-          echo "decision=${DECISION}"     >> "$GITHUB_OUTPUT"
-          echo "risk_score=${RISK}"       >> "$GITHUB_OUTPUT"
+          echo "decision=${DECISION}"       >> "$GITHUB_OUTPUT"
+          echo "risk_score=${RISK}"         >> "$GITHUB_OUTPUT"
           echo "decision_id=${DECISION_ID}" >> "$GITHUB_OUTPUT"
-          echo "exit_code=${EXIT_CODE}"   >> "$GITHUB_OUTPUT"
+          echo "exit_code=${EXIT_CODE}"     >> "$GITHUB_OUTPUT"
+
+          echo "--- Parsed values ---"
+          echo "decision:    ${DECISION}"
+          echo "risk_score:  ${RISK}"
+          echo "decision_id: ${DECISION_ID}"
 
       - name: Assert DENY decision
         run: |
@@ -299,6 +323,16 @@ jobs:
 
   # ===================================================
   # BUILD VERIFICATION
+  #
+  # Verifies the package builds correctly and that all
+  # data files are included in the wheel.
+  #
+  # The wheel content check guards against the v0.5.0
+  # packaging bug where cloudformation_resource_type_map
+  # .yaml was excluded from the wheel, causing a
+  # FileNotFoundError at runtime for any user who
+  # installed from PyPI. This check ensures that bug
+  # cannot silently recur in a future release.
   # ===================================================
 
   build:
@@ -329,30 +363,28 @@ jobs:
           verdict --help
 
       - name: Verify data files included in wheel
-        # Confirms the YAML data files are packaged correctly.
-        # This is the packaging bug that caused v0.5.0 to fail
-        # in the action-test — catching it here before PyPI publish.
+        # Inspects the built wheel to confirm YAML data files
+        # are packaged correctly. Fails the build if the
+        # CloudFormation resource type map is missing.
         run: |
-          pip install build
           python -m build --wheel
           python3 -c "
-          import zipfile, glob, sys
-          wheels = glob.glob('dist/*.whl')
-          if not wheels:
-              print('No wheel found')
-              sys.exit(1)
-          whl = zipfile.ZipFile(wheels[0])
-          yaml_files = [f for f in whl.namelist() if f.endswith('.yaml')]
-          if not yaml_files:
-              print('ERROR: No YAML files found in wheel')
-              sys.exit(1)
-          required = 'context/translators/cloudformation_resource_type_map.yaml'
-          matches = [f for f in yaml_files if 'cloudformation_resource_type_map' in f]
-          if not matches:
-              print(f'ERROR: {required} not found in wheel')
-              print('YAML files found:', yaml_files)
-              sys.exit(1)
-          print(f'✅ Found {len(yaml_files)} YAML file(s) in wheel')
-          for f in yaml_files:
-              print(f'  {f}')
-          "
+import zipfile, glob, sys
+wheels = glob.glob('dist/*.whl')
+if not wheels:
+    print('No wheel found')
+    sys.exit(1)
+whl = zipfile.ZipFile(wheels[0])
+yaml_files = [f for f in whl.namelist() if f.endswith('.yaml')]
+if not yaml_files:
+    print('ERROR: No YAML files found in wheel')
+    sys.exit(1)
+matches = [f for f in yaml_files if 'cloudformation_resource_type_map' in f]
+if not matches:
+    print('ERROR: cloudformation_resource_type_map.yaml not in wheel')
+    print('YAML files present:', yaml_files)
+    sys.exit(1)
+print(f'✅ {len(yaml_files)} YAML file(s) verified in wheel')
+for f in yaml_files:
+    print(f'  {f}')
+"
