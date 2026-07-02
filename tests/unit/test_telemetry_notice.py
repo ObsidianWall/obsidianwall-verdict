@@ -54,7 +54,7 @@ class TestFirstRun:
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert "enabled" in captured.out.lower()
+        assert "enabled" in captured.err.lower()
 
     def test_shows_disabled_status_when_telemetry_off(self, tmp_path, capsys):
         with (
@@ -64,21 +64,21 @@ class TestFirstRun:
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert "disabled" in captured.out.lower()
+        assert "disabled" in captured.err.lower()
 
     def test_opt_out_instructions_included(self, tmp_path, capsys):
         with patch("telemetry.notice.get_db_dir", return_value=tmp_path):
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert "OW_HISTORY_ENABLED=false" in captured.out
+        assert "OW_HISTORY_ENABLED=false" in captured.err
 
     def test_docs_link_included(self, tmp_path, capsys):
         with patch("telemetry.notice.get_db_dir", return_value=tmp_path):
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert "obsidianwall.dev" in captured.out
+        assert "obsidianwall.dev" in captured.err
 
 
 # =====================================================
@@ -94,7 +94,7 @@ class TestSubsequentRuns:
             show_first_run_notice_if_needed()  # second run
 
         captured = capsys.readouterr()
-        assert captured.out == ""
+        assert captured.err == ""
 
     def test_no_output_when_marker_pre_exists(self, tmp_path, capsys):
         _marker(tmp_path).touch()  # simulate prior run
@@ -103,7 +103,7 @@ class TestSubsequentRuns:
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert captured.out == ""
+        assert captured.err == ""
 
 
 # =====================================================
