@@ -34,6 +34,7 @@ from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from notifications import dispatch_notifications
+from telemetry.notice import show_first_run_notice_if_needed
 from telemetry.store import record_decision
 
 app = typer.Typer(
@@ -69,6 +70,7 @@ def _main(
     ),
 ) -> None:
     """ObsidianWall Verdict — pre-deployment infrastructure governance."""
+    show_first_run_notice_if_needed()  # ← inside the body, not the signature
 
 
 logger = get_logger()

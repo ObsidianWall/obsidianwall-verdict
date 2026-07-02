@@ -1,18 +1,20 @@
 # telemetry/config.py
 #
 # Purpose:
-# Opt-in telemetry configuration for ObsidianWall Verdict.
+# Telemetry configuration for ObsidianWall Verdict.
 #
-# Telemetry is DISABLED by default.
-# Users must explicitly enable it.
+# Telemetry is ENABLED by default (opt-out model).
+# Users can disable it at any time.
 #
-# What is collected (when enabled):
-#   - Evaluation counts
-#   - Policy type distribution
+# What is collected (when enabled — the default):
+#   - Evaluation counts and timestamps
+#   - Policy name and policy type
 #   - Decision outcomes (ALLOW/DENY/etc)
-#   - Risk scores (aggregated)
-#   - Override and approval rates
-#   - Condition failure patterns (condition IDs only)
+#   - Risk scores (overall and per analyzer domain)
+#   - Override and approval events (role + approved/denied + notes)
+#   - Condition failure and pass patterns (condition IDs only)
+#   - A SHA-256 hash of the plan file path (not its contents)
+#   - The policy file path, stored as-is
 #
 # What is NEVER collected:
 #   - Plan contents or resource configurations
@@ -22,14 +24,22 @@
 #   - Policy file contents
 #   - IP addresses or user identifiers
 #
-# How to enable:
-#   export OW_TELEMETRY_ENABLED=true
-#   or set OW_TELEMETRY_ENABLED=true in .env
+# How to opt out:
+#   export OW_HISTORY_ENABLED=false
+#   (legacy alias OW_TELEMETRY_ENABLED=false also works)
 #
 # Storage:
 #   ~/.obsidianwall/decisions.db  (SQLite, local only)
-#   No remote telemetry in v0.3.0
-#   Remote opt-in telemetry planned for v0.5.0
+#   No remote transmission in this version.
+#   This data never leaves the user's machine.
+#
+# IMPORTANT — keep this comment block in sync with
+# is_telemetry_enabled() below and with the public
+# privacy policy at obsidianwall.com/privacy.html.
+# A future hosted feature (Compass) will introduce
+# OPTIONAL, explicitly opt-in remote sync. That will
+# be a separate consent flow — it must never be
+# enabled by this opt-out default.
 
 from __future__ import annotations
 
@@ -48,12 +58,12 @@ _DB_PATH = _DB_DIR / "decisions.db"
 
 def is_telemetry_enabled() -> bool:
     """
-    Returns True unless explicitly opted out.
+    Returns True unless the user has explicitly opted out.
 
     OW_HISTORY_ENABLED takes precedence when set.
     Falls back to legacy OW_TELEMETRY_ENABLED for
     backward compatibility.
-    Defaults to True — opt-out model.
+    Defaults to True — this is an opt-out model.
 
     To opt out:
         export OW_HISTORY_ENABLED=false

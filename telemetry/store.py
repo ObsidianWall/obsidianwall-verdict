@@ -17,7 +17,11 @@
 # - No cost amounts stored
 # - No resource names stored
 # - No organization identifiers stored
-# - Plan is represented by SHA-256 hash only
+# - Plan is represented by SHA-256 hash of the file PATH only
+# - Policy is represented by SHA-256 hash of file CONTENTS
+#   (portable across machines — same policy = same hash)
+# - Policy path stored as-is for Sentinel runtime use only
+#   (see note in record_decision on path vs. hash separation)
 #
 # Telemetry layers implemented here:
 #   Layer 1 — Decision Telemetry      (decisions table)
@@ -28,10 +32,22 @@
 #   Layer 5 — Drift Telemetry         (outcomes table, type=drift_detected)
 #   Layer 6 — Effectiveness Telemetry (policy_effectiveness — derived/computed)
 #
+# Policy identity design:
+#   policy_path         — runtime only (Sentinel re-evaluation)
+#                         never used for cross-environment analytics
+#   policy_content_hash — telemetry identity (SHA-256 of file contents)
+#                         portable: same policy file on any machine = same hash
+#                         enables "which policies are most common" queries
+#   policy_family       — high-level governance intent classification
+#                         (cost_governance, security_compliance, etc.)
+#                         enables "which governance intents are most enforced"
+#                         analytics without file path exposure
+#
 # Database evolution:
 #   v0.3.0  SQLite — local only (~/.obsidianwall/decisions.db)
 #   v0.4.0  Added policy_path column for Sentinel verification
-#   Compass PostgreSQL (Supabase) — hosted, multi-tenant
+#   v0.5.1  Added policy_content_hash and policy_family columns
+#   Compass PostgreSQL (Supabase) — hosted, multi-tenant (future)
 #
 # Location:
 #   ~/.obsidianwall/decisions.db
@@ -47,6 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
+from telemetry.policy_classifier import classify_policy_family
 
 # =====================================================
 # SCHEMA
@@ -77,7 +94,9 @@ CREATE TABLE IF NOT EXISTS decisions (
     analyzer_scores     TEXT,
     pricing_mode        TEXT,
     region              TEXT,
-    policy_path         TEXT
+    policy_path         TEXT,
+    policy_content_hash TEXT,
+    policy_family       TEXT
 );
 
 -- Override events.
@@ -118,7 +137,7 @@ CREATE TABLE IF NOT EXISTS approvals (
 --   availability_event    → availability impact after deployment
 --   drift_detected        → infrastructure drifted from declared state
 --
--- Correlating decisions with outcomes enables:
+-- Correlating decisions with outcomes enables queries like:
 --   "92% of cost denials that were overridden
 --    resulted in budget_overrun within 30 days"
 --
@@ -163,6 +182,18 @@ _MIGRATIONS: list[str] = [
     # to re-evaluate the current plan without requiring the
     # user to re-specify the policy on the command line.
     "ALTER TABLE decisions ADD COLUMN policy_path TEXT",
+    # v0.5.1: Privacy-safe policy content identity.
+    # policy_content_hash — SHA-256 of policy file contents,
+    # not the path. Same policy on different machines
+    # produces the same hash, enabling cross-environment
+    # analytics without file path exposure.
+    "ALTER TABLE decisions ADD COLUMN policy_content_hash TEXT",
+    # v0.5.1: High-level governance intent classification.
+    # policy_family answers "what governance intent are
+    # organizations enforcing?" rather than "what file
+    # did they use?" — the analytically valuable question.
+    # See telemetry/policy_classifier.py for family definitions.
+    "ALTER TABLE decisions ADD COLUMN policy_family TEXT",
 ]
 
 
@@ -180,7 +211,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.execute(migration)
             conn.commit()
         except sqlite3.OperationalError:
-            pass  # Already applied — safe to continue
+            pass  # Column already exists — safe to continue.
 
 
 # =====================================================
@@ -211,6 +242,65 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 # =====================================================
+# HELPERS — Privacy-safe policy identity
+# =====================================================
+
+
+def _compute_policy_content_hash(policy_path: str | None) -> str | None:
+    """
+    Compute a short SHA-256 hash of policy file CONTENTS.
+
+    Design intent — content hash vs. path hash:
+      Path hash:    SHA256("/home/alice/budget.yaml")
+                    Changes if the file moves. Unique per machine.
+                    Not useful for cross-environment analytics.
+
+      Content hash: SHA256(file_contents)
+                    Stable if the file moves. Same on every machine.
+                    Enables "which policies are most deployed" queries
+                    without leaking any file system information.
+
+    Returns the first 16 hex characters (64 bits of entropy),
+    sufficient to identify policy versions without storing
+    the full hash in every row.
+
+    Returns None if policy_path is None, the file is unreadable,
+    or any error occurs. Never raises — telemetry must not
+    crash the CLI.
+    """
+    if not policy_path:
+        return None
+    try:
+        contents = Path(policy_path).read_bytes()
+        return hashlib.sha256(contents).hexdigest()[:16]
+    except Exception:
+        return None
+
+
+def _classify_policy(policy_path: str | None) -> str | None:
+    """
+    Classify a policy file into a high-level governance family.
+
+    Loads the policy YAML and delegates to the policy classifier.
+    Returns None if classification fails for any reason —
+    missing file, parse error, or unrecognizable content all
+    produce None rather than raising. Telemetry must not crash.
+
+    See telemetry/policy_classifier.py for family definitions
+    and the keyword matching logic.
+    """
+    if not policy_path:
+        return None
+    try:
+        from engine.policy_loader import load_policy as _load_policy
+
+        policy_dict = _load_policy(policy_path)
+        return classify_policy_family(policy_dict)
+    except Exception:
+        return None
+
+
+# =====================================================
 # WRITE — Layer 1 + 2: Decision and Evaluation
 # =====================================================
 
@@ -226,21 +316,29 @@ def record_decision(
     Covers telemetry layers 1 and 2.
 
     Only writes if governance history is enabled.
-    Never writes plan contents — only a SHA-256
-    hash of the plan path is stored.
 
-    The policy_path is stored as-is and used by Sentinel
-    to re-evaluate the current plan against the same policy
-    without requiring the user to re-specify it.
+    Policy identity is stored as three separate values
+    with different purposes:
+      policy_path         — stored as-is for Sentinel runtime
+                            re-evaluation. Never used for analytics.
+      policy_content_hash — SHA-256 of file contents. Portable
+                            across machines. Used for analytics.
+      policy_family       — high-level governance intent.
+                            Used for aggregate queries.
+
+    Plan identity is stored as a SHA-256 hash of the plan PATH
+    (not its contents). This is less portable than a content hash
+    but sufficient for correlating evaluations within a single
+    environment, and avoids storing any infrastructure detail.
 
     Args:
         result:      complete verdict evaluate result dict
-        plan_path:   path to the Terraform plan file
-        policy_path: path to the policy YAML file
+        plan_path:   path to the Terraform plan or CloudFormation
+                     template file
+        policy_path: path to the ObsidianWall policy YAML file
 
     Returns:
-        True if written, False if history disabled
-        or write failed
+        True if written, False if history disabled or write failed.
     """
     if not is_telemetry_enabled():
         return False
@@ -255,14 +353,25 @@ def record_decision(
             datetime.now(timezone.utc).isoformat(),
         )
 
-        # Hash the plan path — never store plan contents
+        # Hash the plan PATH — never store plan contents.
+        # First 16 hex chars sufficient for correlation within
+        # an environment without full hash storage overhead.
         plan_hash: str | None = None
         if plan_path:
             plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
 
+        # Privacy-safe policy identity for telemetry.
+        # policy_path is kept for Sentinel runtime use.
+        # policy_content_hash and policy_family are for analytics.
+        # All three can be None — telemetry must not crash CLI.
+        policy_content_hash = _compute_policy_content_hash(policy_path)
+        policy_family = _classify_policy(policy_path)
+
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
 
-        # Layer 2: condition evaluation detail
+        # Layer 2: Condition evaluation detail.
+        # Store condition IDs only — no condition expressions
+        # or evaluated values are persisted.
         trace: list[dict[str, Any]] = result.get("trace", [])
         failed = [t["condition_id"] for t in trace if not t.get("result", True)]
         passed = [t["condition_id"] for t in trace if t.get("result", True)]
@@ -282,7 +391,7 @@ def record_decision(
                 user_role, plan_hash, total_findings,
                 failed_conditions, passed_conditions,
                 analyzer_scores, pricing_mode, region,
-                policy_path
+                policy_path, policy_content_hash, policy_family
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?,
@@ -292,14 +401,14 @@ def record_decision(
                 ?, ?, ?,
                 ?, ?,
                 ?, ?, ?,
-                ?
+                ?, ?, ?
             )
             """,
             (
                 decision_id,
                 timestamp,
                 result.get("policy", ""),
-                None,
+                None,  # policy_type — reserved
                 result.get("decision", ""),
                 1 if result.get("conditions_passed") else 0,
                 risk_summary.get("overall_risk_score", 0),
@@ -308,15 +417,17 @@ def record_decision(
                 1 if result.get("override_required") else 0,
                 1 if result.get("override_possible") else 0,
                 1 if result.get("requires_approval") else 0,
-                None,
+                None,  # user_role — reserved
                 plan_hash,
                 risk_summary.get("total_findings", 0),
                 json.dumps(failed),
                 json.dumps(passed),
                 analyzer_scores,
                 result.get("pricing_mode", "table"),
-                None,
+                None,  # region — reserved
                 policy_path,
+                policy_content_hash,
+                policy_family,
             ),
         )
 
@@ -332,7 +443,9 @@ def record_decision(
         return True
 
     except Exception:
-        # Governance history must never crash the CLI
+        # Governance history must never crash the CLI.
+        # Silently return False — the evaluation result
+        # has already been printed to stdout.
         return False
 
 
@@ -348,8 +461,17 @@ def record_override(
     db_path: Path | None = None,
 ) -> bool:
     """
-    Record an override event against a decision.
+    Record an override event against a governance decision.
     Telemetry layer 3.
+
+    Called when an authorized role overrides a DENY_WITH_OVERRIDE
+    decision to allow a deployment to proceed despite a failed
+    policy condition.
+
+    Args:
+        decision_id:   UUID of the original governance decision
+        override_role: the role that performed the override
+        approved:      True if the override was granted
     """
     if not is_telemetry_enabled():
         return False
@@ -387,8 +509,18 @@ def record_approval(
     db_path: Path | None = None,
 ) -> bool:
     """
-    Record an approval event against a decision.
+    Record an approval event against a governance decision.
     Telemetry layer 3.
+
+    Called when an ALLOW_WITH_APPROVAL_REQUIRED decision
+    reaches its approval resolution — either granted or denied
+    by the designated approver role.
+
+    Args:
+        decision_id:    UUID of the original governance decision
+        approver_role:  the role that resolved the approval
+        approved:       True if the approval was granted
+        notes:          optional human-readable approval notes
     """
     if not is_telemetry_enabled():
         return False
@@ -421,8 +553,9 @@ def record_approval(
 
 # =====================================================
 # WRITE — Layer 4 + 5: Outcome and Drift
-# Populated by Sentinel v0.4.0.
-# Schema defined here so correlation exists from day one.
+# Schema defined here. Populated by Sentinel v0.4.0+.
+# Defined early so the correlation schema exists from
+# the first evaluation, even before Sentinel runs.
 # =====================================================
 
 
@@ -438,8 +571,12 @@ def record_outcome(
     Record an outcome event against a governance decision.
     Telemetry layers 4 and 5.
 
-    Called by Sentinel after observing reality against
-    a previous governance decision.
+    Called by Sentinel after observing post-deployment reality
+    against the original governance decision. Correlating
+    decisions with outcomes is what enables Governance
+    Intelligence queries in Compass, e.g.:
+      "92% of cost denials that were overridden resulted
+       in budget_overrun within 30 days."
 
     outcome_type values:
         deployment_success   — no drift, decision still holds
@@ -452,13 +589,10 @@ def record_outcome(
 
     Args:
         decision_id:  UUID of the original governance decision
-        outcome_type: what actually happened
+        outcome_type: what actually happened post-deployment
         severity:     informational | low | medium | high | critical
         description:  human-readable outcome description
         metadata:     domain-specific outcome data (JSON-serializable)
-
-    Returns:
-        True if written, False if history disabled or failed
     """
     if not is_telemetry_enabled():
         return False
@@ -491,7 +625,10 @@ def record_outcome(
 
 
 # =====================================================
-# EFFECTIVENESS — Layer 6 (derived)
+# EFFECTIVENESS — Layer 6 (derived, not collected)
+# Running totals per policy — never a separate write,
+# always computed inside record_decision on the same
+# connection to avoid partial writes.
 # =====================================================
 
 
@@ -503,7 +640,13 @@ def _update_effectiveness(
 ) -> None:
     """
     Update running totals in policy_effectiveness.
-    Called inside record_decision — same connection.
+
+    Called inside record_decision on the same open connection,
+    so both the decision row and the effectiveness update
+    commit atomically. If either fails, neither persists.
+
+    Uses INSERT ... ON CONFLICT to upsert atomically —
+    avoids a read-then-write race condition.
     """
     now = datetime.now(timezone.utc).isoformat()
     is_denied = decision in ("DENY", "DENY_WITH_OVERRIDE")
@@ -541,7 +684,10 @@ def get_recent_decisions(
     limit: int = 50,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Return most recent governance decisions."""
+    """
+    Return most recent governance decisions, newest first.
+    Powers the decision history section of verdict audit.
+    """
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -559,7 +705,13 @@ def get_policy_effectiveness(
     policy_name: str | None = None,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Return policy effectiveness summaries with override counts."""
+    """
+    Return policy effectiveness summaries with override and
+    approval counts joined from the workflow tables.
+
+    If policy_name is provided, returns a single policy summary.
+    Otherwise returns all policies sorted by evaluation volume.
+    """
     try:
         conn = init_db(db_path)
         if policy_name:
@@ -608,7 +760,13 @@ def get_decision_by_id(
     decision_id: str,
     db_path: Path | None = None,
 ) -> dict[str, Any] | None:
-    """Return a single decision by ID with outcomes."""
+    """
+    Return a single governance decision by ID, including
+    any outcome events recorded against it by Sentinel.
+
+    Returns None if the decision_id does not exist or
+    any read error occurs.
+    """
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -638,8 +796,12 @@ def get_domain_risk_summary(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """
-    Return aggregated risk scores by governance domain.
-    Used by verdict audit command.
+    Return aggregated risk scores by governance domain
+    across the 500 most recent decisions.
+
+    Powers the risk summary section of verdict audit.
+    Analyzer scores are stored as JSON per decision and
+    unpacked here for domain-level aggregation.
     """
     try:
         conn = init_db(db_path)
@@ -694,7 +856,11 @@ def get_failed_conditions_summary(
 ) -> list[dict[str, Any]]:
     """
     Aggregate failed condition counts across all decisions.
-    Powers the 'Why denied?' section of verdict audit.
+
+    Powers the "Why denied?" section of verdict audit.
+    Returns conditions sorted by failure frequency, with
+    a failure rate expressed as a percentage of all decisions
+    that recorded any failed conditions.
     """
     try:
         conn = init_db(db_path)
@@ -744,7 +910,11 @@ def get_passed_conditions_summary(
 ) -> list[dict[str, Any]]:
     """
     Aggregate passed condition counts across all decisions.
-    Powers the 'Why allowed?' section of verdict audit.
+
+    Powers the "Why allowed?" section of verdict audit.
+    Returns conditions sorted by pass frequency, with
+    a pass rate expressed as a percentage of all decisions
+    that recorded any passed conditions.
     """
     try:
         conn = init_db(db_path)
@@ -794,7 +964,11 @@ def get_outcome_summary(
 ) -> list[dict[str, Any]]:
     """
     Return outcome type counts across all recorded outcomes.
-    Powers the 'Deployment Outcomes' section of verdict audit.
+
+    Powers the "Deployment Outcomes" section of verdict audit.
+    Outcomes are populated by Sentinel after post-deployment
+    verification — this query returns meaningful data only
+    after Sentinel has been run against at least one decision.
     """
     try:
         conn = init_db(db_path)
@@ -817,8 +991,16 @@ def get_outcome_correlation(
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Correlate governance decisions with outcomes.
+    Correlate governance decisions with their observed outcomes.
+
     Powers future Governance Intelligence in Compass.
+    Enables queries like: "Which decisions most frequently
+    lead to budget_overrun?" or "What override patterns
+    precede security_incident outcomes?"
+
+    Returns rows sorted by frequency, highest first.
+    Only returns data for decisions that have at least
+    one outcome recorded by Sentinel.
     """
     try:
         conn = init_db(db_path)
