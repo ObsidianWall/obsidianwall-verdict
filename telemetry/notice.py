@@ -15,6 +15,10 @@
 #   already set in the environment, the notice still
 #   shows once, but the user's existing choice is
 #   respected and not overridden.
+# - Fully resilient: any OS error (permissions, missing
+#   directory, read-only filesystem) is caught and
+#   silenced. Telemetry disclosure must never crash
+#   the CLI.
 
 from __future__ import annotations
 
@@ -31,15 +35,27 @@ def _marker_path() -> Path:
 
 def show_first_run_notice_if_needed() -> None:
     """
-    Print the telemetry disclosure notice once per
-    machine. Safe to call on every CLI invocation —
-    it no-ops after the first run.
+    Print the telemetry disclosure notice once per machine.
+    Safe to call on every CLI invocation — sliently no-ops after the first run.
+    All filesystem operations are wrapped
+    in try/except so that permission errors, read-only
+    filesystems, or missing directories never raise to the
+    caller.
     """
     marker = _marker_path()
 
-    if marker.exists():
-        return
+    # Check whether the notice has already been shown.
+    # Wrap in try/except — on a read-only filesystem,
+    # marker.exists() itself can raise PermissionError
 
+    try:
+        if marker.exists():
+            return
+    except OSError:
+        # Cannot check marker — treat as first run and
+        # show the notice. The write below will also fail,
+        # which is handled separately.
+        pass
     status = "enabled" if is_telemetry_enabled() else "disabled"
 
     print(

@@ -1,4 +1,3 @@
-
 # vscode
 .vscode/
 vscode/
@@ -14,6 +13,9 @@ output/
 .venv/
 verdict_venv/
 owv-venv/
+
+# Agents
+claude/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
