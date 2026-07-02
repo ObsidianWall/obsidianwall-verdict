@@ -223,12 +223,15 @@ jobs:
             --plan   samples/terraform_plan.json \
             --policy policies/cost/basic_budget.yaml \
             --role   engineer \
-            > /tmp/verdict_output.txt 2>&1
+            > /tmp/verdict_output.txt
 
           EXIT_CODE=$?
 
           # Always surface output in CI logs
           # regardless of governance decision
+          # Show structured logs (stderr went to console directly)
+          # Show JSON artifact from stdout capture
+          echo "=== Verdict JSON Artifact ==="
           cat /tmp/verdict_output.txt
 
           # Parse governance outputs from JSON artifact
