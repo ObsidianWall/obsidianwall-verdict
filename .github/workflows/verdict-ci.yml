@@ -37,8 +37,8 @@ on:
     branches:
       - main
       - dev
-      -testing
-      -staging
+      - testing
+      - staging
   pull_request:
     branches:
       - main
