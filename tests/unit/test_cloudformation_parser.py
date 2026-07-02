@@ -1,4 +1,3 @@
-
 # tests/unit/test_cloudformation_parser.py
 #
 # Test suite for context/translators/cloudformation_parser.py
