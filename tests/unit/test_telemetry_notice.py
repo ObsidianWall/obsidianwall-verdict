@@ -38,7 +38,7 @@ class TestFirstRun:
             show_first_run_notice_if_needed()
 
         captured = capsys.readouterr()
-        assert "Verdict collects" in captured.out
+        assert "Verdict collects" in captured.err
 
     def test_marker_created_after_first_run(self, tmp_path, capsys):
         with patch("telemetry.notice.get_db_dir", return_value=tmp_path):
@@ -148,6 +148,6 @@ class TestResilience:
                 show_first_run_notice_if_needed()
 
             captured = capsys.readouterr()
-            assert "Verdict collects" in captured.out
+            assert "Verdict collects" in captured.err
         finally:
             read_only_dir.chmod(0o755)

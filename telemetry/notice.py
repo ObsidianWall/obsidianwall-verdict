@@ -69,7 +69,8 @@ def show_first_run_notice_if_needed() -> None:
         "Nothing is transmitted off this machine in this version.\n"
         "\n"
         "Disable anytime:  export OW_HISTORY_ENABLED=false\n"
-        "Learn more:        https://obsidianwall.dev/concepts/telemetry\n"
+        "Learn more:        https://obsidianwall.dev/concepts/telemetry\n",
+        file=sys.stderr,
     )
 
     try:
