@@ -37,8 +37,6 @@ on:
     branches:
       - main
       - dev
-      - testing
-      - staging
   pull_request:
     branches:
       - main
@@ -71,7 +69,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
         with:
-          fetch-depth: 0  # full history required by TruffleHog
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405               # v6.2.0
@@ -182,22 +180,29 @@ jobs:
   # Integration test — exercises Verdict CLI directly
   # against real sample files using a local install.
   #
-  # Why local install instead of `uses: ./`:
-  #   `uses: ./` triggers action.yml which runs
-  #   `pip install obsidianwall-verdict` from PyPI.
-  #   During development, the current PyPI version lags
-  #   behind the code in this commit — e.g. data files
-  #   added in this PR are missing from the published
-  #   package. Local install ensures we always test the
-  #   actual code being reviewed, not a stale release.
+  # Why local install instead of uses: ./ :
+  #   uses: ./ triggers action.yml which runs
+  #   pip install obsidianwall-verdict from PyPI.
+  #   During development the current PyPI version lags
+  #   behind the code in this commit — data files added
+  #   in this PR are missing from the published package.
+  #   Local install ensures we always test the actual
+  #   code being reviewed, not a stale release.
   #
   # Why --output instead of parsing stdout:
-  #   `verdict evaluate` writes structured NDJSON log
+  #   verdict evaluate writes structured NDJSON log
   #   lines to stdout alongside the final JSON artifact.
-  #   Parsing stdout with json.load() fails because it
+  #   Parsing stdout with json.load fails because it
   #   hits a log line before the artifact.
-  #   --output writes a clean, artifact-only JSON file.
-  #   We parse from that file instead.
+  #   --output writes a clean artifact-only JSON file.
+  #   We parse from that file with jq instead.
+  #
+  # Why jq instead of inline Python:
+  #   Inline Python in YAML run blocks causes parse
+  #   errors when Python code starts at column 1 or
+  #   contains curly braces that YAML misreads as
+  #   flow mappings. jq is single-line, safe in YAML,
+  #   and installed by default on ubuntu-24.04.
   #
   # Tests:
   # - Governance decision produced correctly (DENY)
@@ -234,8 +239,7 @@ jobs:
           set +e
 
           # --output writes a clean JSON artifact to a dedicated file.
-          # All console output (structured logs, telemetry notice)
-          # goes to verdict_logs.txt for display only — not for parsing.
+          # All console output goes to verdict_logs.txt for display only.
           verdict evaluate \
             --plan   samples/terraform_plan.json \
             --policy policies/cost/basic_budget.yaml \
@@ -245,43 +249,17 @@ jobs:
 
           EXIT_CODE=$?
 
-          # Surface all console output in CI logs
           echo "=== Verdict console output ==="
           cat /tmp/verdict_logs.txt
 
-          # Surface the clean JSON artifact
           echo "=== Verdict JSON artifact ==="
           cat /tmp/verdict_result.json
 
-          # Parse from the clean artifact file — not from stdout.
-          # stdout is mixed log lines + artifact and fails json.load().
-          DECISION=$(python3 -c "
-import json, sys
-try:
-    data = json.load(open('/tmp/verdict_result.json'))
-    print(data.get('decision', ''))
-except Exception as e:
-    print(f'PARSE_ERROR: {e}', file=sys.stderr)
-    print('')
-" 2>/dev/null || echo "")
-
-          RISK=$(python3 -c "
-import json
-try:
-    data = json.load(open('/tmp/verdict_result.json'))
-    print(data.get('risk_summary', {}).get('overall_risk_score', 0))
-except Exception:
-    print('0')
-" 2>/dev/null || echo "0")
-
-          DECISION_ID=$(python3 -c "
-import json
-try:
-    data = json.load(open('/tmp/verdict_result.json'))
-    print(data.get('decision_id', ''))
-except Exception:
-    print('')
-" 2>/dev/null || echo "")
+          # Parse with jq — single line, no YAML quoting conflicts,
+          # no curly brace issues, installed by default on ubuntu-24.04.
+          DECISION=$(jq -r '.decision // empty' /tmp/verdict_result.json 2>/dev/null || echo "")
+          RISK=$(jq -r '.risk_summary.overall_risk_score // 0' /tmp/verdict_result.json 2>/dev/null || echo "0")
+          DECISION_ID=$(jq -r '.decision_id // empty' /tmp/verdict_result.json 2>/dev/null || echo "")
 
           echo "decision=${DECISION}"       >> "$GITHUB_OUTPUT"
           echo "risk_score=${RISK}"         >> "$GITHUB_OUTPUT"
@@ -298,30 +276,30 @@ except Exception:
           DECISION="${{ steps.verdict_deny.outputs.decision }}"
           echo "Decision: $DECISION"
           if [[ "$DECISION" != "DENY_WITH_OVERRIDE" && "$DECISION" != "DENY" ]]; then
-            echo "❌ Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
+            echo "Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
             exit 1
           fi
-          echo "✅ Correct governance decision: $DECISION"
+          echo "Correct governance decision: $DECISION"
 
       - name: Assert risk score computed
         run: |
           RISK="${{ steps.verdict_deny.outputs.risk_score }}"
           echo "Risk score: $RISK"
           if [[ -z "$RISK" || "$RISK" == "0" ]]; then
-            echo "❌ Expected non-zero risk score"
+            echo "Expected non-zero risk score"
             exit 1
           fi
-          echo "✅ Risk score: $RISK/100"
+          echo "Risk score: $RISK/100"
 
       - name: Assert decision ID issued
         run: |
           ID="${{ steps.verdict_deny.outputs.decision_id }}"
           echo "Decision ID: $ID"
           if [[ -z "$ID" ]]; then
-            echo "❌ Expected decision_id in output"
+            echo "Expected decision_id in output"
             exit 1
           fi
-          echo "✅ Decision ID: $ID"
+          echo "Decision ID: $ID"
 
   # ===================================================
   # BUILD VERIFICATION
@@ -366,27 +344,29 @@ except Exception:
 
       - name: Verify data files included in wheel
         # Inspects the built wheel to confirm YAML data files
-        # are packaged correctly. Fails the build if the
-        # CloudFormation resource type map is missing.
+        # are packaged correctly. Fails if the CloudFormation
+        # resource type map is missing from the wheel.
+        # Uses a script file to avoid inline Python YAML issues.
         run: |
           python -m build --wheel
-          python3 -c "
-import zipfile, glob, sys
-wheels = glob.glob('dist/*.whl')
-if not wheels:
-    print('No wheel found')
-    sys.exit(1)
-whl = zipfile.ZipFile(wheels[0])
-yaml_files = [f for f in whl.namelist() if f.endswith('.yaml')]
-if not yaml_files:
-    print('ERROR: No YAML files found in wheel')
-    sys.exit(1)
-matches = [f for f in yaml_files if 'cloudformation_resource_type_map' in f]
-if not matches:
-    print('ERROR: cloudformation_resource_type_map.yaml not in wheel')
-    print('YAML files present:', yaml_files)
-    sys.exit(1)
-print(f'✅ {len(yaml_files)} YAML file(s) verified in wheel')
-for f in yaml_files:
-    print(f'  {f}')
-"
+          cat > /tmp/check_wheel.py << 'PYEOF'
+          import zipfile, glob, sys
+          wheels = glob.glob("dist/*.whl")
+          if not wheels:
+              print("No wheel found")
+              sys.exit(1)
+          whl = zipfile.ZipFile(wheels[0])
+          yaml_files = [f for f in whl.namelist() if f.endswith(".yaml")]
+          if not yaml_files:
+              print("ERROR: No YAML files found in wheel")
+              sys.exit(1)
+          matches = [f for f in yaml_files if "cloudformation_resource_type_map" in f]
+          if not matches:
+              print("ERROR: cloudformation_resource_type_map.yaml not in wheel")
+              print("YAML files present: " + str(yaml_files))
+              sys.exit(1)
+          print("YAML files verified in wheel: " + str(len(yaml_files)))
+          for f in yaml_files:
+              print("  " + f)
+          PYEOF
+          python3 /tmp/check_wheel.py
