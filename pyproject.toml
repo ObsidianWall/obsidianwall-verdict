@@ -80,9 +80,7 @@ exclude = [
     "samples*",
 ]
 
-[
-tool.setuptools.package-data
-]
+[tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
 
 [tool.pytest.ini_options]
