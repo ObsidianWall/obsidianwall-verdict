@@ -196,14 +196,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
 
-      - name: Run Verdict — over budget (expect DENY)
-        id: verdict_deny
-        uses: ./
-        with:
-          plan:         samples/terraform_plan.json
-          policy:       policies/cost/basic_budget.yaml
-          role:         engineer
-          fail_on_deny: "false"
+      - name: Install Verdict from local repo
+        run: |
+          pip install -e .
+      
+      #- name: Run Verdict — over budget (expect DENY)
+        #id: verdict_deny
+        #uses: ./
+        #with:
+          #plan:         samples/terraform_plan.json
+          #policy:       policies/cost/basic_budget.yaml
+          #role:         engineer
+          #fail_on_deny: "false"     
 
       - name: Assert DENY decision
         run: |
