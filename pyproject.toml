@@ -80,6 +80,9 @@ exclude = [
     "samples*",
 ]
 
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
