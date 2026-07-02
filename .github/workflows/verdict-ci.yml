@@ -174,47 +174,102 @@ jobs:
   # ===================================================
   # ACTION SELF-TEST
   #
-  # Integration test — exercises the complete GitHub
-  # Action against real sample files.
+  # Integration test — exercises Verdict CLI directly
+  # against real sample files using a local install.
+  #
+  # Why local install instead of `uses: ./`:
+  #   `uses: ./` triggers action.yml which installs from
+  #   PyPI. During dev/pre-release, the current PyPI
+  #   version may not include data files (e.g. YAML maps)
+  #   added in the current commit. Installing from the
+  #   local checkout ensures the integration test always
+  #   runs against the actual code being reviewed.
   #
   # Tests:
   # - Governance decision produced correctly
   # - Risk score computed and non-zero
   # - Decision ID issued for audit trail
-  #
-  # This is Verdict's integration test layer.
-  # It tests the full system from the outside,
-  # exactly as engineers will use it.
   # ===================================================
 
   action-test:
     name: Action Integration Test
     runs-on: ubuntu-24.04
     needs: test
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
 
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405               # v6.2.0
+        with:
+          python-version: "3.11"
+
       - name: Install Verdict from local repo
+        # Local install ensures data files (YAML maps, etc.)
+        # present in the current commit are available at runtime.
+        # This avoids the PyPI version lag during development.
         run: |
           pip install -e .
-      
-      #- name: Run Verdict — over budget (expect DENY)
-        #id: verdict_deny
-        #uses: ./
-        #with:
-          #plan:         samples/terraform_plan.json
-          #policy:       policies/cost/basic_budget.yaml
-          #role:         engineer
-          #fail_on_deny: "false"     
+
+      - name: Run Verdict — over budget (expect DENY)
+        id: verdict_deny
+        run: |
+          set +e
+
+          verdict evaluate \
+            --plan   samples/terraform_plan.json \
+            --policy policies/cost/basic_budget.yaml \
+            --role   engineer \
+            > /tmp/verdict_output.txt 2>&1
+
+          EXIT_CODE=$?
+
+          # Always surface output in CI logs
+          # regardless of governance decision
+          cat /tmp/verdict_output.txt
+
+          # Parse governance outputs from JSON artifact
+          DECISION=$(python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('/tmp/verdict_output.txt'))
+              print(data.get('decision', ''))
+          except Exception:
+              print('')
+          " 2>/dev/null || echo "")
+
+          RISK=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('/tmp/verdict_output.txt'))
+              print(data.get('risk_summary', {}).get('overall_risk_score', 0))
+          except Exception:
+              print('0')
+          " 2>/dev/null || echo "0")
+
+          DECISION_ID=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('/tmp/verdict_output.txt'))
+              print(data.get('decision_id', ''))
+          except Exception:
+              print('')
+          " 2>/dev/null || echo "")
+
+          echo "decision=${DECISION}"     >> "$GITHUB_OUTPUT"
+          echo "risk_score=${RISK}"       >> "$GITHUB_OUTPUT"
+          echo "decision_id=${DECISION_ID}" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${EXIT_CODE}"   >> "$GITHUB_OUTPUT"
 
       - name: Assert DENY decision
         run: |
           DECISION="${{ steps.verdict_deny.outputs.decision }}"
           echo "Decision: $DECISION"
           if [[ "$DECISION" != "DENY_WITH_OVERRIDE" && "$DECISION" != "DENY" ]]; then
-            echo "Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
+            echo "❌ Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
             exit 1
           fi
           echo "✅ Correct governance decision: $DECISION"
@@ -224,7 +279,7 @@ jobs:
           RISK="${{ steps.verdict_deny.outputs.risk_score }}"
           echo "Risk score: $RISK"
           if [[ -z "$RISK" || "$RISK" == "0" ]]; then
-            echo "Expected non-zero risk score"
+            echo "❌ Expected non-zero risk score"
             exit 1
           fi
           echo "✅ Risk score: $RISK/100"
@@ -234,7 +289,7 @@ jobs:
           ID="${{ steps.verdict_deny.outputs.decision_id }}"
           echo "Decision ID: $ID"
           if [[ -z "$ID" ]]; then
-            echo "Expected decision_id in output"
+            echo "❌ Expected decision_id in output"
             exit 1
           fi
           echo "✅ Decision ID: $ID"
@@ -269,3 +324,32 @@ jobs:
         run: |
           pip install -e .
           verdict --help
+
+      - name: Verify data files included in wheel
+        # Confirms the YAML data files are packaged correctly.
+        # This is the packaging bug that caused v0.5.0 to fail
+        # in the action-test — catching it here before PyPI publish.
+        run: |
+          pip install build
+          python -m build --wheel
+          python3 -c "
+          import zipfile, glob, sys
+          wheels = glob.glob('dist/*.whl')
+          if not wheels:
+              print('No wheel found')
+              sys.exit(1)
+          whl = zipfile.ZipFile(wheels[0])
+          yaml_files = [f for f in whl.namelist() if f.endswith('.yaml')]
+          if not yaml_files:
+              print('ERROR: No YAML files found in wheel')
+              sys.exit(1)
+          required = 'context/translators/cloudformation_resource_type_map.yaml'
+          matches = [f for f in yaml_files if 'cloudformation_resource_type_map' in f]
+          if not matches:
+              print(f'ERROR: {required} not found in wheel')
+              print('YAML files found:', yaml_files)
+              sys.exit(1)
+          print(f'✅ Found {len(yaml_files)} YAML file(s) in wheel')
+          for f in yaml_files:
+              print(f'  {f}')
+          "
