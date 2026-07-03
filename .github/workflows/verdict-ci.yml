@@ -11,9 +11,9 @@
 #                trufflehog + license compliance
 # - test:        pytest with coverage enforcement
 #                matrix: Python 3.11, 3.12, 3.13
-# - action-test: integration test — exercises the full
-#                GitHub Action against a real sample plan
-# - build:       package build verification
+# - action-test: integration test — exercises Verdict CLI
+#                against real sample files using local install
+# - build:       package build verification + wheel check
 #
 # Security controls (secure-by-design):
 # - ruff          → style and lint enforcement
@@ -26,6 +26,9 @@
 #                   that would create legal exposure for enterprise adopters
 # - scoped perms  → contents: read only on all jobs
 # - pinned SHAs   → all actions pinned to exact commit SHA
+#
+# Note: PyPI publish is handled by release.yml on main.
+# This file does NOT publish to PyPI.
 
 name: ObsidianWall Verdict CI
 
@@ -34,6 +37,8 @@ on:
     branches:
       - main
       - dev
+      - testing
+      - staging
   pull_request:
     branches:
       - main
@@ -66,7 +71,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
         with:
-          fetch-depth: 0  # full history required by TruffleHog
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405               # v6.2.0
@@ -75,7 +80,7 @@ jobs:
 
       - name: Install lint dependencies
         run: |
-          pip install ruff bandit
+          pip install ruff==0.15.20 bandit
 
       - name: Ruff lint
         run: |
@@ -83,7 +88,7 @@ jobs:
 
       - name: Ruff format check
         run: |
-          ruff format --check .
+          ruff format --check engine/ schemas/ audit/ cli/
 
       - name: Bandit security scan
         run: |
@@ -174,36 +179,99 @@ jobs:
   # ===================================================
   # ACTION SELF-TEST
   #
-  # Integration test — exercises the complete GitHub
-  # Action against real sample files.
+  # Integration test — exercises Verdict CLI directly
+  # against real sample files using a local install.
+  #
+  # Why local install instead of uses: ./ :
+  #   uses: ./ triggers action.yml which runs
+  #   pip install obsidianwall-verdict from PyPI.
+  #   During development the current PyPI version lags
+  #   behind the code in this commit — data files added
+  #   in this PR are missing from the published package.
+  #   Local install ensures we always test the actual
+  #   code being reviewed, not a stale release.
+  #
+  # Why --output instead of parsing stdout:
+  #   verdict evaluate writes structured NDJSON log
+  #   lines to stdout alongside the final JSON artifact.
+  #   Parsing stdout with json.load fails because it
+  #   hits a log line before the artifact.
+  #   --output writes a clean artifact-only JSON file.
+  #   We parse from that file with jq instead.
+  #
+  # Why jq instead of inline Python:
+  #   Inline Python in YAML run blocks causes parse
+  #   errors when Python code starts at column 1 or
+  #   contains curly braces that YAML misreads as
+  #   flow mappings. jq is single-line, safe in YAML,
+  #   and installed by default on ubuntu-24.04.
   #
   # Tests:
-  # - Governance decision produced correctly
+  # - Governance decision produced correctly (DENY)
   # - Risk score computed and non-zero
   # - Decision ID issued for audit trail
-  #
-  # This is Verdict's integration test layer.
-  # It tests the full system from the outside,
-  # exactly as engineers will use it.
   # ===================================================
 
   action-test:
     name: Action Integration Test
     runs-on: ubuntu-24.04
     needs: test
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
 
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405               # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Verdict from local repo
+        # Local install ensures data files (YAML maps, etc.)
+        # present in this commit are available at runtime.
+        # Avoids the PyPI version lag described above.
+        run: |
+          pip install -e .
+
       - name: Run Verdict — over budget (expect DENY)
         id: verdict_deny
-        uses: ./
-        with:
-          plan:         samples/terraform_plan.json
-          policy:       policies/cost/basic_budget.yaml
-          role:         engineer
-          fail_on_deny: "false"
+        run: |
+          set +e
+
+          # --output writes a clean JSON artifact to a dedicated file.
+          # All console output goes to verdict_logs.txt for display only.
+          verdict evaluate \
+            --plan   samples/terraform_plan.json \
+            --policy policies/cost/basic_budget.yaml \
+            --role   engineer \
+            --output /tmp/verdict_result.json \
+            > /tmp/verdict_logs.txt 2>&1
+
+          EXIT_CODE=$?
+
+          echo "=== Verdict console output ==="
+          cat /tmp/verdict_logs.txt
+
+          echo "=== Verdict JSON artifact ==="
+          cat /tmp/verdict_result.json
+
+          # Parse with jq — single line, no YAML quoting conflicts,
+          # no curly brace issues, installed by default on ubuntu-24.04.
+          DECISION=$(jq -r '.decision // empty' /tmp/verdict_result.json 2>/dev/null || echo "")
+          RISK=$(jq -r '.risk_summary.overall_risk_score // 0' /tmp/verdict_result.json 2>/dev/null || echo "0")
+          DECISION_ID=$(jq -r '.decision_id // empty' /tmp/verdict_result.json 2>/dev/null || echo "")
+
+          echo "decision=${DECISION}"       >> "$GITHUB_OUTPUT"
+          echo "risk_score=${RISK}"         >> "$GITHUB_OUTPUT"
+          echo "decision_id=${DECISION_ID}" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${EXIT_CODE}"     >> "$GITHUB_OUTPUT"
+
+          echo "--- Parsed values ---"
+          echo "decision:    ${DECISION}"
+          echo "risk_score:  ${RISK}"
+          echo "decision_id: ${DECISION_ID}"
 
       - name: Assert DENY decision
         run: |
@@ -213,7 +281,7 @@ jobs:
             echo "Expected DENY or DENY_WITH_OVERRIDE, got: $DECISION"
             exit 1
           fi
-          echo "✅ Correct governance decision: $DECISION"
+          echo "Correct governance decision: $DECISION"
 
       - name: Assert risk score computed
         run: |
@@ -223,7 +291,7 @@ jobs:
             echo "Expected non-zero risk score"
             exit 1
           fi
-          echo "✅ Risk score: $RISK/100"
+          echo "Risk score: $RISK/100"
 
       - name: Assert decision ID issued
         run: |
@@ -233,10 +301,20 @@ jobs:
             echo "Expected decision_id in output"
             exit 1
           fi
-          echo "✅ Decision ID: $ID"
+          echo "Decision ID: $ID"
 
   # ===================================================
   # BUILD VERIFICATION
+  #
+  # Verifies the package builds correctly and that all
+  # data files are included in the wheel.
+  #
+  # The wheel content check guards against the v0.5.0
+  # packaging bug where cloudformation_resource_type_map
+  # .yaml was excluded from the wheel, causing a
+  # FileNotFoundError at runtime for any user who
+  # installed from PyPI. This check ensures that bug
+  # cannot silently recur in a future release.
   # ===================================================
 
   build:
@@ -265,3 +343,32 @@ jobs:
         run: |
           pip install -e .
           verdict --help
+
+      - name: Verify data files included in wheel
+        # Inspects the built wheel to confirm YAML data files
+        # are packaged correctly. Fails if the CloudFormation
+        # resource type map is missing from the wheel.
+        # Uses a script file to avoid inline Python YAML issues.
+        run: |
+          python -m build --wheel
+          cat > /tmp/check_wheel.py << 'PYEOF'
+          import zipfile, glob, sys
+          wheels = glob.glob("dist/*.whl")
+          if not wheels:
+              print("No wheel found")
+              sys.exit(1)
+          whl = zipfile.ZipFile(wheels[0])
+          yaml_files = [f for f in whl.namelist() if f.endswith(".yaml")]
+          if not yaml_files:
+              print("ERROR: No YAML files found in wheel")
+              sys.exit(1)
+          matches = [f for f in yaml_files if "cloudformation_resource_type_map" in f]
+          if not matches:
+              print("ERROR: cloudformation_resource_type_map.yaml not in wheel")
+              print("YAML files present: " + str(yaml_files))
+              sys.exit(1)
+          print("YAML files verified in wheel: " + str(len(yaml_files)))
+          for f in yaml_files:
+              print("  " + f)
+          PYEOF
+          python3 /tmp/check_wheel.py

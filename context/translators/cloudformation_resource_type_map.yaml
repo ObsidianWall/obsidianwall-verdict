@@ -1,0 +1,124 @@
+
+# context/translators/cloudformation_resource_type_map.yaml
+#
+# CloudFormation to Terraform resource type mappings.
+#
+# Purpose:
+#   Maps AWS CloudFormation resource type strings to their
+#   Terraform provider equivalents so existing analyzers
+#   and policies work transparently with CloudFormation input.
+#
+# Maintenance:
+#   Add new entries here when AWS releases new resource types
+#   or when new Terraform provider resources need support.
+#   No Python code changes required — the parser loads this
+#   file at import time.
+#
+# Format:
+#   CloudFormation type string: terraform_type_string
+#
+# GPU instance type prefixes are listed separately at the
+# bottom of this file. Add new GPU instance family prefixes
+# here as AWS releases new hardware generations.
+
+
+resource_type_mappings:
+
+  compute:
+    AWS::EC2::Instance:                        aws_instance
+    AWS::AutoScaling::AutoScalingGroup:        aws_autoscaling_group
+    AWS::ECS::Service:                         aws_ecs_service
+    AWS::ECS::TaskDefinition:                  aws_ecs_task_definition
+    AWS::Batch::ComputeEnvironment:            aws_batch_compute_environment
+    AWS::Lambda::Function:                     aws_lambda_function
+    AWS::ElasticBeanstalk::Environment:        aws_elastic_beanstalk_environment
+
+  containers_and_kubernetes:
+    AWS::EKS::Cluster:                         aws_eks_cluster
+    AWS::ECS::Cluster:                         aws_ecs_cluster
+
+  storage:
+    AWS::S3::Bucket:                           aws_s3_bucket
+    AWS::S3::BucketPolicy:                     aws_s3_bucket_policy
+    AWS::EFS::FileSystem:                      aws_efs_file_system
+    AWS::FSx::FileSystem:                      aws_fsx_file_system
+
+  databases:
+    AWS::RDS::DBInstance:                      aws_db_instance
+    AWS::RDS::DBCluster:                       aws_rds_cluster
+    AWS::DynamoDB::Table:                      aws_dynamodb_table
+    AWS::ElastiCache::ReplicationGroup:        aws_elasticache_replication_group
+    AWS::Redshift::Cluster:                    aws_redshift_cluster
+    AWS::Neptune::DBCluster:                   aws_neptune_cluster
+    AWS::DocDB::DBCluster:                     aws_docdb_cluster
+
+  networking:
+    AWS::EC2::SecurityGroup:                   aws_security_group
+    AWS::EC2::SecurityGroupIngress:            aws_vpc_security_group_ingress_rule
+    AWS::EC2::VPC:                             aws_vpc
+    AWS::EC2::Subnet:                          aws_subnet
+    AWS::EC2::RouteTable:                      aws_route_table
+    AWS::EC2::InternetGateway:                 aws_internet_gateway
+    AWS::EC2::NatGateway:                      aws_nat_gateway
+    AWS::EC2::NetworkAcl:                      aws_network_acl
+    AWS::EC2::NetworkAclEntry:                 aws_network_acl_rule
+
+  load_balancers:
+    AWS::ElasticLoadBalancingV2::LoadBalancer: aws_lb
+    AWS::ElasticLoadBalancingV2::Listener:     aws_lb_listener
+    AWS::ElasticLoadBalancingV2::TargetGroup:  aws_lb_target_group
+
+  identity_and_access:
+    AWS::IAM::Role:                            aws_iam_role
+    AWS::IAM::Policy:                          aws_iam_policy
+    AWS::IAM::User:                            aws_iam_user
+    AWS::IAM::Group:                           aws_iam_group
+    AWS::IAM::InstanceProfile:                 aws_iam_instance_profile
+
+  encryption_and_secrets:
+    AWS::KMS::Key:                             aws_kms_key
+    AWS::SecretsManager::Secret:              aws_secretsmanager_secret
+    AWS::SSM::Parameter:                       aws_ssm_parameter
+
+  cdn_and_dns:
+    AWS::CloudFront::Distribution:             aws_cloudfront_distribution
+    AWS::Route53::HostedZone:                  aws_route53_zone
+    AWS::Route53::RecordSet:                   aws_route53_record
+
+  monitoring_and_logging:
+    AWS::CloudTrail::Trail:                    aws_cloudtrail
+    AWS::CloudWatch::Alarm:                    aws_cloudwatch_metric_alarm
+    AWS::Logs::LogGroup:                       aws_cloudwatch_log_group
+    AWS::Config::ConfigRule:                   aws_config_config_rule
+
+  messaging:
+    AWS::SQS::Queue:                           aws_sqs_queue
+    AWS::SNS::Topic:                           aws_sns_topic
+
+  api:
+    AWS::ApiGateway::RestApi:                  aws_api_gateway_rest_api
+    AWS::ApiGatewayV2::Api:                    aws_apigatewayv2_api
+
+  ai_and_ml:
+    AWS::SageMaker::NotebookInstance:          aws_sagemaker_notebook_instance
+    AWS::SageMaker::EndpointConfig:            aws_sagemaker_endpoint_configuration
+    AWS::SageMaker::Endpoint:                  aws_sagemaker_endpoint
+    AWS::Bedrock::KnowledgeBase:               aws_bedrock_knowledge_base
+
+
+# GPU instance type prefixes.
+# Add new entries when AWS releases new GPU hardware generations.
+# The parser checks whether an EC2 instance type starts with
+# any of these prefixes to classify it as a GPU workload.
+
+gpu_instance_type_prefixes:
+  - "p2."    # NVIDIA K80
+  - "p3."    # NVIDIA V100
+  - "p4."    # NVIDIA A100
+  - "p5."    # NVIDIA H100
+  - "g3."    # NVIDIA M60
+  - "g4dn."  # NVIDIA T4
+  - "g5."    # NVIDIA A10G
+  - "inf1."  # AWS Inferentia
+  - "inf2."  # AWS Inferentia2
+  - "trn1."  # AWS Trainium
