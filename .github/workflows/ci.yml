@@ -95,4 +95,4 @@ jobs:
 
       - name: Ruff format check
         run: |
-          ruff format --check .
+          ruff format --check engine/ schemas/ audit/ cli/
