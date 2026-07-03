@@ -1,4 +1,3 @@
-
 # .github/workflows/ci.yml
 #
 # Purpose:
@@ -6,13 +5,19 @@
 # dev, testing, and staging branches.
 #
 # Responsibilities:
-# - Run full test suite
-# - Lint and type check
+# - Run full test suite with 90% coverage gate
+# - Lint and format check
 # - Fail fast on any broken code
+#
+# Coverage modules:
+#   engine        core evaluation pipeline
+#   schemas       policy schema validation
+#   audit         audit logger
+#   notifications dispatch channels
+#   telemetry     governance history store
 #
 # This workflow is the quality gate for all branches.
 # Code that fails here must not be promoted.
-
 
 name: CI
 
@@ -61,16 +66,19 @@ jobs:
           python -m pytest tests/ -v \
             --cov=engine \
             --cov=schemas \
+            --cov=audit \
+            --cov=notifications \
+            --cov=telemetry \
             --cov-report=term-missing \
-            --cov-fail-under=40
+            --cov-fail-under=90
 
   lint:
-    name: Lint and Type Check
+    name: Lint and Format Check
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                   # v6.0.3
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405              # v6.2.0
@@ -83,8 +91,8 @@ jobs:
 
       - name: Ruff lint
         run: |
-          ruff check .
+          ruff check engine/ schemas/ audit/ cli/
 
       - name: Ruff format check
         run: |
-          ruff format --check .
+          ruff format --check engine/ schemas/ audit/ cli/

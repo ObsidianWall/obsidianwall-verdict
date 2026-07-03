@@ -5,7 +5,7 @@
 # Usage:
 #
 #   - name: ObsidianWall Verdict
-#     uses: ObsidianWall/obsidianwall-verdict@v0.2.4
+#     uses: ObsidianWall/obsidianwall-verdict@v0.5.1
 #     with:
 #       plan:   terraform_plan.json
 #       policy: policies/cost/basic_budget.yaml
@@ -20,8 +20,9 @@
 name: "ObsidianWall Verdict"
 
 description: >
-  Pre-deployment infrastructure governance for Terraform.
-  Deterministic policy evaluation before deployment executes.
+  Pre-deployment infrastructure governance for Terraform
+  and CloudFormation. Deterministic policy evaluation
+  before deployment executes.
 
 author: "ObsidianWall"
 
@@ -37,8 +38,10 @@ inputs:
 
   plan:
     description: >
-      Path to the Terraform plan JSON file.
-      Generate with: terraform show -json tfplan > plan.json
+        Path to the Terraform plan JSON file or CloudFormation
+        template (JSON or YAML). Format is auto-detected.
+        Terraform: terraform show -json tfplan > plan.json
+        CloudFormation: pass the template file directly.
     required: true
 
   policy:

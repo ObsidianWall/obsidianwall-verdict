@@ -1,4 +1,3 @@
-
 ## **How Verdict is packaged for end users**
 
 **Three ways to get it:**
@@ -6,7 +5,7 @@
 ```
 1. pip install obsidianwall-verdict
    → installs verdict CLI command globally
-   → works anywhere Python 3.13+ is installed
+   → works anywhere Python 3.11+ is installed
 
 2. GitHub Actions
    uses: obsidianwall/obsidianwall-verdict@main
@@ -36,7 +35,10 @@ verdict evaluate  → should this be allowed?
 terraform apply   → only runs if verdict says ALLOW
 ```
 
-Verdict reads the plan JSON (which describes every resource Terraform intends to create), estimates what those resources will cost, evaluates that estimate against your policy, and either allows or blocks the deployment before a single resource is created.
+Verdict reads a Terraform plan JSON or CloudFormation template (auto-detected
+from file content — no format flag required), estimates what those resources
+will cost, evaluates that estimate against your policy, and either allows or
+blocks the deployment before a single resource is created.
 
 ---
 ## Use Case 1
@@ -103,6 +105,52 @@ spec:
     requires_approval: false
 ```
 
+**Step 2.5 — Simulate the policy before generating a real plan**
+
+Before running `terraform plan`, verify the policy behaves correctly at
+different cost thresholds using `verdict simulate`. No infrastructure plan
+or cloud credentials required.
+
+```bash
+# Test within budget
+verdict simulate \
+  --policy policies/my_budget.yaml \
+  --set estimated_cost=12
+```
+
+```
+  ✅  ALLOW
+
+  Technical Risk:    0/100
+  Governance Risk:   high
+  Reason:            conditions passed high severity notification
+```
+
+```bash
+# Test over budget
+verdict simulate \
+  --policy policies/my_budget.yaml \
+  --set estimated_cost=50
+```
+
+```
+  🚫  DENY
+
+  Technical Risk:    0/100
+  Governance Risk:   high
+  Reason:            conditions failed hard deny
+```
+
+If the simulation matches your expectations, proceed. If not, adjust the
+policy threshold and simulate again before touching any real infrastructure.
+
+Technical Risk and Governance Risk are shown as separate dimensions. A DENY
+at Technical Risk 0 means a policy condition failed — not that infrastructure
+is misconfigured. This distinction matters: the VM is fine, the cost is the
+governance problem.
+
+---
+
 **Step 3 — Generate the Terraform plan**
 
 ```bash
@@ -111,7 +159,17 @@ terraform plan -out=tfplan
 terraform show -json tfplan > terraform_plan.json
 ```
 
-This creates a `terraform_plan.json` file that describes every resource Terraform intends to create.
+This creates a `terraform_plan.json` file that describes every resource
+Terraform intends to create.
+
+CloudFormation users pass the template directly — JSON or YAML both work
+and the format is auto-detected:
+
+```bash
+verdict evaluate \
+  --plan   template.yaml \
+  --policy policies/my_budget.yaml
+```
 
 **Step 4 — Run Verdict**
 
@@ -162,13 +220,15 @@ Change `vm_size = "Standard_D2s_v3"` ($50/month) and run Verdict again:
 ✗ Deployment blocked by governance policy.
 ```
 
-`terraform apply` never runs. The resource never exists. You never get a bill for it.
+`terraform apply` never runs. The resource never exists. You never get a
+bill for it.
 
 ---
 
 **What Verdict does NOT do at MVP — being honest**
 
-The cost estimation uses internal pricing tables with hardcoded approximate prices. It does not:
+The cost estimation uses internal pricing tables with hardcoded approximate
+prices. It does not:
 
 - Call real Azure/AWS pricing APIs
 - Account for data transfer costs
@@ -176,6 +236,10 @@ The cost estimation uses internal pricing tables with hardcoded approximate pric
 - Account for reserved instance discounts
 - Know current spot pricing
 
-So `Standard_B1s` is hardcoded as `$12` in the pricing table. The real Azure price may differ slightly depending on region and current pricing. This is a known limitation at MVP stage. The value is the governance gate mechanism, not perfect cost precision.
+So `Standard_B1s` is hardcoded as `$12` in the pricing table. The real Azure
+price may differ slightly depending on region and current pricing. This is a
+known limitation at MVP stage. The value is the governance gate mechanism,
+not perfect cost precision.
 
-The pricing tables are in `engine/cost_estimator.py` and will be improved as the intelligence layer matures.
+The pricing tables are in `engine/cost_estimator.py` and will be improved
+as the intelligence layer matures.

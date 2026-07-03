@@ -1,4 +1,3 @@
-
 # tests/unit/test_approval_resolver.py
 #
 # Purpose:
