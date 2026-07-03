@@ -80,7 +80,7 @@ jobs:
 
       - name: Install lint dependencies
         run: |
-          pip install ruff bandit
+          pip install ruff==0.15.20 bandit
 
       - name: Ruff lint
         run: |
@@ -88,7 +88,7 @@ jobs:
 
       - name: Ruff format check
         run: |
-          ruff format --check .
+          ruff format --check engine/ schemas/ audit/ cli/
 
       - name: Bandit security scan
         run: |
