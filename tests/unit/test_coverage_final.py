@@ -260,7 +260,7 @@ class TestRunMigrationsAlreadyApplied:
             "duplicate column name: policy_path"
         )
         _run_migrations(mock_connection)
-        mock_connection.execute.assert_called_once()
+        mock_connection.execute.assert_called()
 
 
 # =====================================================

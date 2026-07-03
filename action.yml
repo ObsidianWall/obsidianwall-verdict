@@ -5,7 +5,7 @@
 # Usage:
 #
 #   - name: ObsidianWall Verdict
-#     uses: ObsidianWall/obsidianwall-verdict@v0.5.0
+#     uses: ObsidianWall/obsidianwall-verdict@v0.5.1
 #     with:
 #       plan:   terraform_plan.json
 #       policy: policies/cost/basic_budget.yaml
