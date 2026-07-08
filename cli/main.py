@@ -34,6 +34,7 @@ from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from notifications import dispatch_notifications
+from renderers import SUPPORTED_FORMATS, render
 from telemetry.notice import show_first_run_notice_if_needed
 from telemetry.store import record_decision
 
@@ -70,7 +71,7 @@ def _main(
     ),
 ) -> None:
     """ObsidianWall Verdict — pre-deployment infrastructure governance."""
-    show_first_run_notice_if_needed()  # ← inside the body, not the signature
+    show_first_run_notice_if_needed()
 
 
 logger = get_logger()
@@ -97,6 +98,17 @@ def evaluate(
         "output/result.json",
         "--output",
         help="Path to write the audit artifact JSON.",
+    ),
+    fmt: str = typer.Option(
+        "text",
+        "--format",
+        help=(
+            "Output format printed to stdout. "
+            "'text' prints a concise human-readable summary (default). "
+            "'json' prints the full JSON artifact. "
+            "'yaml' prints the full YAML artifact. "
+            f"Supported: {', '.join(SUPPORTED_FORMATS)}"
+        ),
     ),
     pricing: str = typer.Option(
         "table",
@@ -134,14 +146,23 @@ def evaluate(
     Produces a governance decision with full audit trail,
     risk summary, notification manifest, and explainability artifact.
 
+    By default, prints a concise human-readable summary to stdout.
+    Use --format json for the full machine-readable artifact
+    (required for CI/CD pipelines and scripts that parse output).
+    The full artifact is always written to the --output file
+    regardless of --format.
+
     Exit codes:
       0   ALLOW or ALLOW_WITH_NOTIFICATION
       1   DENY, DENY_WITH_OVERRIDE, or evaluation error
 
     Examples:
 
-      Basic evaluation:
+      Basic evaluation (human-readable summary):
         verdict evaluate --plan plan.json --policy budget.yaml
+
+      Full JSON for CI/CD pipelines:
+        verdict evaluate --plan plan.json --policy budget.yaml --format json
 
       With current month spend:
         verdict evaluate --plan plan.json --policy budget.yaml --current-spend 30.0
@@ -154,6 +175,7 @@ def evaluate(
           --plan          terraform_plan.json \\
           --policy        policies/cost/basic_budget.yaml \\
           --role          engineer \\
+          --format        json \\
           --current-spend 30.0 \\
           --pricing       live \\
           --region        eastus
@@ -212,6 +234,8 @@ def evaluate(
 
         # ---------------------------------------------
         # STEP 4 — Persist audit artifact
+        # Full artifact always written to file
+        # regardless of --format used for stdout.
         # ---------------------------------------------
 
         output_path = Path(output)
@@ -259,14 +283,22 @@ def evaluate(
         )
 
         # ---------------------------------------------
-        # STEP 6 — Print audit artifact to stdout
-        # Structured logs go to stderr via audit_logger.
-        # The final JSON artifact goes to stdout.
-        # This separation allows shell piping and
-        # GitHub Actions output parsing.
+        # STEP 6 — Render governance decision to stdout
+        #
+        # text:  concise human-readable summary (default)
+        #        ~15 lines — decision, failed conditions,
+        #        remediation, decision ID
+        # json:  full artifact — current/legacy behavior,
+        #        required for CI/CD pipelines and scripts
+        # yaml:  full artifact in YAML format
+        #
+        # The full JSON artifact is always written to the
+        # --output file (STEP 4) regardless of this choice.
+        # Structured logs go to stderr via audit_logger,
+        # keeping stdout clean for the chosen renderer.
         # ---------------------------------------------
 
-        print(json.dumps(result, indent=2, default=str))
+        render(result, fmt=fmt, output_path=output)
 
         # ---------------------------------------------
         # STEP 7 — Exit code based on decision

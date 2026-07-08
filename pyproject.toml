@@ -73,6 +73,7 @@ include = [
     "scripts*",
     "telemetry*",
     "notifications*",
+    "renderers*",
 ]
 exclude = [
     "tests*",
