@@ -8,6 +8,7 @@
 # - Write governance decisions to local store
 # - Write override and approval events
 # - Write outcome events (populated by Sentinel v0.4.0)
+# - Write and read evidence artifacts (v0.5.2)
 # - Query decision history for audit command
 # - Query policy effectiveness metrics
 # - Query outcome correlation for governance intelligence
@@ -31,6 +32,7 @@
 #                                      populated by Sentinel v0.4.0)
 #   Layer 5 — Drift Telemetry         (outcomes table, type=drift_detected)
 #   Layer 6 — Effectiveness Telemetry (policy_effectiveness — derived/computed)
+#   Layer 7 — Evidence Store          (decision_artifacts — v0.5.2)
 #
 # Policy identity design:
 #   policy_path         — runtime only (Sentinel re-evaluation)
@@ -43,10 +45,31 @@
 #                         enables "which governance intents are most enforced"
 #                         analytics without file path exposure
 #
+# Decision vs. Evidence design (v0.5.2):
+#   The decisions table stays lean and query-optimized —
+#   it holds only the operational metadata needed for fast
+#   aggregate queries (risk scores, condition pass/fail,
+#   policy names). Think of it as a decision ledger.
+#
+#   The decision_artifacts table is a separate evidence
+#   store. It holds full JSON payloads — the complete
+#   verdict evaluate result, and in the future other
+#   evidence kinds (trace graph exports, Sentinel drift
+#   snapshots, SBOMs, cost reports) — keyed by decision_id
+#   and artifact_type. This separation means:
+#     - Compass can query decisions cheaply without
+#       loading full artifacts for aggregate analysis
+#     - New evidence types can be added as new
+#       artifact_type values without schema changes
+#     - verdict explain retrieves full evidence without
+#       depending on the original --output file still
+#       existing on disk
+#
 # Database evolution:
 #   v0.3.0  SQLite — local only (~/.obsidianwall/decisions.db)
 #   v0.4.0  Added policy_path column for Sentinel verification
 #   v0.5.1  Added policy_content_hash and policy_family columns
+#   v0.5.2  Added decision_artifacts table (evidence store)
 #   Compass PostgreSQL (Supabase) — hosted, multi-tenant (future)
 #
 # Location:
@@ -73,6 +96,12 @@ _SCHEMA = """
 -- Governance decision history.
 -- Layers 1 + 2: Decision and Evaluation Telemetry.
 -- One row per verdict evaluate invocation.
+--
+-- This table is intentionally lean. Full evidentiary
+-- detail (reasoning chains, trace graphs, explained
+-- recommendations) lives in decision_artifacts, not here.
+-- Keeping this table lean means aggregate queries across
+-- thousands of decisions stay fast.
 CREATE TABLE IF NOT EXISTS decisions (
     id                  TEXT PRIMARY KEY,
     timestamp           TEXT NOT NULL,
@@ -167,6 +196,37 @@ CREATE TABLE IF NOT EXISTS policy_effectiveness (
     last_evaluation     TEXT,
     last_updated        TEXT NOT NULL
 );
+
+-- Evidence store.
+-- Layer 7: Evidence Store (v0.5.2).
+--
+-- Full JSON artifacts linked to decisions, kept
+-- deliberately separate from the lean decisions table.
+-- One decision can accumulate multiple artifact types
+-- over time without any schema change:
+--   "evaluation"        the full verdict evaluate result
+--   "trace_graph"        (future) standalone trace exports
+--   "sentinel_snapshot"  (future) post-deployment drift evidence
+--   "sbom"               (future) software bill of materials
+--   "cost_report"        (future) detailed cost breakdown exports
+--
+-- verdict explain reads from this table by decision_id,
+-- so full evidence remains available even if the original
+-- --output file has been overwritten or deleted.
+CREATE TABLE IF NOT EXISTS decision_artifacts (
+    id              TEXT PRIMARY KEY,
+    decision_id     TEXT NOT NULL,
+    artifact_type   TEXT NOT NULL,
+    artifact_json   TEXT NOT NULL,
+    artifact_hash   TEXT,
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY (decision_id) REFERENCES decisions(id)
+);
+
+-- Index for the common lookup pattern: fetch the most
+-- recent artifact of a given type for a decision.
+CREATE INDEX IF NOT EXISTS idx_decision_artifacts_decision_id
+    ON decision_artifacts(decision_id);
 """
 
 # =====================================================
@@ -205,6 +265,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     guarded by a try/except on OperationalError, which fires
     when the column already exists. This makes each migration
     idempotent regardless of the database version.
+
+    Note: the decision_artifacts table (v0.5.2) is created
+    via _SCHEMA (CREATE TABLE IF NOT EXISTS), not a migration,
+    since it is a new table rather than a column addition to
+    an existing table.
     """
     for migration in _MIGRATIONS:
         try:
@@ -331,6 +396,11 @@ def record_decision(
     but sufficient for correlating evaluations within a single
     environment, and avoids storing any infrastructure detail.
 
+    This function writes only operational metadata to the
+    lean decisions table. Full evidence (the complete result
+    dict) is stored separately via record_artifact() — see
+    that function for the evidence store design.
+
     Args:
         result:      complete verdict evaluate result dict
         plan_path:   path to the Terraform plan or CloudFormation
@@ -446,6 +516,76 @@ def record_decision(
         # Governance history must never crash the CLI.
         # Silently return False — the evaluation result
         # has already been printed to stdout.
+        return False
+
+
+# =====================================================
+# WRITE — Layer 7: Evidence Store (v0.5.2)
+# =====================================================
+
+
+def record_artifact(
+    decision_id: str,
+    artifact: dict[str, Any],
+    artifact_type: str = "evaluation",
+    db_path: Path | None = None,
+) -> bool:
+    """
+    Store a full evidence artifact linked to a decision.
+
+    This is the evidence store — deliberately separate from
+    the lean decisions table (see module docstring: "Decision
+    vs. Evidence design"). Call this after record_decision()
+    to persist the complete governance artifact for later
+    retrieval by verdict explain.
+
+    Args:
+        decision_id:   UUID of the governance decision this
+                       artifact provides evidence for
+        artifact:      the full artifact dict to store
+                       (typically the complete verdict
+                       evaluate result)
+        artifact_type: classifies the evidence kind.
+                       Defaults to "evaluation" — the full
+                       verdict evaluate result. Future values:
+                       "trace_graph", "sentinel_snapshot",
+                       "sbom", "cost_report".
+        db_path:       optional path override (for testing)
+
+    Returns:
+        True if written, False if history disabled or write
+        failed. Never raises — evidence storage must not
+        crash the CLI.
+    """
+    if not is_telemetry_enabled():
+        return False
+
+    try:
+        artifact_json = json.dumps(artifact, default=str)
+        artifact_hash = hashlib.sha256(artifact_json.encode("utf-8")).hexdigest()[:16]
+
+        conn = init_db(db_path)
+        conn.execute(
+            """
+            INSERT INTO decision_artifacts (
+                id, decision_id, artifact_type,
+                artifact_json, artifact_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                decision_id,
+                artifact_type,
+                artifact_json,
+                artifact_hash,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    except Exception:
         return False
 
 
@@ -676,6 +816,149 @@ def _update_effectiveness(
 
 
 # =====================================================
+# READ — Layer 7: Evidence Store (v0.5.2)
+#
+# All three evidence-store read functions are grouped
+# here together: get_artifact() for full content,
+# get_artifact_metadata() for hash/timestamp only
+# (powers the Evidence section of verdict explain
+# without loading the full artifact), and
+# list_artifact_types() to discover what evidence
+# kinds exist for a decision.
+# =====================================================
+
+
+def get_artifact(
+    decision_id: str,
+    artifact_type: str = "evaluation",
+    db_path: Path | None = None,
+) -> dict[str, Any] | None:
+    """
+    Retrieve the most recent evidence artifact for a
+    decision, parsed back into a dict.
+
+    Powers verdict explain — loads the full governance
+    artifact by decision_id without requiring the original
+    --output file to still exist on disk.
+
+    Args:
+        decision_id:   UUID of the governance decision
+        artifact_type: which evidence kind to retrieve.
+                       Defaults to "evaluation".
+        db_path:       optional path override (for testing)
+
+    Returns:
+        Parsed artifact dict, or None if no artifact exists
+        for this decision_id and artifact_type, or if the
+        stored JSON fails to parse.
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT artifact_json FROM decision_artifacts
+            WHERE decision_id = ? AND artifact_type = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (decision_id, artifact_type),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        return json.loads(row["artifact_json"])
+
+    except Exception:
+        return None
+
+
+def get_artifact_metadata(
+    decision_id: str,
+    artifact_type: str = "evaluation",
+    db_path: Path | None = None,
+) -> dict[str, Any] | None:
+    """
+    Retrieve metadata about a stored evidence artifact,
+    without the full artifact content.
+
+    Powers the Evidence section of verdict explain — shows
+    the artifact hash and recorded timestamp as proof this
+    is stored governance evidence, not just a policy check
+    result, without exposing the full row structure or the
+    complete artifact content to the CLI layer.
+
+    Args:
+        decision_id:   UUID of the governance decision
+        artifact_type: which evidence kind to retrieve.
+                       Defaults to "evaluation".
+        db_path:       optional path override (for testing)
+
+    Returns:
+        dict with "artifact_hash" and "created_at" keys,
+        or None if no artifact exists for this decision_id
+        and artifact_type.
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT artifact_hash, created_at FROM decision_artifacts
+            WHERE decision_id = ? AND artifact_type = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (decision_id, artifact_type),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        return {
+            "artifact_hash": row["artifact_hash"],
+            "created_at": row["created_at"],
+        }
+
+    except Exception:
+        return None
+
+
+def list_artifact_types(
+    decision_id: str,
+    db_path: Path | None = None,
+) -> list[str]:
+    """
+    Return the distinct artifact types stored for a decision.
+
+    Useful for verdict explain to report what evidence is
+    available before attempting to load a specific type —
+    e.g. once Sentinel writes "sentinel_snapshot" artifacts,
+    this lets the CLI say "evaluation + sentinel_snapshot
+    evidence available" rather than guessing.
+
+    Returns an empty list if no artifacts exist or on error.
+    """
+    try:
+        conn = init_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT DISTINCT artifact_type FROM decision_artifacts
+            WHERE decision_id = ?
+            """,
+            (decision_id,),
+        )
+        rows = [row["artifact_type"] for row in cursor.fetchall()]
+        conn.close()
+        return rows
+    except Exception:
+        return []
+
+
+# =====================================================
 # READ — for verdict audit, sentinel, effectiveness
 # =====================================================
 
@@ -766,6 +1049,11 @@ def get_decision_by_id(
 
     Returns None if the decision_id does not exist or
     any read error occurs.
+
+    Note: this returns operational metadata from the
+    decisions table only. For the full evidentiary
+    artifact (reasoning chains, trace graphs, explained
+    recommendations), use get_artifact() instead.
     """
     try:
         conn = init_db(db_path)
