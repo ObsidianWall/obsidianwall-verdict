@@ -26,17 +26,19 @@ import typer
 from audit.audit_logger import get_logger
 from cli.commands.audit import audit_app
 from cli.commands.coverage import coverage
+from cli.commands.explain import explain_app
 from cli.commands.sentinel import sentinel_app
 from cli.commands.simulate import simulate
 from cli.commands.test_command import test_command
 from context.context_builder import build_context
+from engine.governance_objective import compute_governance_objective
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from notifications import dispatch_notifications
 from renderers import SUPPORTED_FORMATS, render
 from telemetry.notice import show_first_run_notice_if_needed
-from telemetry.store import record_decision
+from telemetry.store import record_artifact, record_decision
 
 app = typer.Typer(
     name="verdict",
@@ -46,6 +48,7 @@ app = typer.Typer(
 
 # ── Register commands ──────────────────────────────
 app.add_typer(audit_app, name="audit")
+app.add_typer(explain_app, name="explain")
 app.add_typer(sentinel_app, name="sentinel")
 app.command(name="coverage")(coverage)
 app.command(name="simulate")(simulate)
@@ -233,6 +236,24 @@ def evaluate(
         )
 
         # ---------------------------------------------
+        # STEP 3b — Compute governance objective
+        # Optional. Only present if the policy declares
+        # metadata.governance_objective.statement. Shifts
+        # the artifact from reporting technical facts to
+        # reporting whether an organizational governance
+        # objective was upheld or violated. Never influences
+        # the decision — purely explanatory, computed after
+        # the decision is already final.
+        # ---------------------------------------------
+
+        governance_objective = compute_governance_objective(
+            policy_dict=policy_dict,
+            decision=result.get("decision", ""),
+        )
+        if governance_objective is not None:
+            result["governance_objective"] = governance_objective
+
+        # ---------------------------------------------
         # STEP 4 — Persist audit artifact
         # Full artifact always written to file
         # regardless of --format used for stdout.
@@ -257,6 +278,16 @@ def evaluate(
             result=result,
             plan_path=plan,
             policy_path=policy,
+        )
+
+        # Store the full artifact as evidence, linked to this
+        # decision. Powers `verdict explain`. See telemetry/
+        # store.py module docstring for the Decision vs.
+        # Evidence design rationale.
+        record_artifact(
+            decision_id=result.get("decision_id", ""),
+            artifact=result,
+            artifact_type="evaluation",
         )
 
         # ---------------------------------------------

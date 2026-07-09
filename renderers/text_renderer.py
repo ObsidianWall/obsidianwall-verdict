@@ -140,6 +140,16 @@ def render_text(
     lines.append(f"  {decision_text}")
     lines.append("")
 
+    # Governance Objective — optional, only present if the
+    # policy declares metadata.governance_objective.statement
+    governance_objective: dict[str, Any] | None = result.get("governance_objective")
+    if governance_objective:
+        obj_status = governance_objective.get("status", "")
+        obj_statement = governance_objective.get("statement", "")
+        lines.append(f"  {_bold('Governance Objective')}  {obj_statement}")
+        lines.append(f"  {_bold('Objective Status')}      {obj_status}")
+        lines.append("")
+
     # Failed conditions
     if failed:
         lines.append(f"  {_bold('Failed Conditions')}")
