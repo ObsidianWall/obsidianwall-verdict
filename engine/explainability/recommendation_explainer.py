@@ -15,6 +15,7 @@
 # Explainability artifacts are produced AFTER
 # the deterministic decision is resolved.
 
+from typing import Any
 
 from audit.audit_logger import get_logger
 
@@ -29,7 +30,7 @@ logger = get_logger()
 # Extends as new recommendation types are added to
 # the optimization catalog.
 
-RECOMMENDATION_RATIONALE = {
+RECOMMENDATION_RATIONALE: dict[str, str] = {
     "rightsizing": (
         "The detected resource configuration appears "
         "oversized for its workload profile and environment. "
@@ -145,21 +146,35 @@ def _priority_tier(priority_score: int) -> str:
 # =====================================================
 
 
-def _explain_single(recommendation: dict) -> dict:
+def _explain_single(recommendation: dict[str, Any]) -> dict[str, Any]:
     """
     Enrich a single recommendation with plain-English
     rationale and priority context.
     Skips malformed recommendations defensively.
+
+    Reads recommendation_confidence (v0.5.2+ field name).
+    Falls back to the legacy "confidence" key for any
+    recommendation objects produced by code not yet
+    migrated to the new field name, so nothing silently
+    defaults to 0.0 during the transition.
     """
 
-    rec_type = recommendation.get("type", "unknown")
-    message = recommendation.get("message", "")
-    severity = recommendation.get("severity", "medium")
-    priority_score = recommendation.get("priority_score", 50)
-    confidence = recommendation.get("confidence", 0.0)
-    savings_percent = recommendation.get("estimated_savings_percent", 0)
+    rec_type: str = recommendation.get("type", "unknown")
+    message: str = recommendation.get("message", "")
+    severity: str = recommendation.get("severity", "medium")
+    priority_score: int = recommendation.get("priority_score", 50)
 
-    rationale = RECOMMENDATION_RATIONALE.get(
+    # v0.5.2: recommendation_confidence replaced confidence.
+    # Check both keys during the migration window so no
+    # recommendation silently reports 0.0.
+    recommendation_confidence: float = recommendation.get(
+        "recommendation_confidence",
+        recommendation.get("confidence", 0.65),
+    )
+
+    savings_percent: int = recommendation.get("estimated_savings_percent", 0)
+
+    rationale: str = RECOMMENDATION_RATIONALE.get(
         rec_type,
         (
             "This recommendation was generated based on "
@@ -168,16 +183,16 @@ def _explain_single(recommendation: dict) -> dict:
         ),
     )
 
-    priority_tier = _priority_tier(priority_score)
+    priority_tier: str = _priority_tier(priority_score)
 
-    explained = {
+    explained: dict[str, Any] = {
         "type": rec_type,
         "message": message,
         "rationale": rationale,
         "severity": severity,
         "priority_tier": priority_tier,
         "priority_score": priority_score,
-        "confidence": confidence,
+        "recommendation_confidence": recommendation_confidence,
         "estimated_savings_percent": savings_percent,
     }
 
@@ -196,9 +211,9 @@ def _explain_single(recommendation: dict) -> dict:
 
 
 def explain_recommendations(
-    recommendations: list[dict],
+    recommendations: list[dict[str, Any]],
     decision: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Generate plain-English explanation for all recommendations.
 
@@ -227,7 +242,7 @@ def explain_recommendations(
     # EXPLAIN EACH RECOMMENDATION
     # =================================================
 
-    explained_recommendations = []
+    explained_recommendations: list[dict[str, Any]] = []
 
     for recommendation in recommendations:
         if not isinstance(recommendation, dict):
@@ -244,7 +259,7 @@ def explain_recommendations(
     # GROUP BY PRIORITY TIER
     # =================================================
 
-    grouped = {
+    grouped: dict[str, list[dict[str, Any]]] = {
         "critical": [],
         "high": [],
         "medium": [],
@@ -252,7 +267,7 @@ def explain_recommendations(
     }
 
     for rec in explained_recommendations:
-        tier = rec.get("priority_tier", "low")
+        tier: str = rec.get("priority_tier", "low")
         if tier in grouped:
             grouped[tier].append(rec)
 
@@ -260,21 +275,23 @@ def explain_recommendations(
     # TOTAL SAVINGS POTENTIAL
     # =================================================
 
-    savings_values = [
+    savings_values: list[int] = [
         rec.get("estimated_savings_percent", 0)
         for rec in explained_recommendations
         if rec.get("estimated_savings_percent", 0) > 0
     ]
 
-    max_savings = max(savings_values) if savings_values else 0
+    max_savings: int = max(savings_values) if savings_values else 0
 
     # =================================================
     # ADVISORY SUMMARY
     # =================================================
 
-    total_count = len(explained_recommendations)
-    critical_count = len(grouped["critical"])
-    high_count = len(grouped["high"])
+    total_count: int = len(explained_recommendations)
+    critical_count: int = len(grouped["critical"])
+    high_count: int = len(grouped["high"])
+
+    advisory_summary: str
 
     if total_count == 0:
         advisory_summary = (
@@ -303,7 +320,7 @@ def explain_recommendations(
             f"{critical_count + high_count} require immediate attention."
         )
 
-    artifact = {
+    artifact: dict[str, Any] = {
         "advisory_summary": advisory_summary,
         "total_recommendations": total_count,
         "max_estimated_savings_percent": max_savings,

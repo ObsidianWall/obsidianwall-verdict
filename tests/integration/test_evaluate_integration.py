@@ -15,6 +15,13 @@
 # - Output file written correctly
 # - --current-spend passed through to context
 # - Error handling for missing files
+#
+# NOTE (v0.5.2): Default stdout is now the text renderer,
+# not JSON (see renderers/text_renderer.py). Tests that
+# parse result.output as JSON must pass --format json
+# explicitly. Tests that only check the --output file
+# are unaffected — the file always contains full JSON
+# regardless of --format.
 
 import json
 import pytest
@@ -61,6 +68,7 @@ class TestEvaluateAllow:
             "evaluate",
             "--plan",   _SAMPLE_PLAN,
             "--policy", _BUDGET_POLICY,
+            "--format", "json",
         ])
         output = json.loads(result.output)
         assert "decision" in output
@@ -79,6 +87,7 @@ class TestEvaluateAllow:
             "evaluate",
             "--plan",   _SAMPLE_PLAN,
             "--policy", _BUDGET_POLICY,
+            "--format", "json",
         ])
         output = json.loads(result.output)
         assert "decision_id" in output
@@ -92,6 +101,7 @@ class TestEvaluateAllow:
             "evaluate",
             "--plan",   _SAMPLE_PLAN,
             "--policy", _BUDGET_POLICY,
+            "--format", "json",
         ])
         output = json.loads(result.output)
         assert "conditions_passed" in output
@@ -109,11 +119,12 @@ class TestEvaluateAllow:
         ])
         with open(output_path) as output_file:
             output = json.load(output_file)
-        
+
         # risk score is nested under risk_summary in the audit artifact
+        # This test checks the --output FILE, unaffected by --format.
         assert "risk_summary" in output
         assert "overall_risk_score" in output["risk_summary"]
-    
+
         assert isinstance(output["risk_summary"]["overall_risk_score"], (int, float))
         assert 0 <= output["risk_summary"]["overall_risk_score"] <= 100
 
@@ -154,6 +165,11 @@ class TestEvaluateOutputFile:
         assert "decision" in data
 
     def test_output_file_matches_stdout(self, tmp_path):
+        """
+        Confirms the --output file and --format json stdout
+        represent the same underlying decision. This is the
+        contract that matters: both are views of one artifact.
+        """
         if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
             pytest.skip("Fixture files not found")
 
@@ -163,6 +179,7 @@ class TestEvaluateOutputFile:
             "--plan",    _SAMPLE_PLAN,
             "--policy",  _BUDGET_POLICY,
             "--output",  output_path,
+            "--format",  "json",
         ])
         stdout_data = json.loads(result.output)
         with open(output_path) as output_file:
@@ -170,6 +187,100 @@ class TestEvaluateOutputFile:
 
         assert stdout_data["decision"] == file_data["decision"]
         assert stdout_data["decision_id"] == file_data["decision_id"]
+
+
+# =====================================================
+# EVALUATE — TEXT RENDERER (DEFAULT STDOUT)
+# =====================================================
+
+
+class TestEvaluateTextRenderer:
+    """
+    Confirms the default stdout output (no --format flag)
+    is the concise text summary, not raw JSON. This is the
+    v0.5.2 behavior change — added here to lock it in.
+    """
+
+    def test_default_stdout_is_not_valid_json(self):
+        """
+        The default text renderer output should NOT parse
+        as JSON. If this test starts failing, it likely means
+        stdout has reverted to raw JSON — check cli/main.py
+        STEP 6 and confirm --format defaults to "text".
+        """
+        if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
+            pytest.skip("Fixture files not found")
+
+        result = runner.invoke(app, [
+            "evaluate",
+            "--plan",   _SAMPLE_PLAN,
+            "--policy", _BUDGET_POLICY,
+        ])
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(result.output)
+
+    def test_default_stdout_contains_decision_keyword(self):
+        """Text renderer output should mention the decision value."""
+        if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
+            pytest.skip("Fixture files not found")
+
+        result = runner.invoke(app, [
+            "evaluate",
+            "--plan",   _SAMPLE_PLAN,
+            "--policy", _BUDGET_POLICY,
+        ])
+        # One of the five decision types must appear in the text output
+        assert any(
+            decision in result.output
+            for decision in (
+                "ALLOW",
+                "ALLOW_WITH_NOTIFICATION",
+                "ALLOW_WITH_APPROVAL_REQUIRED",
+                "DENY_WITH_OVERRIDE",
+                "DENY",
+            )
+        )
+
+    def test_default_stdout_references_output_artifact(self):
+        """Text renderer should point the user to the full JSON artifact."""
+        if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
+            pytest.skip("Fixture files not found")
+
+        result = runner.invoke(app, [
+            "evaluate",
+            "--plan",   _SAMPLE_PLAN,
+            "--policy", _BUDGET_POLICY,
+        ])
+        assert "output/result.json" in result.output or "artifact" in result.output.lower()
+
+    def test_yaml_format_produces_parseable_yaml(self):
+        """--format yaml should produce valid YAML on stdout."""
+        import yaml
+
+        if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
+            pytest.skip("Fixture files not found")
+
+        result = runner.invoke(app, [
+            "evaluate",
+            "--plan",   _SAMPLE_PLAN,
+            "--policy", _BUDGET_POLICY,
+            "--format", "yaml",
+        ])
+        parsed = yaml.safe_load(result.output)
+        assert "decision" in parsed
+
+    def test_invalid_format_flag_raises_error(self):
+        """An unsupported --format value should fail, not silently succeed."""
+        if not _files_exist(_BUDGET_POLICY, _SAMPLE_PLAN):
+            pytest.skip("Fixture files not found")
+
+        result = runner.invoke(app, [
+            "evaluate",
+            "--plan",   _SAMPLE_PLAN,
+            "--policy", _BUDGET_POLICY,
+            "--format", "xml",
+        ])
+        assert result.exit_code != 0
 
 
 # =====================================================
@@ -231,6 +342,7 @@ class TestEvaluateArgPassthrough:
             "--plan",    _SAMPLE_PLAN,
             "--policy",  _BUDGET_POLICY,
             "--role",    "budget_owner",
+            "--format",  "json",
         ])
         assert result.exit_code in (0, 1)
         output = json.loads(result.output)
@@ -245,6 +357,7 @@ class TestEvaluateArgPassthrough:
             "--plan",          _SAMPLE_PLAN,
             "--policy",        _BUDGET_POLICY,
             "--current-spend", "30.0",
+            "--format",        "json",
         ])
         assert result.exit_code in (0, 1)
         output = json.loads(result.output)
@@ -259,12 +372,14 @@ class TestEvaluateArgPassthrough:
             "--plan",          _SAMPLE_PLAN,
             "--policy",        _BUDGET_POLICY,
             "--current-spend", "0",
+            "--format",        "json",
         ])
         result_high = runner.invoke(app, [
             "evaluate",
             "--plan",          _SAMPLE_PLAN,
             "--policy",        _BUDGET_POLICY,
             "--current-spend", "10000",
+            "--format",        "json",
         ])
 
         output_low  = json.loads(result_low.output)
