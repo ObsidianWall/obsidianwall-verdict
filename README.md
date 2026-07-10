@@ -26,20 +26,31 @@ $ verdict evaluate \
     --policy policies/cost/basic_budget.yaml \
     --role  engineer
 
-  policy       basic_budget_verdict
-  condition    budget_check                    ✗ FAILED
-  expression   (current_spend + estimated_cost) <= budget.amount
-  evaluated    (0 + 100) <= 50  →  false
+──────────────────────────────────────────────────────
+ObsidianWall Verdict  ·  basic_budget_verdict
+──────────────────────────────────────────────────────
 
-  risk score   75 / 100  (critical)
-  findings     cost_analysis: 2   topology: 1
-  notified     budget_owner (email)   engineering_lead (slack)
+  ✗  DENY_WITH_OVERRIDE  ·  CRITICAL  ·  Risk 75/100
 
-  decision     DENY_WITH_OVERRIDE
-  override     budget_owner may authorize
-  decision_id  abc3a13b-83d5-4fad-87d8
+  Governance Objective  Maintain cloud spend within approved budget
+  Objective Status      Violated
 
-✗ Deployment blocked by governance policy.
+  Failed Conditions
+    ✗  budget_check
+       Monthly spend cap enforcement
+       (current_spend + estimated_cost) <= budget.amount
+
+  Remediation
+    →  Reduce the estimated infrastructure cost to satisfy the
+       budget constraint, or contact your budget owner to request
+       a budget adjustment or override authorization.
+
+  Override  contact budget_owner, engineering_lead
+
+──────────────────────────────────────────────────────
+  Decision ID  abc3a13b  ·  Full artifact: output/result.json
+  Run  verdict explain abc3a13b  for full reasoning chain
+──────────────────────────────────────────────────────
 ```
 
 No AI guessing. No approximations. Every decision is deterministic,
@@ -66,6 +77,8 @@ metadata:
   name: team_budget
   version: "0.1"
   owner: your-team
+  governance_objective:
+    statement: "Maintain cloud spend within approved budget"
 
 spec:
   inputs:
@@ -130,7 +143,8 @@ blocking CI/CD pipelines automatically.
 ### verdict evaluate
 
 Evaluate a Terraform plan or CloudFormation template against a governance policy.
-Plan format is auto-detected from file content — no `--format` flag required.
+Plan format is auto-detected from file content — no `--format` flag required
+for input detection.
 
 ```bash
 verdict evaluate \
@@ -140,15 +154,41 @@ verdict evaluate \
   --current-spend 30.0
 ```
 
+By default, prints a concise human-readable summary to stdout. The full
+artifact is always written to the `--output` file regardless of stdout
+format. For CI/CD pipelines and scripts parsing stdout directly, use
+`--format json`.
+
 |Flag             |Description                                                       |
 |-----------------|------------------------------------------------------------------|
 |`--plan`         |Path to Terraform plan JSON or CloudFormation template (JSON/YAML)|
 |`--policy`       |Path to policy YAML file                                          |
 |`--role`         |Role of the user triggering the deployment                        |
+|`--format`       |Output format for stdout: `text` (default), `json`, or `yaml`     |
 |`--current-spend`|Spend already incurred this month (default: 0.0)                  |
 |`--pricing`      |`table` (default, offline) or `live` (Azure Retail API)           |
 |`--region`       |Cloud region for live pricing (default: eastus)                   |
 |`--output`       |Path to write the audit artifact (default: output/result.json)    |
+
+-----
+
+### verdict explain
+
+Show the full governance reasoning chain for a past decision. Retrieves
+the complete evidence artifact from the local evidence store by decision
+ID — works even if the original `--output` file has since been overwritten.
+
+```bash
+verdict explain <decision_id>
+verdict explain abc3a13b     # short 8-character prefix also works
+```
+
+Shows governance routing (who owns this decision, override availability),
+the full reasoning chain, condition trace, analyzer findings, recommendations,
+and an evidence record with the artifact hash and storage confirmation.
+
+Use `verdict evaluate` for the fast day-to-day decision. Use `verdict explain`
+when you need to understand — or defend — exactly why a decision was made.
 
 -----
 
@@ -324,16 +364,11 @@ Exit codes: `0` pass, `1` fail, `2` evaluation error.
 ### verdict audit
 
 Review governance decisions recorded over time. Verdict stores a local
-history of every evaluation when telemetry is enabled, and `verdict audit`
-turns that history into a governance report.
+history of every evaluation by default, and `verdict audit` turns that
+history into a governance report.
 
-**Enable telemetry first:**
-
-```bash
-export OW_TELEMETRY_ENABLED=true
-```
-
-**Run the audit:**
+Telemetry is **enabled by default**. To disable it, see the
+[Telemetry](#telemetry) section below.
 
 ```bash
 verdict audit
@@ -441,11 +476,17 @@ Risk scorer           Aggregates findings into risk score (0–100)
       ↓
 Decision resolver     5-level governance decision with override routing
       ↓
+Governance objective  Optional: reports whether the policy's declared
+                       organizational objective was upheld or violated
+      ↓
 Explainability        Reasoning chain, trace graph, remediation steps
       ↓
 Notification manifest Stakeholder routing — never dispatched automatically
       ↓
-Audit artifact        Immutable JSON record of the complete evaluation
+Evidence store        Full artifact persisted, retrievable via
+                       verdict explain regardless of --output file state
+      ↓
+Audit artifact         Immutable JSON record of the complete evaluation
 ```
 
 Every stage is deterministic. Analyzers are advisory — they inform
@@ -493,10 +534,13 @@ apiVersion: obsidianwall.io/v1     Protocol version
 kind: Policy                        Always Policy for now
 
 metadata:
-  name:        string               Policy identifier
-  version:     string               Semver string
-  owner:       string               Responsible team
-  description: string               Optional description
+  name:                  string     Policy identifier
+  version:               string     Semver string
+  owner:                 string     Responsible team
+  description:           string     Optional description
+  governance_objective:  dict       Optional. The organizational
+                                     outcome this policy exists to
+                                     achieve. See below.
 
 spec:
   inputs:      list[string]         Runtime context keys required
@@ -507,6 +551,21 @@ spec:
   override:    Override             Roles and approval requirements
   actions:     list[Action]         notify / log actions
 ```
+
+### Governance Objective
+
+Optionally declare the organizational outcome a policy exists to achieve.
+Every decision against the policy reports whether that objective was
+**Upheld**, **Violated**, or **Pending Approval**:
+
+```yaml
+metadata:
+  governance_objective:
+    statement: "Maintain cloud spend within approved budget"
+```
+
+Fully optional. Policies without a declared objective work unchanged —
+the field is simply omitted from the decision output.
 
 ### Governance domains
 
@@ -547,7 +606,9 @@ Context resolution: dot-notation for nested parameters (`budget.amount`)
 
 ## Audit artifact
 
-Every evaluation produces a complete audit artifact:
+Every evaluation produces a complete audit artifact, always written to
+the `--output` file (default: `output/result.json`) regardless of the
+`--format` chosen for stdout:
 
 ```json
 {
@@ -559,6 +620,10 @@ Every evaluation produces a complete audit artifact:
   "override_required":  false,
   "conditions_passed":  false,
   "effective_severity": "critical",
+  "governance_objective": {
+    "statement": "Maintain cloud spend within approved budget",
+    "status":    "Violated"
+  },
   "risk_summary": {
     "overall_risk_score":    75,
     "risk_severity":         "critical",
@@ -575,8 +640,9 @@ Every evaluation produces a complete audit artifact:
 }
 ```
 
-The artifact is written to `output/result.json` and printed to stdout.
-It is suitable for storage in an audit log, S3 bucket, or compliance system.
+Use `--format json` on `verdict evaluate` to print this full artifact
+to stdout, or `verdict explain <decision_id>` to view it as an organized,
+human-readable report retrieved from the local evidence store.
 
 -----
 
@@ -619,11 +685,13 @@ assurance platform.
 │  schemas/      policy DSL and typed contracts       │
 │  context/      Translation Layer (Terraform +       │
 │                CloudFormation auto-detection)        │
-│  telemetry/    local decision history (SQLite)      │
+│  telemetry/    local decision history + evidence    │
+│                store (SQLite)                       │
+│  renderers/    output rendering (text/json/yaml)    │
 │  audit/        structured audit logging             │
 │  cli/          command-line interface               │
 └─────────────────────────────────────────────────────┘
-         ↓ telemetry (opt-in, local SQLite)
+         ↓ telemetry (opt-out, local SQLite)
 ┌─────────────────────────────────────────────────────┐
 │  Intelligence Layer  (future — private)             │
 │                                                     │
@@ -648,12 +716,15 @@ assurance platform.
 
 ## Telemetry
 
-Telemetry is **opt-in** and **disabled by default**. When enabled,
-Verdict records governance decisions to a local SQLite database at
-`~/.obsidianwall/decisions.db`. Nothing is sent anywhere remotely.
+Telemetry is **enabled by default** (opt-out model). Verdict records
+governance decisions to a local SQLite database at
+`~/.obsidianwall/decisions.db`. Nothing is sent anywhere remotely in
+this version.
+
+**To disable telemetry:**
 
 ```bash
-export OW_TELEMETRY_ENABLED=true
+export OW_HISTORY_ENABLED=false
 ```
 
 **What is stored:**
@@ -661,6 +732,13 @@ export OW_TELEMETRY_ENABLED=true
 - Decision outcomes, risk scores, policy names
 - Which conditions passed and which failed
 - Override and approval events
+- A SHA-256 hash of the policy file contents (portable across
+  machines — never the policy contents themselves)
+- A high-level governance family classification (e.g. `cost_governance`,
+  `security_compliance`) — what kind of governance intent is being
+  enforced, not which file was used
+- The full governance artifact, stored separately in a local evidence
+  store — this is what powers `verdict explain`
 
 **What is never stored:**
 
@@ -668,9 +746,13 @@ export OW_TELEMETRY_ENABLED=true
 - Cost amounts or budget values
 - Resource names or identifiers
 - Organization or team identifiers
+- Policy file contents
 
-Telemetry powers `verdict audit`. Without it, `verdict audit` has no
-data to read.
+A one-time disclosure notice is shown on first invocation of any
+`verdict` command, confirming telemetry status and how to disable it.
+
+Telemetry powers `verdict audit` and `verdict explain`. Disabling it
+means both commands have no data to read.
 
 -----
 
@@ -693,7 +775,7 @@ verdict evaluate \
   --role   engineer
 ```
 
-**Test suite:** 737 tests — unit and integration.
+**Test suite:** 823+ tests — unit and integration.
 
 ```bash
 pytest tests/unit/        # unit tests
