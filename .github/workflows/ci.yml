@@ -11,10 +11,13 @@
 #
 # Coverage modules:
 #   engine        core evaluation pipeline
+#   cli           command-line interface
 #   schemas       policy schema validation
 #   audit         audit logger
 #   notifications dispatch channels
 #   telemetry     governance history store
+#   context       evaluation context
+#   render        policy rendering
 #
 # This workflow is the quality gate for all branches.
 # Code that fails here must not be promoted.
@@ -65,10 +68,13 @@ jobs:
         run: |
           python -m pytest tests/ -v \
             --cov=engine \
+            --cov=cli \
             --cov=schemas \
             --cov=audit \
             --cov=notifications \
             --cov=telemetry \
+            --cov=context \
+            --cov=render \
             --cov-report=term-missing \
             --cov-fail-under=90
 

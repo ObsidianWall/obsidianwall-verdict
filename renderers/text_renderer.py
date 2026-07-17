@@ -142,10 +142,10 @@ def render_text(
 
     # Governance Objective — optional, only present if the
     # policy declares metadata.governance_objective.statement
-    governance_objective: dict[str, Any] | None = result.get("governance_objective")
+    governance_objective: dict[str, Any] = result.get("governance_objective", {})
     if governance_objective:
-        obj_status = governance_objective.get("status", "")
         obj_statement = governance_objective.get("statement", "")
+        obj_status = governance_objective.get("status", "")
         lines.append(f"  {_bold('Governance Objective')}  {obj_statement}")
         lines.append(f"  {_bold('Objective Status')}      {obj_status}")
         lines.append("")
@@ -176,13 +176,18 @@ def render_text(
             lines.append(f"    →  {step}")
         lines.append("")
 
-    # Override / approval
+    # Override / approval — framed as an action, not a noun.
+    # Humans scan verbs faster than labels when deciding what
+    # to do next.
     if override_possible and "DENY" in decision:
         notif_roles: list[str] = [
             n.get("target_role", "") for n in notifications if n.get("target_role")
         ]
         if notif_roles:
-            lines.append(f"  {_bold('Override')}  contact {', '.join(notif_roles)}")
+            lines.append(f"  {_bold('Next Step')}")
+            lines.append("    Request override from:")
+            for r in notif_roles:
+                lines.append(f"      • {r}")
             lines.append("")
 
     if requires_approval:

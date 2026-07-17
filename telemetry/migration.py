@@ -2,20 +2,21 @@
 #
 # Purpose:
 # Automatic one-time migration from the v0.5.x schema
-# (decisions, overrides, approvals, outcomes) to the v0.6.0
-# Sentinel schema (governance_records, governance_record_revisions).
+# (decisions, overrides, approvals, outcomes,
+# decision_artifacts) to the v0.6.0 Sentinel schema
+# (governance_records, governance_history,
+# governance_evidence).
 #
-# Unlike a standalone script, this module ships INSIDE the
-# installed package and runs automatically — the same pattern
-# as the first-run telemetry notice. A pip-installed user
-# never needs repo access or to run anything manually.
+# Ships inside the installed package and runs automatically
+# — same pattern as the first-run telemetry notice. A
+# pip-installed user never needs repo access or to run
+# anything manually.
 #
 # Trigger:
 # Called from cli/main.py's app callback, alongside
 # show_first_run_notice_if_needed(). Runs before any command
 # executes. Checks a marker file to ensure it only attempts
-# migration once per machine, even if migration is skipped
-# or fails.
+# migration once per machine.
 #
 # Safety:
 # - Creates a timestamped backup of decisions.db before
@@ -28,7 +29,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 import sys
@@ -38,7 +38,11 @@ from pathlib import Path
 from typing import Any
 
 from telemetry.config import get_db_dir, get_db_path
-from telemetry.governance_store import _hash_revision_data, init_governance_db
+from telemetry.governance_store import (
+    _hash_history_data,
+    hash_objective_statement,
+    init_governance_db,
+)
 
 _MIGRATION_MARKER = "migrated_v060"
 
@@ -48,32 +52,31 @@ def _marker_path() -> Path:
 
 
 def _needs_migration(db_path: Path) -> bool:
-    """
-    Return True if the old v0.5.x 'decisions' table exists
-    and has not yet been migrated (no marker file present).
-    """
+    """Return True if the old 'decisions' table exists and
+    has not yet been migrated (no marker file present)."""
     if _marker_path().exists():
         return False
 
     if not db_path.exists():
         return False
 
+    conn = None
     try:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'"
         )
         exists = cursor.fetchone() is not None
-        conn.close()
         return exists
     except Exception:
         return False
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _backup_database(db_path: Path) -> Path | None:
-    """Create a timestamped backup before migration. Returns
-    the backup path, or None if the backup could not be created
-    (in which case migration should not proceed)."""
+    """Create a timestamped backup before migration."""
     try:
         import shutil
 
@@ -93,50 +96,54 @@ def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return cursor.fetchone() is not None
 
 
-def _append_migrated_revision(
+def _append_migrated_history(
     conn: sqlite3.Connection,
     record_id: str,
-    revision_type: str,
-    revision_data: dict[str, Any],
+    history_category: str,
+    history_action: str,
+    history_data: dict[str, Any],
     timestamp: str,
 ) -> None:
-    """Append a revision during migration with correct sequencing."""
+    """Append a history entry during migration with correct
+    sequencing and hash chaining."""
     cursor = conn.execute(
         """
-        SELECT MAX(revision_number) as max_rev
-        FROM governance_record_revisions WHERE record_id = ?
+        SELECT MAX(history_number) as max_num
+        FROM governance_history WHERE record_id = ?
         """,
         (record_id,),
     )
     row = cursor.fetchone()
-    next_num = (row["max_rev"] or 0) + 1
+    next_num = (row["max_num"] or 0) + 1
 
     prev_hash_row = conn.execute(
         """
-        SELECT revision_hash FROM governance_record_revisions
-        WHERE record_id = ? ORDER BY revision_number DESC LIMIT 1
+        SELECT history_hash FROM governance_history
+        WHERE record_id = ? ORDER BY history_number DESC LIMIT 1
         """,
         (record_id,),
     ).fetchone()
-    prev_hash = prev_hash_row["revision_hash"] if prev_hash_row else None
+    prev_hash = prev_hash_row["history_hash"] if prev_hash_row else None
 
-    revision_hash = _hash_revision_data(revision_data)
+    history_hash = _hash_history_data(history_data)
 
     conn.execute(
         """
-        INSERT INTO governance_record_revisions (
-            revision_id, record_id, revision_number,
-            revision_type, revision_data, revision_hash,
-            prev_revision_hash, actor_role, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
+        INSERT INTO governance_history (
+            history_id, record_id, history_number,
+            history_category, history_action,
+            history_data, history_hash,
+            prev_history_hash, actor_role, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
         """,
         (
             str(uuid.uuid4()),
             record_id,
             next_num,
-            revision_type,
-            json.dumps(revision_data, default=str),
-            revision_hash,
+            history_category,
+            history_action,
+            json.dumps(history_data, default=str),
+            history_hash,
             prev_hash,
             timestamp,
         ),
@@ -145,10 +152,12 @@ def _append_migrated_revision(
     conn.execute(
         """
         UPDATE governance_records
-        SET current_revision_number = ?, current_revision_type = ?
+        SET current_history_number = ?,
+            current_history_category = ?,
+            current_history_action = ?
         WHERE record_id = ?
         """,
-        (next_num, revision_type, record_id),
+        (next_num, history_category, history_action, record_id),
     )
 
 
@@ -169,20 +178,32 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
         if existing is not None:
             continue
 
+        objective_statement = None  # not present in v0.5.x decisions table
+        objective_hash = hash_objective_statement(objective_statement)
+
+        is_risk_candidate = 1 if (
+            row.get("decision", "") == "DENY_WITH_OVERRIDE"
+            and row.get("override_possible")
+        ) else 0
+
         conn.execute(
             """
             INSERT INTO governance_records (
                 record_id, policy_name, policy_content_hash,
                 policy_family, artifact_hash,
                 governance_objective_statement,
+                governance_objective_hash,
                 decision, conditions_passed, overall_risk_score,
                 effective_severity, governance_severity,
                 override_possible, requires_approval,
                 plan_hash, user_role, verdict_version,
-                created_at, current_revision_number,
-                current_revision_type
+                created_at, analyzer_scores, failed_conditions,
+                passed_conditions, is_risk_acceptance_candidate,
+                current_history_number,
+                current_history_category, current_history_action
             ) VALUES (
-                ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 'CREATED'
+                ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 1,
+                'decision', 'created'
             )
             """,
             (
@@ -190,6 +211,8 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
                 row.get("policy_name", ""),
                 row.get("policy_content_hash"),
                 row.get("policy_family"),
+                objective_statement,
+                objective_hash,
                 row.get("decision", ""),
                 row.get("conditions_passed", 0),
                 row.get("overall_risk_score", 0),
@@ -200,29 +223,34 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
                 row.get("plan_hash"),
                 row.get("user_role"),
                 row.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                row.get("analyzer_scores"),
+                row.get("failed_conditions"),
+                row.get("passed_conditions"),
+                is_risk_candidate,
             ),
         )
 
-        revision_data = {
+        history_data = {
             "decision": row.get("decision", ""),
             "policy": row.get("policy_name", ""),
             "migrated_from": "v0.5.x decisions table",
         }
-        revision_hash = _hash_revision_data(revision_data)
+        history_hash = _hash_history_data(history_data)
 
         conn.execute(
             """
-            INSERT INTO governance_record_revisions (
-                revision_id, record_id, revision_number,
-                revision_type, revision_data, revision_hash,
-                prev_revision_hash, actor_role, created_at
-            ) VALUES (?, ?, 1, 'CREATED', ?, ?, NULL, NULL, ?)
+            INSERT INTO governance_history (
+                history_id, record_id, history_number,
+                history_category, history_action,
+                history_data, history_hash,
+                prev_history_hash, actor_role, created_at
+            ) VALUES (?, ?, 1, 'decision', 'created', ?, ?, NULL, NULL, ?)
             """,
             (
                 str(uuid.uuid4()),
                 record_id,
-                json.dumps(revision_data, default=str),
-                revision_hash,
+                json.dumps(history_data, default=str),
+                history_hash,
                 row.get("timestamp", datetime.now(timezone.utc).isoformat()),
             ),
         )
@@ -232,45 +260,73 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
     return migrated
 
 
-def _migrate_workflow_table(
-    conn: sqlite3.Connection,
-    table_name: str,
-    type_field: str,
-    approved_type: str,
-    denied_type: str,
-) -> int:
-    """Shared logic for migrating overrides and approvals tables."""
-    if not _table_exists(conn, table_name):
+def _migrate_overrides(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "overrides"):
         return 0
 
     rows = [
         dict(r)
         for r in conn.execute(
-            f"SELECT * FROM {table_name} ORDER BY timestamp ASC"
+            "SELECT * FROM overrides ORDER BY timestamp ASC"
         ).fetchall()
     ]
     migrated = 0
 
     for row in rows:
         record_id = row["decision_id"]
-        parent_exists = conn.execute(
+        if conn.execute(
             "SELECT record_id FROM governance_records WHERE record_id = ?",
             (record_id,),
-        ).fetchone()
-        if parent_exists is None:
+        ).fetchone() is None:
             continue
 
-        revision_type = approved_type if row.get("approved") else denied_type
-        revision_data = {
-            k: v for k, v in row.items() if k not in ("id", "decision_id")
+        action = "approved" if row.get("approved") else "denied"
+        history_data = {
+            "override_role": row.get("override_role"),
+            "approved": bool(row.get("approved")),
+            "migrated_from": "v0.5.x overrides table",
         }
-        revision_data["migrated_from"] = f"v0.5.x {table_name} table"
 
-        _append_migrated_revision(
-            conn,
-            record_id,
-            revision_type,
-            revision_data,
+        _append_migrated_history(
+            conn, record_id, "override", action, history_data,
+            row.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        )
+        migrated += 1
+
+    conn.commit()
+    return migrated
+
+
+def _migrate_approvals(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "approvals"):
+        return 0
+
+    rows = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM approvals ORDER BY timestamp ASC"
+        ).fetchall()
+    ]
+    migrated = 0
+
+    for row in rows:
+        record_id = row["decision_id"]
+        if conn.execute(
+            "SELECT record_id FROM governance_records WHERE record_id = ?",
+            (record_id,),
+        ).fetchone() is None:
+            continue
+
+        action = "approved" if row.get("approved") else "denied"
+        history_data = {
+            "approver_role": row.get("approver_role"),
+            "approved": bool(row.get("approved")),
+            "notes": row.get("notes"),
+            "migrated_from": "v0.5.x approvals table",
+        }
+
+        _append_migrated_history(
+            conn, record_id, "approval", action, history_data,
             row.get("timestamp", datetime.now(timezone.utc).isoformat()),
         )
         migrated += 1
@@ -291,21 +347,21 @@ def _migrate_outcomes(conn: sqlite3.Connection) -> int:
     ]
     migrated = 0
 
-    outcome_type_map = {"drift_detected": "DRIFT_DETECTED"}
-
     for row in rows:
         record_id = row["decision_id"]
-        parent_exists = conn.execute(
+        if conn.execute(
             "SELECT record_id FROM governance_records WHERE record_id = ?",
             (record_id,),
-        ).fetchone()
-        if parent_exists is None:
+        ).fetchone() is None:
             continue
 
         outcome_type = row.get("outcome_type", "")
-        revision_type = outcome_type_map.get(outcome_type, "OUTCOME_OBSERVED")
+        if outcome_type == "drift_detected":
+            category, action = "drift", "detected"
+        else:
+            category, action = "outcome", "observed"
 
-        revision_data = {
+        history_data = {
             "outcome_type": outcome_type,
             "severity": row.get("severity"),
             "description": row.get("description"),
@@ -313,12 +369,59 @@ def _migrate_outcomes(conn: sqlite3.Connection) -> int:
             "migrated_from": "v0.5.x outcomes table",
         }
 
-        _append_migrated_revision(
-            conn,
-            record_id,
-            revision_type,
-            revision_data,
+        _append_migrated_history(
+            conn, record_id, category, action, history_data,
             row.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        )
+        migrated += 1
+
+    conn.commit()
+    return migrated
+
+
+def _migrate_decision_artifacts(conn: sqlite3.Connection) -> int:
+    """
+    Rename/migrate v0.5.2's decision_artifacts table into the
+    new governance_evidence table. Same shape, new name and
+    column names — folded into this migration since it's
+    already running, rather than requiring its own pass later.
+    """
+    if not _table_exists(conn, "decision_artifacts"):
+        return 0
+
+    rows = [
+        dict(r)
+        for r in conn.execute("SELECT * FROM decision_artifacts").fetchall()
+    ]
+    migrated = 0
+
+    for row in rows:
+        record_id = row.get("decision_id")
+        if record_id is None:
+            continue
+        if conn.execute(
+            "SELECT record_id FROM governance_records WHERE record_id = ?",
+            (record_id,),
+        ).fetchone() is None:
+            continue
+
+        conn.execute(
+            """
+            INSERT INTO governance_evidence (
+                evidence_id, record_id, evidence_type,
+                evidence_json, evidence_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                record_id,
+                row.get("artifact_type", "evaluation"),
+                row.get("artifact_json", "{}"),
+                row.get("artifact_hash"),
+                row.get(
+                    "created_at", datetime.now(timezone.utc).isoformat()
+                ),
+            ),
         )
         migrated += 1
 
@@ -329,22 +432,38 @@ def _migrate_outcomes(conn: sqlite3.Connection) -> int:
 def _verify_and_finalize(conn: sqlite3.Connection) -> bool:
     """
     Confirm row counts match, then drop old tables if safe.
-    Returns True if migration completed and old tables were
-    dropped. Returns False if verification failed — in that
-    case old tables are preserved and NOT dropped.
+    Returns False (preserving old tables) if verification fails.
     """
-    old_count = 0
+    old_decisions = 0
     if _table_exists(conn, "decisions"):
-        old_count = conn.execute("SELECT COUNT(*) as c FROM decisions").fetchone()["c"]
+        old_decisions = conn.execute(
+            "SELECT COUNT(*) as c FROM decisions"
+        ).fetchone()["c"]
 
-    new_count = conn.execute(
+    new_records = conn.execute(
         "SELECT COUNT(*) as c FROM governance_records"
     ).fetchone()["c"]
 
-    if old_count > new_count:
+    if old_decisions > new_records:
         return False
 
-    for table in ("decisions", "overrides", "approvals", "outcomes"):
+    old_artifacts = 0
+    if _table_exists(conn, "decision_artifacts"):
+        old_artifacts = conn.execute(
+            "SELECT COUNT(*) as c FROM decision_artifacts"
+        ).fetchone()["c"]
+
+    new_evidence = conn.execute(
+        "SELECT COUNT(*) as c FROM governance_evidence"
+    ).fetchone()["c"]
+
+    if old_artifacts > new_evidence:
+        return False
+
+    for table in (
+        "decisions", "overrides", "approvals", "outcomes",
+        "decision_artifacts",
+    ):
         if _table_exists(conn, table):
             conn.execute(f"DROP TABLE {table}")
     conn.commit()
@@ -354,22 +473,15 @@ def _verify_and_finalize(conn: sqlite3.Connection) -> bool:
 def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None:
     """
     Check whether migration is needed and run it automatically
-    if so. Safe to call on every CLI invocation — this is a
-    no-op after the first successful run (or after any run
-    where the old schema is absent).
-
-    This is the function cli/main.py calls in its app callback,
-    the same way it calls show_first_run_notice_if_needed().
-
-    Args:
-        db_path: optional path override (for testing)
-        silent:  if True, suppress console output (used in tests)
+    if so. Safe to call on every CLI invocation — a no-op after
+    the first successful run or when the old schema is absent.
 
     Never raises — migration failures must not crash the CLI.
     On failure, the marker file is not written, so migration
     is retried on the next invocation.
     """
     path = db_path or get_db_path()
+    conn = None
 
     try:
         if not _needs_migration(path):
@@ -399,18 +511,12 @@ def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None
         conn.execute("PRAGMA foreign_keys=ON")
 
         decisions_migrated = _migrate_decisions(conn)
-        overrides_migrated = _migrate_workflow_table(
-            conn, "overrides", "override_role",
-            "OVERRIDE_APPROVED", "OVERRIDE_DENIED",
-        )
-        approvals_migrated = _migrate_workflow_table(
-            conn, "approvals", "approver_role",
-            "APPROVAL_GRANTED", "APPROVAL_DENIED",
-        )
+        overrides_migrated = _migrate_overrides(conn)
+        approvals_migrated = _migrate_approvals(conn)
         outcomes_migrated = _migrate_outcomes(conn)
+        evidence_migrated = _migrate_decision_artifacts(conn)
 
         success = _verify_and_finalize(conn)
-        conn.close()
 
         if success:
             _marker_path().touch()
@@ -419,7 +525,8 @@ def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None
                     f"Migration complete: {decisions_migrated} decision(s), "
                     f"{overrides_migrated} override(s), "
                     f"{approvals_migrated} approval(s), "
-                    f"{outcomes_migrated} outcome(s) preserved.\n"
+                    f"{outcomes_migrated} outcome(s), "
+                    f"{evidence_migrated} evidence record(s) preserved.\n"
                     f"Backup saved at: {backup_path}\n",
                     file=sys.stderr,
                 )
@@ -428,15 +535,13 @@ def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None
                 print(
                     "Migration verification failed — your original data "
                     "is preserved and untouched. This will be retried "
-                    "automatically. Backup saved at: "
-                    f"{backup_path}\n",
+                    f"automatically. Backup saved at: {backup_path}\n",
                     file=sys.stderr,
                 )
 
     except Exception:
-        # Migration must never crash the CLI. If it fails for
-        # any reason, the marker is not written, so it will be
-        # retried on the next invocation. The user's original
-        # data was never touched unless the backup succeeded
-        # and migration completed.
         pass
+
+    finally:
+        if conn is not None:
+            conn.close()

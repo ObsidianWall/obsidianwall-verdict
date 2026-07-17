@@ -56,10 +56,70 @@ def _section_header(title: str) -> str:
     return f"\n{_bold(title.upper())}\n{_dim('─' * 54)}"
 
 
+# =====================================================
+# RECOMMENDATION CATEGORY GROUPING
+#
+# Maps individual recommendation types onto three
+# human-facing categories. This is a rendering-only
+# grouping — it does not change what recommender.py
+# or recommendation_explainer.py compute, only how the
+# explain view presents them. Full Compass-level
+# recommendation MERGING (collapsing multiple findings
+# into one synthesized recommendation) is a separate,
+# larger piece of work — this grouping is the lightweight
+# v0.6.0 step toward that direction.
+# =====================================================
+
+_RECOMMENDATION_CATEGORIES: dict[str, str] = {
+    "budget_exceeded": "Financial",
+    "elevated_projected_cost": "Financial",
+    "cost_optimization": "Financial",
+    "cost_anomaly_review": "Financial",
+    "resource_rightsizing": "Financial",
+    "rightsizing": "Financial",
+    "reserved_capacity": "Financial",
+    "burstable_migration": "Financial",
+    "serverless_candidate": "Financial",
+    "lifecycle_policy": "Financial",
+    "network_segmentation": "Security",
+    "missing_network_segmentation": "Security",
+    "security_posture": "Security",
+    "load_balancer_coverage": "Security",
+    "database_redundancy": "Security",
+    "compute_redundancy": "Security",
+    "enforcement": "Governance",
+    "analyzer_finding": "Governance",
+    "optimization_candidate": "Governance",
+    "observability": "Governance",
+}
+
+_CATEGORY_ORDER = ["Financial", "Security", "Governance", "Other"]
+
+
+def _group_recommendations_by_category(
+    recommendations: list[dict[str, Any]],
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    """
+    Group recommendations into Financial / Security /
+    Governance / Other categories, preserving a stable
+    display order. Unrecognized recommendation types fall
+    into "Other" rather than being dropped.
+    """
+    buckets: dict[str, list[dict[str, Any]]] = {cat: [] for cat in _CATEGORY_ORDER}
+
+    for rec in recommendations:
+        rtype = rec.get("type", "")
+        category = _RECOMMENDATION_CATEGORIES.get(rtype, "Other")
+        buckets[category].append(rec)
+
+    return [(cat, buckets[cat]) for cat in _CATEGORY_ORDER]
+
+
 def render_explain(
     artifact: dict[str, Any],
     artifact_hash: str | None = None,
     recorded_at: str | None = None,
+    chain_verified: bool | None = None,
 ) -> None:
     """
     Render the mid-tier detail view for a stored decision
@@ -109,17 +169,20 @@ def render_explain(
         lines.append("")
         lines.append(f"  {_dim(risk_narrative)}")
 
-    # ---- Governance Objective — optional ----
-    governance_objective: dict[str, Any] | None = artifact.get("governance_objective")
+    # ---- 2. Governance Objective — optional ----
+    # Only present if the policy declares
+    # metadata.governance_objective.statement. Shows WHY
+    # before HOW — the organizational outcome this decision
+    # relates to, and whether it was upheld or violated.
+    governance_objective: dict[str, Any] = artifact.get("governance_objective", {})
     if governance_objective:
-        obj_status = governance_objective.get("status", "")
         obj_statement = governance_objective.get("statement", "")
-        lines.append("")
-        lines.append(f"  {_bold('Governance Objective')}")
+        obj_status = governance_objective.get("status", "")
+        lines.append(_section_header("Governance Objective"))
         lines.append(f"  {obj_statement}")
         lines.append(f"  Objective Status: {_bold(obj_status)}")
 
-    # ---- 2. Governance Routing — moved up front ----
+    # ---- 3. Governance Routing — moved up front ----
     # This is what an engineer needs first: who owns this
     # decision, and is approval or override required.
     notif_manifest: dict[str, Any] = artifact.get("notification_manifest", {})
@@ -149,9 +212,11 @@ def render_explain(
                 }
             )
             if override_roles:
-                lines.append(f"  Override   available via {', '.join(override_roles)}")
+                lines.append("  Next Step  Request override from:")
+                for r in override_roles:
+                    lines.append(f"               • {r}")
 
-    # ---- 3. Governance Reasoning Chain ----
+    # ---- 4. Governance Reasoning Chain ----
     explanation: dict[str, Any] = artifact.get("explanation", {})
     governance_reasoning: dict[str, Any] = explanation.get("governance_reasoning", {})
     reasoning_chain: list[dict[str, Any]] = governance_reasoning.get(
@@ -173,7 +238,7 @@ def render_explain(
                 lines.append(f"     {_dim(reason)}")
             lines.append("")
 
-    # ---- 4. Condition Trace ----
+    # ---- 5. Condition Trace ----
     trace: list[dict[str, Any]] = artifact.get("trace", [])
 
     if trace:
@@ -192,7 +257,7 @@ def render_explain(
                 lines.append(f"     {_dim(expr)}")
             lines.append("")
 
-    # ---- 5. Analyzer Findings ----
+    # ---- 6. Analyzer Findings ----
     analyzer_findings: list[dict[str, Any]] = explanation.get("analyzer_findings", [])
 
     if analyzer_findings:
@@ -207,29 +272,47 @@ def render_explain(
             lines.append(f"     {message}")
             lines.append("")
 
-    # ---- 6. Recommendations — priority tier only ----
+    # ---- 7. Recommendations — grouped by category ----
     # recommendation_confidence and priority_score are
     # deliberately omitted here. They are internal scoring
     # metadata for Compass, not human-facing signal. Both
     # remain available via --format json / --format yaml.
+    #
+    # Recommendations are grouped into three categories
+    # (Financial, Security, Governance) rather than listed
+    # flat. Individual recommendation types (budget_exceeded,
+    # elevated_projected_cost, cost_optimization) often
+    # represent the same underlying issue from different
+    # analyzer angles — grouping collapses that repetition
+    # into one conversation per category instead of six
+    # near-duplicate entries. Full per-finding detail with
+    # zero grouping remains available via --format json.
     explained_recs: dict[str, Any] = explanation.get("explained_recommendations", {})
     all_recs: list[dict[str, Any]] = explained_recs.get("all_recommendations", [])
 
     if all_recs:
         lines.append(_section_header("Recommendations"))
-        for rec in all_recs:
-            rtype: str = rec.get("type", "")
-            message = rec.get("message", "")
-            tier: str = rec.get("priority_tier", "")
-            savings: int = rec.get("estimated_savings_percent", 0)
 
-            lines.append(f"  [{tier.upper()}] {_bold(rtype)}")
-            lines.append(f"     {message}")
-            if savings > 0:
-                lines.append(f"     {_dim(f'Estimated savings: {savings}%')}")
+        grouped = _group_recommendations_by_category(all_recs)
+
+        for category_label, recs_in_category in grouped:
+            if not recs_in_category:
+                continue
+
+            lines.append(f"  {_bold(category_label)}")
+
+            for rec in recs_in_category:
+                message = rec.get("message", "")
+                tier: str = rec.get("priority_tier", "")
+                savings: int = rec.get("estimated_savings_percent", 0)
+
+                lines.append(f"    [{tier.upper()}]  {message}")
+                if savings > 0:
+                    lines.append(f"           {_dim(f'Estimated savings: {savings}%')}")
+
             lines.append("")
 
-    # ---- 7. Evidence ----
+    # ---- 8. Evidence ----
     # Confirms this is governance evidence, not just a
     # policy check result. Artifact hash and recorded_at
     # come from the evidence store (decision_artifacts),
@@ -249,6 +332,16 @@ def render_explain(
     if recorded_at:
         lines.append(f"  Recorded         {recorded_at}")
     lines.append("  Evidence Status  Stored locally")
+
+    # History chain integrity — verify_history_chain() recomputes
+    # every history entry's hash and confirms the chain is intact.
+    # This is real, computed verification (not aspirational text) —
+    # it detects if any past revision was altered after the fact.
+    if chain_verified is not None:
+        integrity_label = (
+            "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
+        )
+        lines.append(f"  Integrity        {integrity_label}")
 
     lines.append("")
     lines.append(_dim("─" * 54))

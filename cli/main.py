@@ -9,15 +9,19 @@
 #   audit      Governance risk summary across recorded decisions
 #   test       Assert expected governance decision
 #   sentinel   Post-deployment reality verification
+#   explain    Show full reasoning chain for a past decision
 #
-# Enterprise design:
-#   Validation explicit      ← compliance requirement
-#   Audit logging intact     ← security requirement
-#   Deterministic execution  ← core architecture
-#   Command separation       ← platform scalability
+# v0.6.0: governance storage moved from telemetry/store.py
+# (decisions/overrides/approvals/outcomes/decision_artifacts)
+# to telemetry/governance_store.py (governance_records +
+# governance_history + governance_evidence). Migration from
+# the old schema runs automatically on first invocation via
+# telemetry/migration.py — no manual steps required for
+# pip-installed users with existing local history.
 
 import importlib.metadata
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +41,12 @@ from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from notifications import dispatch_notifications
 from renderers import SUPPORTED_FORMATS, render
+from telemetry.governance_store import (
+    create_governance_record,
+    record_governance_evidence,
+)
+from telemetry.migration import migrate_if_needed
 from telemetry.notice import show_first_run_notice_if_needed
-from telemetry.store import record_artifact, record_decision
 
 app = typer.Typer(
     name="verdict",
@@ -48,8 +56,8 @@ app = typer.Typer(
 
 # ── Register commands ──────────────────────────────
 app.add_typer(audit_app, name="audit")
-app.add_typer(explain_app, name="explain")
 app.add_typer(sentinel_app, name="sentinel")
+app.add_typer(explain_app, name="explain")
 app.command(name="coverage")(coverage)
 app.command(name="simulate")(simulate)
 app.command(name="test")(test_command)
@@ -74,6 +82,10 @@ def _main(
     ),
 ) -> None:
     """ObsidianWall Verdict — pre-deployment infrastructure governance."""
+    # Runs before any command. migrate_if_needed() is a no-op
+    # after the first successful run or when no old-schema
+    # database is present — safe on every invocation.
+    migrate_if_needed()
     show_first_run_notice_if_needed()
 
 
@@ -142,6 +154,17 @@ def evaluate(
             "Defaults to 0.0."
         ),
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help=(
+            "Show structured INFO-level evaluation logs on stderr "
+            "in addition to the governance decision output. "
+            "Default (off) shows only the decision — matching the "
+            "same logging.disable(logging.INFO) pattern already "
+            "used by verdict sentinel scan."
+        ),
+    ),
 ) -> None:
     """
     Evaluate a Terraform plan against an ObsidianWall policy.
@@ -183,6 +206,13 @@ def evaluate(
           --pricing       live \\
           --region        eastus
     """
+
+    # Suppress structured INFO-level logs by default — the
+    # governance decision output is the point, not the internal
+    # pipeline trace. Same pattern already used by
+    # verdict sentinel scan. --verbose restores full logging.
+    if not verbose:
+        logging.disable(logging.INFO)
 
     try:
         logger.info(
@@ -266,28 +296,36 @@ def evaluate(
             json.dump(result, f, indent=2, default=str)
 
         # ---------------------------------------------
-        # STEP 5 — Record to governance history
-        # Only writes if history is enabled.
-        # Silently no-ops if disabled.
-        # Never raises — history must not crash CLI.
-        # policy_path stored so Sentinel can reload
-        # the policy without user re-specifying it.
+        # STEP 5 — Record governance decision + evidence
+        #
+        # v0.6.0: create_governance_record() replaces
+        # record_decision() from v0.5.x — writes the
+        # governance_records row and its first (CREATED)
+        # history entry in one call. policy_content_hash
+        # and policy_family are auto-computed internally
+        # from policy_path, matching the old function's
+        # call simplicity.
+        #
+        # record_governance_evidence() replaces
+        # record_artifact() from v0.5.2 — stores the full
+        # artifact, retrievable later by verdict explain
+        # regardless of whether the --output file still
+        # exists on disk.
+        #
+        # Both never raise — governance recording must not
+        # crash the CLI.
         # ---------------------------------------------
 
-        record_decision(
+        create_governance_record(
             result=result,
             plan_path=plan,
             policy_path=policy,
         )
 
-        # Store the full artifact as evidence, linked to this
-        # decision. Powers `verdict explain`. See telemetry/
-        # store.py module docstring for the Decision vs.
-        # Evidence design rationale.
-        record_artifact(
-            decision_id=result.get("decision_id", ""),
-            artifact=result,
-            artifact_type="evaluation",
+        record_governance_evidence(
+            record_id=result.get("decision_id", ""),
+            evidence=result,
+            evidence_type="evaluation",
         )
 
         # ---------------------------------------------

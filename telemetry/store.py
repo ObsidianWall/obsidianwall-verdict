@@ -413,6 +413,7 @@ def record_decision(
     if not is_telemetry_enabled():
         return False
 
+    conn = None
     try:
         decision_id = result.get("decision_id", "")
         if not decision_id:
@@ -509,7 +510,6 @@ def record_decision(
         )
 
         conn.commit()
-        conn.close()
         return True
 
     except Exception:
@@ -517,6 +517,10 @@ def record_decision(
         # Silently return False — the evaluation result
         # has already been printed to stdout.
         return False
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =====================================================
@@ -560,6 +564,7 @@ def record_artifact(
     if not is_telemetry_enabled():
         return False
 
+    conn = None
     try:
         artifact_json = json.dumps(artifact, default=str)
         artifact_hash = hashlib.sha256(artifact_json.encode("utf-8")).hexdigest()[:16]
@@ -582,11 +587,14 @@ def record_artifact(
             ),
         )
         conn.commit()
-        conn.close()
         return True
 
     except Exception:
         return False
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =====================================================
@@ -616,6 +624,7 @@ def record_override(
     if not is_telemetry_enabled():
         return False
 
+    conn = None
     try:
         conn = init_db(db_path)
         conn.execute(
@@ -634,11 +643,14 @@ def record_override(
             ),
         )
         conn.commit()
-        conn.close()
         return True
 
     except Exception:
         return False
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def record_approval(
@@ -665,6 +677,7 @@ def record_approval(
     if not is_telemetry_enabled():
         return False
 
+    conn = None
     try:
         conn = init_db(db_path)
         conn.execute(
@@ -684,11 +697,14 @@ def record_approval(
             ),
         )
         conn.commit()
-        conn.close()
         return True
 
     except Exception:
         return False
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =====================================================
@@ -737,6 +753,7 @@ def record_outcome(
     if not is_telemetry_enabled():
         return False
 
+    conn = None
     try:
         conn = init_db(db_path)
         conn.execute(
@@ -757,11 +774,14 @@ def record_outcome(
             ),
         )
         conn.commit()
-        conn.close()
         return True
 
     except Exception:
         return False
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =====================================================
@@ -852,6 +872,7 @@ def get_artifact(
         for this decision_id and artifact_type, or if the
         stored JSON fails to parse.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -864,7 +885,6 @@ def get_artifact(
             (decision_id, artifact_type),
         )
         row = cursor.fetchone()
-        conn.close()
 
         if not row:
             return None
@@ -873,6 +893,10 @@ def get_artifact(
 
     except Exception:
         return None
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def get_artifact_metadata(
@@ -901,6 +925,7 @@ def get_artifact_metadata(
         or None if no artifact exists for this decision_id
         and artifact_type.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -913,7 +938,6 @@ def get_artifact_metadata(
             (decision_id, artifact_type),
         )
         row = cursor.fetchone()
-        conn.close()
 
         if not row:
             return None
@@ -925,6 +949,10 @@ def get_artifact_metadata(
 
     except Exception:
         return None
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def list_artifact_types(
@@ -942,6 +970,7 @@ def list_artifact_types(
 
     Returns an empty list if no artifacts exist or on error.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -952,10 +981,13 @@ def list_artifact_types(
             (decision_id,),
         )
         rows = [row["artifact_type"] for row in cursor.fetchall()]
-        conn.close()
         return rows
     except Exception:
         return []
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =====================================================
@@ -971,6 +1003,7 @@ def get_recent_decisions(
     Return most recent governance decisions, newest first.
     Powers the decision history section of verdict audit.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -978,10 +1011,13 @@ def get_recent_decisions(
             (limit,),
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
         return rows
     except Exception:
         return []
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def get_policy_effectiveness(
@@ -995,6 +1031,7 @@ def get_policy_effectiveness(
     If policy_name is provided, returns a single policy summary.
     Otherwise returns all policies sorted by evaluation volume.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         if policy_name:
@@ -1033,10 +1070,13 @@ def get_policy_effectiveness(
                 """
             )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
         return rows
     except Exception:
         return []
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def get_decision_by_id(
@@ -1055,6 +1095,7 @@ def get_decision_by_id(
     artifact (reasoning chains, trace graphs, explained
     recommendations), use get_artifact() instead.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1063,7 +1104,6 @@ def get_decision_by_id(
         )
         row = cursor.fetchone()
         if not row:
-            conn.close()
             return None
 
         result = dict(row)
@@ -1074,10 +1114,13 @@ def get_decision_by_id(
         )
         result["outcomes"] = [dict(r) for r in outcomes_cursor.fetchall()]
 
-        conn.close()
         return result
     except Exception:
         return None
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def get_domain_risk_summary(
@@ -1091,6 +1134,7 @@ def get_domain_risk_summary(
     Analyzer scores are stored as JSON per decision and
     unpacked here for domain-level aggregation.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1105,7 +1149,6 @@ def get_domain_risk_summary(
             """
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
 
         if not rows:
             return {}
@@ -1138,6 +1181,10 @@ def get_domain_risk_summary(
     except Exception:
         return {}
 
+    finally:
+        if conn is not None:
+            conn.close()
+
 
 def get_failed_conditions_summary(
     db_path: Path | None = None,
@@ -1150,6 +1197,7 @@ def get_failed_conditions_summary(
     a failure rate expressed as a percentage of all decisions
     that recorded any failed conditions.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1160,7 +1208,6 @@ def get_failed_conditions_summary(
             """
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
 
         if not rows:
             return []
@@ -1192,6 +1239,10 @@ def get_failed_conditions_summary(
     except Exception:
         return []
 
+    finally:
+        if conn is not None:
+            conn.close()
+
 
 def get_passed_conditions_summary(
     db_path: Path | None = None,
@@ -1204,6 +1255,7 @@ def get_passed_conditions_summary(
     a pass rate expressed as a percentage of all decisions
     that recorded any passed conditions.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1214,7 +1266,6 @@ def get_passed_conditions_summary(
             """
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
 
         if not rows:
             return []
@@ -1246,6 +1297,10 @@ def get_passed_conditions_summary(
     except Exception:
         return []
 
+    finally:
+        if conn is not None:
+            conn.close()
+
 
 def get_outcome_summary(
     db_path: Path | None = None,
@@ -1258,6 +1313,7 @@ def get_outcome_summary(
     verification — this query returns meaningful data only
     after Sentinel has been run against at least one decision.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1269,10 +1325,13 @@ def get_outcome_summary(
             """
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
         return rows
     except Exception:
         return []
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def get_outcome_correlation(
@@ -1290,6 +1349,7 @@ def get_outcome_correlation(
     Only returns data for decisions that have at least
     one outcome recorded by Sentinel.
     """
+    conn = None
     try:
         conn = init_db(db_path)
         cursor = conn.execute(
@@ -1306,7 +1366,10 @@ def get_outcome_correlation(
             """
         )
         rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
         return rows
     except Exception:
         return []
+
+    finally:
+        if conn is not None:
+            conn.close()

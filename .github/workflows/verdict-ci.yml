@@ -134,10 +134,15 @@ jobs:
   #
   # Coverage measured across:
   #   engine/        core evaluation pipeline
+  #   cli/           command-line interface
   #   schemas/       policy schema validation
   #   audit/         audit logger
   #   notifications/ dispatch channels
   #   telemetry/     governance history store
+  #   context/         evaluation context
+  #   render/          policy rendering
+  #
+  # Coverage gate enforces minimum 90% coverage across all modules.
   # ===================================================
 
   test:
@@ -169,10 +174,13 @@ jobs:
         run: |
           python -m pytest tests/ -v \
             --cov=engine \
+            --cov=cli \
             --cov=schemas \
             --cov=audit \
             --cov=notifications \
             --cov=telemetry \
+            --cov=context \
+            --cov=render \
             --cov-report=term-missing \
             --cov-fail-under=90
 

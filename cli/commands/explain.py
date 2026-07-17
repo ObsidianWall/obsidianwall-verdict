@@ -3,15 +3,16 @@
 # Purpose:
 # CLI command: verdict explain
 #
-# Retrieves the full evidence artifact for a past governance
-# decision by decision_id and renders a mid-tier detail view —
-# richer than the default evaluate text summary, but organized
-# for human reading rather than a raw JSON dump.
+# Retrieves the full evidence for a past governance decision
+# by decision_id and renders a mid-tier detail view — richer
+# than the default evaluate text summary, but organized for
+# human reading rather than a raw JSON dump.
 #
-# Reads from the evidence store (decision_artifacts table),
-# not from the --output file — so this works even if the
-# original file has been overwritten or deleted. See
-# telemetry/store.py module docstring for the Decision vs.
+# v0.6.0: reads from telemetry/governance_store.py
+# (governance_records + governance_evidence), not from the
+# --output file — so this works even if the original file has
+# been overwritten or deleted. See telemetry/governance_store.py
+# module docstring for the Governance Record / History /
 # Evidence design rationale.
 #
 # Usage:
@@ -20,7 +21,7 @@
 #
 # Exit codes:
 #   0   Decision found and explained
-#   1   Decision or artifact not found
+#   1   Decision or evidence not found
 
 from __future__ import annotations
 
@@ -29,7 +30,12 @@ from typing import Any
 
 import typer
 
-from telemetry.store import get_artifact, get_artifact_metadata, get_decision_by_id
+from telemetry.governance_store import (
+    get_governance_evidence,
+    get_governance_evidence_metadata,
+    get_governance_record,
+    verify_history_chain,
+)
 
 explain_app = typer.Typer(
     name="explain",
@@ -44,24 +50,30 @@ def _find_full_decision_id(short_id: str) -> str | None:
     a full decision_id.
 
     If short_id is already a full UUID and matches a stored
-    decision, returns it unchanged. Otherwise searches recent
-    decisions for a matching prefix.
+    record, returns it unchanged. Otherwise searches recent
+    records for a matching prefix.
 
     Returns None if no match is found.
     """
     # Try exact match first — handles full UUIDs directly.
-    exact = get_decision_by_id(short_id)
+    exact = get_governance_record(short_id)
     if exact is not None:
         return short_id
 
-    # Fall back to prefix search across recent decisions.
-    from telemetry.store import get_recent_decisions
+    # Fall back to prefix search across recent records.
+    from telemetry.governance_store import init_governance_db
 
-    recent = get_recent_decisions(limit=500)
-    matches = [d for d in recent if d.get("id", "").startswith(short_id)]
+    conn = init_governance_db()
+    cursor = conn.execute(
+        "SELECT record_id FROM governance_records ORDER BY created_at DESC LIMIT 500"
+    )
+    recent_ids = [row["record_id"] for row in cursor.fetchall()]
+    conn.close()
+
+    matches = [rid for rid in recent_ids if rid.startswith(short_id)]
 
     if len(matches) == 1:
-        return matches[0]["id"]
+        return matches[0]
 
     return None
 
@@ -89,11 +101,11 @@ def explain(
     """
     Show the full reasoning chain for a past governance decision.
 
-    Retrieves the complete evidence artifact from the local
-    evidence store and renders governance reasoning, condition
-    trace, analyzer findings, and recommendations with
-    confidence scores — everything the default evaluate
-    summary intentionally leaves out.
+    Retrieves the complete evidence from the local governance
+    store and renders governance reasoning, condition trace,
+    analyzer findings, and recommendations with confidence
+    scores — everything the default evaluate summary
+    intentionally leaves out.
 
     Examples:
 
@@ -109,24 +121,33 @@ def explain(
         _print_not_found(decision_id)
         raise typer.Exit(code=1)
 
-    artifact: dict[str, Any] | None = get_artifact(full_id, artifact_type="evaluation")
+    artifact: dict[str, Any] | None = get_governance_evidence(
+        full_id, evidence_type="evaluation"
+    )
 
     if artifact is None:
         print(
             f"Decision '{full_id}' was found, but no evidence "
-            f"artifact is stored for it. This can happen for "
-            f"decisions recorded before v0.5.2, or if telemetry "
-            f"was disabled at evaluation time.",
+            f"is stored for it. This can happen for decisions "
+            f"recorded before v0.5.2, or if telemetry was "
+            f"disabled at evaluation time.",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
 
-    metadata = get_artifact_metadata(full_id, artifact_type="evaluation")
+    metadata = get_governance_evidence_metadata(full_id, evidence_type="evaluation")
+
+    # Verify the governance history chain's tamper-evidence.
+    # This recomputes every history entry's hash and confirms
+    # the chain is intact — real computed verification, shown
+    # in the Evidence section as "Integrity: Verified".
+    chain_result = verify_history_chain(full_id)
 
     from renderers.explain_renderer import render_explain
 
     render_explain(
         artifact,
-        artifact_hash=metadata.get("artifact_hash") if metadata else None,
+        artifact_hash=metadata.get("evidence_hash") if metadata else None,
         recorded_at=metadata.get("created_at") if metadata else None,
+        chain_verified=chain_result.get("verified"),
     )

@@ -6,27 +6,26 @@
 # Sentinel asks: "Did reality align with the governance decision?"
 # Verdict asks:  "Should this deployment be allowed?"
 #
-# These are different questions at different lifecycle stages.
-# Sentinel never creates new governance decisions — it records
-# outcomes against existing decisions. This keeps the telemetry
-# streams cleanly separated:
+# v0.6.0: reads from telemetry/governance_store.py
+# (governance_records + governance_history), replacing the
+# v0.5.x telemetry/store.py functions.
 #
-#   verdict evaluate  → decisions table  (what should happen)
-#   sentinel scan     → outcomes table   (what actually happened)
+#   verdict evaluate  → governance_records + governance_history
+#                       (CREATED entry) — what should happen
+#   sentinel scan      → governance_history (outcome / drift
+#                       entries) — what actually happened
+#
+# Field name change: the primary key on a governance record
+# is "record_id", not "id" (the old decisions table's column
+# name). failed_conditions/passed_conditions/analyzer_scores
+# are now stored directly on governance_records, same as the
+# old decisions table — Sentinel reads them the same way it
+# always did, just from the new table.
 #
 # Usage:
-#   # Compare current plan against most recent decision
 #   verdict sentinel scan --plan terraform_plan.json
-#
-#   # Compare against a specific recorded decision
-#   verdict sentinel scan \
-#     --plan        terraform_plan.json \
-#     --decision-id abc3a13b-83d5-4fad-87d8
-#
-#   # Override policy path (for decisions recorded before v0.4.0)
-#   verdict sentinel scan \
-#     --plan   terraform_plan.json \
-#     --policy policies/cost/basic_budget.yaml
+#   verdict sentinel scan --plan terraform_plan.json --decision-id abc3a13b
+#   verdict sentinel scan --plan terraform_plan.json --policy policies/cost/basic_budget.yaml
 #
 # Exit codes:
 #   0   No drift detected
@@ -48,10 +47,10 @@ from engine.policy_loader import load_policy
 from engine.validator import validate_policy
 from notifications import dispatch_notifications
 from telemetry.config import get_db_path, is_telemetry_enabled
-from telemetry.store import (
-    get_decision_by_id,
-    get_recent_decisions,
-    record_outcome,
+from telemetry.governance_store import (
+    add_history_entry,
+    get_governance_record,
+    get_most_recent_record,
 )
 
 sentinel_app = typer.Typer(
@@ -62,16 +61,13 @@ sentinel_app = typer.Typer(
 #
 # Plan-comparison outcomes (Sentinel MVP — no cloud API):
 #   no_drift             — plan state unchanged, decision holds
-#   drift_detected       — conditions or risk score changed
-#   compliance_violation — previously passing conditions now failing
-#   budget_overrun       — cost risk escalated significantly
+#   drift_detected        — conditions or risk score changed
+#   compliance_violation  — previously passing conditions now failing
+#   budget_overrun         — cost risk escalated significantly
 #
 # Reserved for Sentinel with cloud API access (future):
-#   deployment_success   — deployment completed successfully
-#   deployment_failure   — deployment failed post-authorization
-#   security_incident    — security event after allowed deployment
-#   availability_event   — availability impact after deployment
-#   manual_rollback      — deployment manually rolled back
+#   deployment_success, deployment_failure, security_incident,
+#   availability_event, manual_rollback
 
 _OUTCOME_NO_DRIFT = "no_drift"
 _OUTCOME_DRIFT_DETECTED = "drift_detected"
@@ -86,6 +82,23 @@ _RISK_DELTA_THRESHOLD = 20
 _WIDTH = 72
 
 
+# =====================================================
+# History category/action mapping for outcome types
+#
+# governance_history splits events into history_category +
+# history_action rather than one flat outcome_type string.
+# This maps Sentinel's plan-comparison outcomes onto that
+# two-dimensional model.
+# =====================================================
+
+_OUTCOME_TO_HISTORY: dict[str, tuple[str, str]] = {
+    _OUTCOME_NO_DRIFT: ("outcome", "observed"),
+    _OUTCOME_DRIFT_DETECTED: ("drift", "detected"),
+    _OUTCOME_COMPLIANCE_VIOLATION: ("drift", "detected"),
+    _OUTCOME_BUDGET_OVERRUN: ("drift", "detected"),
+}
+
+
 @sentinel_app.command()
 def scan(
     plan: str = typer.Option(
@@ -97,7 +110,7 @@ def scan(
         None,
         "--decision-id",
         help=(
-            "Governance decision ID to compare against. "
+            "Governance record ID to compare against. "
             "Defaults to the most recent recorded decision."
         ),
     ),
@@ -106,8 +119,9 @@ def scan(
         "--policy",
         help=(
             "Policy path override. "
-            "Only required for decisions recorded before v0.4.0 "
-            "when policy_path was not yet stored."
+            "Only required if the stored record has no "
+            "policy_path (should not occur for records "
+            "created under v0.6.0)."
         ),
     ),
     role: str = typer.Option(
@@ -135,12 +149,10 @@ def scan(
     Compare the current infrastructure plan against a previous
     governance decision and detect drift.
 
-    Loads the comparison decision from governance history.
-    Uses the policy path stored in that decision to re-evaluate
-    the current plan — no need to re-specify the policy.
-
-    Records an outcome event to governance history.
-    Does not create a new governance decision.
+    Loads the comparison record from governance history.
+    Re-evaluates the current plan against the same policy.
+    Records an outcome entry to governance history. Does not
+    create a new governance record.
 
     Exit codes:
       0   No drift detected
@@ -157,14 +169,14 @@ def scan(
           --plan        terraform_plan.json \\
           --decision-id abc3a13b-83d5-4fad-87d8
 
-      Override policy for pre-v0.4.0 decisions:
+      Override policy explicitly:
         verdict sentinel scan \\
           --plan   terraform_plan.json \\
           --policy policies/cost/basic_budget.yaml
     """
-
-    # Suppress audit logger output — sentinel output is
-    # the comparison report, not evaluation log events.
+    # Suppress structured INFO logs by default — same pattern
+    # as verdict evaluate's --verbose flag. Sentinel's own
+    # report is the point, not the internal evaluation trace.
     logging.disable(logging.INFO)
 
     # ── Governance history gate ───────────────────────
@@ -173,45 +185,42 @@ def scan(
             "\n  Governance history is disabled.\n"
             "  Sentinel requires decision history to compare against.\n\n"
             "  To enable:\n"
-            "    export OW_HISTORY_ENABLED=true\n\n"
+            "    unset OW_HISTORY_ENABLED\n\n"
             f"  Storage: {get_db_path()}\n"
         )
         raise typer.Exit(code=2)
 
-    # ── Load comparison decision ──────────────────────
+    # ── Load comparison record ────────────────────────
     previous: dict[str, Any] | None = None
-
     if decision_id:
-        previous = get_decision_by_id(decision_id)
+        previous = get_governance_record(decision_id)
         if not previous:
             typer.echo(
-                f"\n  Decision not found: {decision_id}\n"
+                f"\n  Governance record not found: {decision_id}\n"
                 f"  Run 'verdict audit' to see recorded decisions.\n"
             )
             raise typer.Exit(code=2)
     else:
-        recent = get_recent_decisions(limit=1)
-        if not recent:
+        previous = get_most_recent_record()
+        if not previous:
             typer.echo(
-                "\n  No governance decisions found in history.\n"
+                "\n  No governance records found in history.\n"
                 "  Run 'verdict evaluate' first to record a decision.\n"
             )
             raise typer.Exit(code=2)
-        previous = recent[0]
 
     # ── Resolve policy path ───────────────────────────
-    # Use --policy override if provided.
-    # Otherwise load from the stored decision record.
-    # policy_path is stored since v0.4.0 — older decisions
-    # will have NULL and require the --policy fallback.
-
-    policy_path: str | None = policy or previous.get("policy_path")
-
+    # governance_records does not store policy_path directly
+    # (only policy_content_hash, for privacy). --policy is
+    # required unless a future version adds runtime policy
+    # path resolution via the content hash.
+    policy_path: str | None = policy
     if not policy_path:
         typer.echo(
-            "\n  Policy path not found in decision record.\n"
-            "  This decision was recorded before v0.4.0.\n\n"
-            "  Provide the policy path manually:\n"
+            "\n  --policy is required for verdict sentinel scan.\n\n"
+            "  Governance records store a privacy-safe content\n"
+            "  hash of the policy, not the file path. Provide the\n"
+            "  policy path explicitly:\n\n"
             "    verdict sentinel scan \\\n"
             "      --plan   terraform_plan.json \\\n"
             "      --policy <path-to-policy>\n"
@@ -235,24 +244,26 @@ def scan(
             context=context,
             user_role=role,
         )
-
     except Exception as exception:
         typer.echo(
             f"\n  Evaluation error during Sentinel scan.\n  Error: {exception}\n"
         )
         raise typer.Exit(code=2)
 
-    # ── Extract comparison data ───────────────────────
+    # ── Extract comparison data ────────────────────────
+    record_id: str = str(previous.get("record_id", ""))
     previous_decision: str = str(previous.get("decision", ""))
     current_decision: str = str(current_result.get("decision", ""))
-
     previous_risk: int = int(previous.get("overall_risk_score", 0))
     current_risk: int = int(
         current_result.get("risk_summary", {}).get("overall_risk_score", 0)
     )
     risk_delta: int = current_risk - previous_risk
 
-    # Previous conditions from stored history
+    # Previous conditions — now stored directly on
+    # governance_records (analyzer_scores, failed_conditions,
+    # passed_conditions columns), same as they were on the
+    # old decisions table.
     previous_failed: set[str] = set(
         json.loads(previous.get("failed_conditions") or "[]")
     )
@@ -273,47 +284,26 @@ def scan(
         if trace_entry.get("result", True)
     }
 
-    # Conditions that changed state
     new_failures: set[str] = current_failed - previous_failed
     newly_resolved: set[str] = previous_failed - current_failed
 
-    # All conditions seen across both evaluations
     all_conditions: set[str] = (
         previous_failed | previous_passed | current_failed | current_passed
     )
 
-    # ── Determine outcome type ────────────────────────
-    #
-    # compliance_violation: previously passing conditions now failing.
-    #   Highest priority — governance was satisfied before,
-    #   reality has since diverged.
-    #
-    # budget_overrun: cost risk analyzer score increased significantly.
-    #   Indicates the plan's cost profile has grown beyond
-    #   what was previously evaluated.
-    #
-    # drift_detected: any change in conditions or risk score.
-    #   Includes newly resolved conditions (improvement) and
-    #   significant risk score changes in either direction.
-    #
-    # no_drift: plan state matches previous evaluation exactly.
-    #   Neutral — not a success assertion. Sentinel cannot know
-    #   whether a deployment succeeded without cloud API access.
-    #   deployment_success is reserved for future Sentinel versions
-    #   that can observe actual infrastructure state via cloud APIs.
-
+    # ── Determine outcome type ─────────────────────────
     compliance_violation: bool = bool(new_failures)
     drift_detected: bool = bool(new_failures or newly_resolved) or (
         abs(risk_delta) >= _RISK_DELTA_THRESHOLD
     )
 
-    # Budget overrun: cost risk analyzer score increased significantly
     previous_analyzer_scores: dict[str, int] = json.loads(
         previous.get("analyzer_scores") or "{}"
     )
     current_analyzer_scores: dict[str, int] = current_result.get(
         "risk_summary", {}
     ).get("analyzer_scores", {})
+
     previous_cost_risk: int = int(previous_analyzer_scores.get("cost_analysis", 0))
     current_cost_risk: int = int(current_analyzer_scores.get("cost_analysis", 0))
     budget_overrun: bool = (
@@ -330,26 +320,26 @@ def scan(
         outcome_type = _OUTCOME_DRIFT_DETECTED
         outcome_severity = "low"
     else:
-        # No drift detected. Using no_drift rather than deployment_success
-        # because Sentinel cannot observe whether a deployment actually
-        # occurred or succeeded without cloud API access.
         outcome_type = _OUTCOME_NO_DRIFT
         outcome_severity = "informational"
 
-    # ── Record outcome to history ─────────────────────
-    # Sentinel writes ONLY to the outcomes table.
-    # No new decision record is created.
+    # ── Record outcome to governance history ──────────
+    # Sentinel writes ONLY a new history entry — no new
+    # governance record is created.
+    history_category, history_action = _OUTCOME_TO_HISTORY[outcome_type]
 
-    record_outcome(
-        decision_id=str(previous.get("id", "")),
-        outcome_type=outcome_type,
-        severity=outcome_severity,
-        description=(
-            f"Sentinel scan: {outcome_type}. "
-            f"Previous: {previous_decision} (risk {previous_risk}/100). "
-            f"Current: {current_decision} (risk {current_risk}/100)."
-        ),
-        metadata={
+    add_history_entry(
+        record_id=record_id,
+        history_category=history_category,
+        history_action=history_action,
+        history_data={
+            "outcome_type": outcome_type,
+            "severity": outcome_severity,
+            "description": (
+                f"Sentinel scan: {outcome_type}. "
+                f"Previous: {previous_decision} (risk {previous_risk}/100). "
+                f"Current: {current_decision} (risk {current_risk}/100)."
+            ),
             "previous_decision": previous_decision,
             "current_decision": current_decision,
             "previous_risk_score": previous_risk,
@@ -360,14 +350,10 @@ def scan(
             "plan_path": plan,
             "policy_path": policy_path,
         },
+        actor_role="sentinel-scan",
     )
 
-    # ── Dispatch outcome notifications ───────────────
-    # Notify policy stakeholders when drift or violation
-    # is detected. Reuses the same notification targets
-    # (roles and channels) defined in the policy governance
-    # configuration. Silent no-op when no channels configured.
-
+    # ── Dispatch outcome notifications ────────────────
     if outcome_type != _OUTCOME_NO_DRIFT:
         _dispatch_outcome_notifications(
             outcome_type=outcome_type,
@@ -378,11 +364,11 @@ def scan(
             previous_risk=previous_risk,
             current_risk=current_risk,
             new_failures=new_failures,
-            decision_id=str(previous.get("id", "")),
+            decision_id=record_id,
             existing_manifest=current_result.get("notification_manifest", {}),
         )
 
-    # ── Print scan report ─────────────────────────────
+    # ── Print scan report ──────────────────────────────
     _print_scan_report(
         previous=previous,
         current_result=current_result,
@@ -401,10 +387,9 @@ def scan(
         policy_path=policy_path,
     )
 
-    # ── Exit code ─────────────────────────────────────
+    # ── Exit code ───────────────────────────────────────
     if compliance_violation or drift_detected:
         raise typer.Exit(code=1)
-
     raise typer.Exit(code=0)
 
 
@@ -431,44 +416,38 @@ def _print_scan_report(
     policy_path: str,
 ) -> None:
     """Render the Sentinel drift detection report."""
-
-    short_id: str = str(previous.get("id", ""))[:8]
-    timestamp: str = str(previous.get("timestamp", ""))[:19].replace("T", " ")
+    short_id: str = str(previous.get("record_id", ""))[:8]
+    timestamp: str = str(previous.get("created_at", ""))[:19].replace("T", " ")
     policy_name: str = str(previous.get("policy_name", ""))
 
     typer.echo("\n" + "─" * _WIDTH)
     typer.echo("  ObsidianWall Sentinel — Drift Detection Report")
     typer.echo("─" * _WIDTH)
-
     typer.echo(f"\n  Decision:  {short_id}  ({timestamp})")
     typer.echo(f"  Policy:    {policy_name}")
     typer.echo(f"  Plan:      {plan}")
 
-    # ── Decision comparison ───────────────────────────
+    # ── Decision comparison ────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
     typer.echo("  Decision Comparison")
     typer.echo("─" * _WIDTH)
-
     previous_icon: str = decision_icon(previous_decision)
     current_icon: str = decision_icon(current_decision)
-
     typer.echo(
         f"  Previous:  {previous_icon} {previous_decision:<28}  risk: {previous_risk}/100"
     )
     typer.echo(
         f"  Current:   {current_icon} {current_decision:<28}  risk: {current_risk}/100"
     )
-
     risk_delta_string: str = f"+{risk_delta}" if risk_delta > 0 else str(risk_delta)
     if risk_delta != 0:
         typer.echo(f"  Risk delta: {risk_delta_string}")
 
-    # ── Condition comparison ──────────────────────────
+    # ── Condition comparison ───────────────────────────
     if all_conditions:
         typer.echo(f"\n{'─' * _WIDTH}")
         typer.echo("  Condition Comparison")
         typer.echo("─" * _WIDTH)
-
         for condition in sorted(all_conditions):
             was_failing: bool = condition in previous_failed
             is_failing: bool = condition in current_failed
@@ -487,7 +466,7 @@ def _print_scan_report(
 
             typer.echo(f"  {condition:<38}  {previous_symbol} → {current_symbol}{note}")
 
-    # ── Sentinel observation ──────────────────────────
+    # ── Sentinel observation ───────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
     typer.echo("  Sentinel Observation")
     typer.echo("─" * _WIDTH)
@@ -504,7 +483,6 @@ def _print_scan_report(
             "Budget overrun — cost risk increased significantly",
         ),
     }
-
     outcome_icon, outcome_label = _OUTCOME_DISPLAY.get(
         outcome_type, ("ℹ ", outcome_type)
     )
@@ -543,15 +521,9 @@ def _dispatch_outcome_notifications(
 ) -> None:
     """
     Dispatch Sentinel outcome notifications to policy stakeholders.
-
-    Reuses the same notification targets (roles and channels)
-    defined in the policy governance configuration. Builds
-    Sentinel-specific subject and body content so stakeholders
-    receive a clear explanation of what Sentinel observed.
-
-    Only called when outcome_type is not no_drift.
-    Silent no-op if no channels are configured.
-    Never raises.
+    Reuses the same notification targets defined in the policy
+    governance configuration. Silent no-op if no channels are
+    configured. Never raises.
     """
     existing_notifications: list[dict[str, Any]] = existing_manifest.get(
         "notifications", []
@@ -566,7 +538,6 @@ def _dispatch_outcome_notifications(
         _OUTCOME_DRIFT_DETECTED: ("[ObsidianWall Sentinel] Governance Drift Detected"),
         _OUTCOME_BUDGET_OVERRUN: ("[ObsidianWall Sentinel] Budget Overrun Detected"),
     }
-
     _OUTCOME_PRIORITY: dict[str, str] = {
         _OUTCOME_COMPLIANCE_VIOLATION: "urgent",
         _OUTCOME_DRIFT_DETECTED: "high",

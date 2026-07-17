@@ -1,28 +1,16 @@
 # cli/commands/audit.py
 #
 # Purpose:
-# verdict audit command — governance risk summary
-# across all recorded decisions.
+# verdict audit — governance risk audit across recorded decisions.
 #
-# Usage:
-#   verdict audit
-#   verdict audit --insights
-#   verdict audit --policy policies/cost/basic_budget.yaml
-#   verdict audit --limit 100
-#   verdict audit --format json
-#
-# Requires OW_TELEMETRY_ENABLED=true
-# Data source: ~/.obsidianwall/decisions.db
-#
-# Output sections:
-#   Overview             total evaluations, deny rate
-#   Domain Risk Scores   per-domain risk with visual bar
-#   Why Denied/Allowed   top failing and passing conditions
-#   Policy Effectiveness deny rate, override rate per policy
-#   Deployment Outcomes  populated by Sentinel v0.4.0
-#   Recent Decisions     decision history with scores
-#   Governance Insights  what happened and why (--insights)
-#   Recommendations      what to do about it  (--insights)
+# v0.6.0: reads from telemetry/governance_store.py
+# (governance_records + governance_history), replacing the
+# v0.5.x telemetry/store.py functions. Field name changes:
+# the primary key is "record_id" (not "id"); condition and
+# analyzer data now come from governance_records' own
+# analyzer_scores/failed_conditions/passed_conditions columns.
+# Outcome data comes from governance_history entries with
+# history_category in ('outcome', 'drift').
 
 from __future__ import annotations
 
@@ -33,27 +21,20 @@ import typer
 
 from cli.display import decision_icon
 from telemetry.config import get_db_path, is_telemetry_enabled
-from telemetry.store import (
+from telemetry.governance_store import (
     get_domain_risk_summary,
     get_failed_conditions_summary,
     get_outcome_summary,
     get_passed_conditions_summary,
     get_policy_effectiveness,
-    get_recent_decisions,
+    get_recent_records,
 )
 
-# ── Command registration ──────────────────────────────
-# invoke_without_command=True allows `verdict audit` to
-# run the callback directly without a sub-command.
-# Future sub-commands (audit history, audit effectiveness)
-# can be added as @audit_app.command() without refactoring.
 audit_app = typer.Typer(
-    invoke_without_command=True,
     help="Governance risk audit across recorded decisions.",
 )
 
-# ── Constants ─────────────────────────────────────────
-_WIDTH: int = 72
+_WIDTH = 72
 
 _DOMAIN_LABELS: dict[str, str] = {
     "cost_analysis": "Cost",
@@ -63,13 +44,12 @@ _DOMAIN_LABELS: dict[str, str] = {
 }
 
 
-@audit_app.callback()
+@audit_app.callback(invoke_without_command=True)
 def audit(
     policy: Optional[str] = typer.Option(
         None,
         "--policy",
-        "-p",
-        help="Filter audit to a specific policy name.",
+        help="Filter to a specific policy name.",
     ),
     limit: int = typer.Option(
         50,
@@ -96,7 +76,9 @@ def audit(
     """
     Governance risk audit across recorded decisions.
 
-    Requires OW_TELEMETRY_ENABLED=true.
+    Telemetry is enabled by default (opt-out model). See
+    the Telemetry section of the docs to disable it.
+
     Reads from ~/.obsidianwall/decisions.db.
 
     Examples:
@@ -106,14 +88,14 @@ def audit(
       verdict audit --format json
       verdict audit --limit 100
     """
-
     # ── Telemetry gate ────────────────────────────────
     if not is_telemetry_enabled():
         typer.echo(
             "\n  Telemetry is disabled.\n"
             "  verdict audit requires decision history.\n\n"
             "  To enable:\n"
-            "    export OW_HISTORY_ENABLED=true\n\n"
+            "    unset OW_HISTORY_ENABLED\n"
+            "    (or explicitly: export OW_HISTORY_ENABLED=true)\n\n"
             "  What is stored locally:\n"
             "    Decision outcomes, risk scores, policy names,\n"
             "    condition results. No plan contents.\n"
@@ -123,7 +105,7 @@ def audit(
         raise typer.Exit(code=1)
 
     # ── Load data ─────────────────────────────────────
-    recent: list[dict[str, Any]] = get_recent_decisions(limit=limit)
+    recent: list[dict[str, Any]] = get_recent_records(limit=limit)
     effectiveness: list[dict[str, Any]] = get_policy_effectiveness(policy_name=policy)
     domain_summary: dict[str, Any] = get_domain_risk_summary()
     failed_conditions: list[dict[str, Any]] = get_failed_conditions_summary()
@@ -157,7 +139,7 @@ def audit(
             )
             output["insights"] = insight_lines
             output["recommendations"] = rec_lines
-        typer.echo(json.dumps(output, indent=2))
+        typer.echo(json.dumps(output, indent=2, default=str))
         return
 
     # ── Table output ──────────────────────────────────
@@ -191,7 +173,6 @@ def _print_audit_table(
     show_insights: bool,
 ) -> None:
     """Render the governance audit as a formatted table."""
-
     typer.echo("\n" + "─" * _WIDTH)
     typer.echo("  ObsidianWall Verdict — Governance Audit")
     if policy_filter:
@@ -278,9 +259,9 @@ def _print_audit_table(
                 f"{over_pct:>8.1f}%  {deny_pct:>5.1f}%"
             )
 
-    # ── Deployment outcomes ───────────────────────────
+    # ── Deployment outcomes ────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
-    typer.echo("  Deployment Outcomes  (populated by Sentinel v0.4.0)")
+    typer.echo("  Deployment Outcomes  (populated by verdict sentinel scan)")
     typer.echo("─" * _WIDTH)
     if outcomes:
         typer.echo(f"  {'Outcome Type':<32}  {'Count':>6}")
@@ -290,18 +271,18 @@ def _print_audit_table(
     else:
         typer.echo(
             "  No outcomes recorded yet.\n"
-            "  Sentinel will record what happened after\n"
-            "  each deployment decision."
+            "  Run verdict sentinel scan to record what happened\n"
+            "  after each deployment decision."
         )
 
-    # ── Recent decisions ──────────────────────────────
+    # ── Recent decisions ───────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
     typer.echo(f"  Recent Decisions  (last {min(len(recent), limit)})")
     typer.echo("─" * _WIDTH)
     typer.echo(f"  {'Decision ID':<12}  {'Policy':<32}  {'Decision':<24}  {'Score':>6}")
     typer.echo(f"  {'─' * 12}  {'─' * 32}  {'─' * 24}  {'─' * 6}")
     for row in recent[:limit]:
-        short_id: str = str(row.get("id", ""))[:8]
+        short_id: str = str(row.get("record_id", ""))[:8]
         name_r: str = str(row.get("policy_name", ""))[:30]
         decision: str = str(row.get("decision", ""))[:22]
         score: int = int(row.get("overall_risk_score", 0))
@@ -320,7 +301,6 @@ def _print_audit_table(
             outcomes,
         )
 
-        # Insights — interpretation of what happened
         typer.echo(f"\n{'─' * _WIDTH}")
         typer.echo("  Governance Insights")
         typer.echo("─" * _WIDTH)
@@ -333,7 +313,6 @@ def _print_audit_table(
                 "  Run more evaluations to surface patterns."
             )
 
-        # Recommendations — what to do about it
         typer.echo(f"\n{'─' * _WIDTH}")
         typer.echo("  Recommendations")
         typer.echo("─" * _WIDTH)
@@ -354,13 +333,10 @@ def _print_audit_table(
 #
 # Separation of concerns:
 #   Insights        → interpretation of what happened
-#                     "budget_check is failing 100% of the time"
 #   Recommendations → what to do about it
-#                     "Review budget_check threshold"
 #
 # Aligned with ObsidianWall doctrine:
 #   AI may advise. AI may not govern.
-#   The insights engine advises — it does not enforce.
 # =====================================================
 
 
@@ -377,19 +353,16 @@ def _generate_insights_and_recommendations(
 
     Returns:
         (insights, recommendations) — two separate lists.
-        Insights interpret what happened.
-        Recommendations advise what to do.
     """
-
     insights: list[str] = []
     recommendations: list[str] = []
+
     total: int = domain_summary.get("total_evaluations", 0)
     domain_scores: dict[str, float] = domain_summary.get("domain_avg_scores", {})
 
     if total == 0:
         return insights, recommendations
 
-    # ── Totals for gap detection ──────────────────────
     total_approvals: int = sum(
         int(row.get("approval_count", 0)) for row in effectiveness
     )
@@ -458,6 +431,7 @@ def _generate_insights_and_recommendations(
         top_domain: str = max(domain_scores, key=lambda d: domain_scores[d])
         top_score: float = domain_scores[top_domain]
         label: str = _DOMAIN_LABELS.get(top_domain, top_domain)
+
         if top_score >= 40.0:
             insights.append(
                 f"ℹ  {label} is the highest risk domain "
@@ -518,7 +492,7 @@ def _generate_insights_and_recommendations(
             "     be measured against real-world results."
         )
         recommendations.append(
-            "Enable Sentinel (v0.4.0) to record deployment\n"
+            "Run verdict sentinel scan to record deployment\n"
             "     outcomes. Without outcome data, it is impossible\n"
             "     to know whether governance decisions are achieving\n"
             "     their intended effect."
