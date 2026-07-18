@@ -81,12 +81,14 @@ _RECOMMENDATION_CATEGORIES: dict[str, str] = {
     "burstable_migration": "Financial",
     "serverless_candidate": "Financial",
     "lifecycle_policy": "Financial",
+
     "network_segmentation": "Security",
     "missing_network_segmentation": "Security",
     "security_posture": "Security",
     "load_balancer_coverage": "Security",
     "database_redundancy": "Security",
     "compute_redundancy": "Security",
+
     "enforcement": "Governance",
     "analyzer_finding": "Governance",
     "optimization_candidate": "Governance",
@@ -105,7 +107,9 @@ def _group_recommendations_by_category(
     display order. Unrecognized recommendation types fall
     into "Other" rather than being dropped.
     """
-    buckets: dict[str, list[dict[str, Any]]] = {cat: [] for cat in _CATEGORY_ORDER}
+    buckets: dict[str, list[dict[str, Any]]] = {
+        cat: [] for cat in _CATEGORY_ORDER
+    }
 
     for rec in recommendations:
         rtype = rec.get("type", "")
@@ -174,7 +178,9 @@ def render_explain(
     # metadata.governance_objective.statement. Shows WHY
     # before HOW — the organizational outcome this decision
     # relates to, and whether it was upheld or violated.
-    governance_objective: dict[str, Any] = artifact.get("governance_objective", {})
+    governance_objective: dict[str, Any] = artifact.get(
+        "governance_objective", {}
+    )
     if governance_objective:
         obj_statement = governance_objective.get("statement", "")
         obj_status = governance_objective.get("status", "")
@@ -193,28 +199,42 @@ def render_explain(
     if notifications or approval_request or override_possible:
         lines.append(_section_header("Governance Routing"))
 
+        # Notified / Approval are short single-line label-value
+        # facts — a small shared width keeps them tight and
+        # readable. Action Required is a different KIND of
+        # content — a heading introducing a multi-line list, not
+        # a single-line fact — so it is rendered as its own
+        # sub-block below, indented consistently, rather than
+        # forced into the same label column as the short facts.
+        # Trying to align a long label ("Action Required") with
+        # short ones ("Notified", "Approval") in one shared
+        # column always produces an oversized gap for the short
+        # rows or a cramped one for the long row — treating it
+        # as its own block avoids that tradeoff entirely.
+        _FACT_LABEL_WIDTH = 10
+
         for n in notifications:
             role: str = n.get("target_role", "")
             channel: str = n.get("channel", "")
             priority: str = n.get("priority", "")
-            lines.append(f"  Notified   {role} via {channel}  {_dim(f'({priority})')}")
+            label = "Notified".ljust(_FACT_LABEL_WIDTH)
+            lines.append(f"  {label}{role} via {channel}  {_dim(f'({priority})')}")
 
         approval_status: str = approval_request.get("approval_status", "")
         if approval_status:
-            lines.append(f"  Approval   {approval_status}")
+            label = "Approval".ljust(_FACT_LABEL_WIDTH)
+            lines.append(f"  {label}{approval_status}")
 
         if override_possible:
             override_roles = sorted(
-                {
-                    n.get("target_role", "")
-                    for n in notifications
-                    if n.get("target_role")
-                }
+                {n.get("target_role", "") for n in notifications if n.get("target_role")}
             )
             if override_roles:
-                lines.append("  Next Step  Request override from:")
+                lines.append("")
+                lines.append(f"  {_bold('Action Required')}")
+                lines.append("    Request override from:")
                 for r in override_roles:
-                    lines.append(f"               • {r}")
+                    lines.append(f"      • {r}")
 
     # ---- 4. Governance Reasoning Chain ----
     explanation: dict[str, Any] = artifact.get("explanation", {})
@@ -331,16 +351,14 @@ def render_explain(
         lines.append(f"  Artifact Hash    sha256:{artifact_hash}")
     if recorded_at:
         lines.append(f"  Recorded         {recorded_at}")
-    lines.append("  Evidence Status  Stored locally")
+    lines.append(f"  Evidence Status  Stored locally")
 
     # History chain integrity — verify_history_chain() recomputes
     # every history entry's hash and confirms the chain is intact.
     # This is real, computed verification (not aspirational text) —
     # it detects if any past revision was altered after the fact.
     if chain_verified is not None:
-        integrity_label = (
-            "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
-        )
+        integrity_label = "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
         lines.append(f"  Integrity        {integrity_label}")
 
     lines.append("")

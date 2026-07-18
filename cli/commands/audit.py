@@ -20,6 +20,7 @@ from typing import Any, Optional
 import typer
 
 from cli.display import decision_icon
+from renderers.explain_renderer import _bold, _color
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.governance_store import (
     get_domain_risk_summary,
@@ -29,6 +30,8 @@ from telemetry.governance_store import (
     get_policy_effectiveness,
     get_recent_records,
 )
+
+
 
 audit_app = typer.Typer(
     help="Governance risk audit across recorded decisions.",
@@ -174,7 +177,7 @@ def _print_audit_table(
 ) -> None:
     """Render the governance audit as a formatted table."""
     typer.echo("\n" + "─" * _WIDTH)
-    typer.echo("  ObsidianWall Verdict — Governance Audit")
+    typer.echo(_bold("  ObsidianWall Verdict — Governance Audit"))
     if policy_filter:
         typer.echo(f"  Policy filter: {policy_filter}")
     typer.echo("─" * _WIDTH)
@@ -193,7 +196,7 @@ def _print_audit_table(
     domain_scores: dict[str, float] = domain_summary.get("domain_avg_scores", {})
     if domain_scores:
         typer.echo(f"\n{'─' * _WIDTH}")
-        typer.echo("  Domain Risk Scores  (average across recorded decisions)")
+        typer.echo(_bold("  Domain Risk Scores  (average across recorded decisions)"))
         typer.echo("─" * _WIDTH)
         for domain, score in sorted(
             domain_scores.items(),
@@ -208,7 +211,7 @@ def _print_audit_table(
     # ── Why decisions were made ───────────────────────
     if failed_conditions or passed_conditions:
         typer.echo(f"\n{'─' * _WIDTH}")
-        typer.echo("  Why Decisions Were Made")
+        typer.echo(_bold("  Why Decisions Were Made"))
         typer.echo("─" * _WIDTH)
 
         if failed_conditions:
@@ -236,7 +239,7 @@ def _print_audit_table(
     # ── Policy effectiveness ──────────────────────────
     if effectiveness:
         typer.echo(f"\n{'─' * _WIDTH}")
-        typer.echo("  Policy Effectiveness")
+        typer.echo(_bold("  Policy Effectiveness"))
         typer.echo("─" * _WIDTH)
         typer.echo(
             f"  {'Policy':<34}  {'Evals':>5}  "
@@ -261,7 +264,7 @@ def _print_audit_table(
 
     # ── Deployment outcomes ────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
-    typer.echo("  Deployment Outcomes  (populated by verdict sentinel scan)")
+    typer.echo(_bold("  Deployment Outcomes  (populated by verdict sentinel scan)"))
     typer.echo("─" * _WIDTH)
     if outcomes:
         typer.echo(f"  {'Outcome Type':<32}  {'Count':>6}")
@@ -277,18 +280,31 @@ def _print_audit_table(
 
     # ── Recent decisions ───────────────────────────────
     typer.echo(f"\n{'─' * _WIDTH}")
-    typer.echo(f"  Recent Decisions  (last {min(len(recent), limit)})")
+    typer.echo(_bold(f"  Recent Decisions  (last {min(len(recent), limit)})"))
     typer.echo("─" * _WIDTH)
-    typer.echo(f"  {'Decision ID':<12}  {'Policy':<32}  {'Decision':<24}  {'Score':>6}")
-    typer.echo(f"  {'─' * 12}  {'─' * 32}  {'─' * 24}  {'─' * 6}")
+    typer.echo(
+        f"  {'Decision ID':<12}  {'When':<16}  {'Policy':<24}  "
+        f"{'Decision':<24}  {'Score':>6}"
+    )
+    typer.echo(
+        f"  {'─' * 12}  {'─' * 16}  {'─' * 24}  {'─' * 24}  {'─' * 6}"
+    )
     for row in recent[:limit]:
         short_id: str = str(row.get("record_id", ""))[:8]
-        name_r: str = str(row.get("policy_name", ""))[:30]
+        # created_at is stored as an ISO 8601 timestamp
+        # (e.g. "2026-07-18T00:08:30.863793+00:00"). Trim to
+        # "2026-07-18 00:08" for a compact, readable column —
+        # full precision remains in the record itself and in
+        # verdict explain.
+        raw_timestamp: str = str(row.get("created_at", ""))
+        when: str = raw_timestamp[:16].replace("T", " ") if raw_timestamp else "—"
+        name_r: str = str(row.get("policy_name", ""))[:22]
         decision: str = str(row.get("decision", ""))[:22]
         score: int = int(row.get("overall_risk_score", 0))
         icon: str = decision_icon(str(row.get("decision", "")))
         typer.echo(
-            f"  {short_id:<12}  {name_r:<32}  {icon} {decision:<22}  {score:>5}/100"
+            f"  {short_id:<12}  {when:<16}  {name_r:<24}  "
+            f"{icon} {decision:<22}  {score:>5}/100"
         )
 
     # ── Governance insights + recommendations ─────────

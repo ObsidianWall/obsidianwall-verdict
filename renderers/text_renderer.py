@@ -42,6 +42,7 @@ _SEVERITY_COLORS: dict[str, str] = {
 _RESET = "\033[0m"
 _BOLD = "\033[1m"
 _DIM = "\033[2m"
+_ITALIC = "\033[3m"
 
 
 def _supports_color() -> bool:
@@ -62,6 +63,11 @@ def _bold(text: str) -> str:
 
 def _dim(text: str) -> str:
     return _color(text, _DIM)
+
+def _dim_italic(text: str) -> str:
+    # ANSI code for dim + italic is \033[2;3m
+    return _color(text, "\033[2;3m")
+
 
 
 def _severity_color(text: str, severity: str) -> str:
@@ -184,7 +190,7 @@ def render_text(
             n.get("target_role", "") for n in notifications if n.get("target_role")
         ]
         if notif_roles:
-            lines.append(f"  {_bold('Next Step')}")
+            lines.append(f"  {_bold('Action Required')}")
             lines.append("    Request override from:")
             for r in notif_roles:
                 lines.append(f"      • {r}")
@@ -208,7 +214,7 @@ def render_text(
         f"  {_dim('·')}  {_dim(f'Full artifact: {resolved_output_path}')}"
     )
     lines.append(
-        f"  {_dim('Run')}  {_dim(f'verdict explain {short_id}')}"
+        f"  {_dim('Run')}  {_dim_italic(f"'verdict explain {short_id}'")}"
         f"  {_dim('for full reasoning chain')}"
     )
     lines.append(_divider())

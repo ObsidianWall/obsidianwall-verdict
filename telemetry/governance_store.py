@@ -145,19 +145,6 @@ CREATE TABLE IF NOT EXISTS governance_records (
     current_history_action                              TEXT NOT NULL DEFAULT 'created'
 );
 
-CREATE INDEX IF NOT EXISTS idx_gov_records_policy_name
-    ON governance_records(policy_name);
-CREATE INDEX IF NOT EXISTS idx_gov_records_policy_content_hash
-    ON governance_records(policy_content_hash);
-CREATE INDEX IF NOT EXISTS idx_gov_records_objective_hash
-    ON governance_records(governance_objective_hash);
-CREATE INDEX IF NOT EXISTS idx_gov_records_decision
-    ON governance_records(decision);
-CREATE INDEX IF NOT EXISTS idx_gov_records_created_at
-    ON governance_records(created_at);
-CREATE INDEX IF NOT EXISTS idx_gov_records_risk_acceptance
-    ON governance_records(is_risk_acceptance_candidate);
-
 -- Governance History.
 -- Append-only. Every event in a record's lifecycle — override
 -- requested, outcome observed, drift detected — is a new
@@ -191,13 +178,6 @@ CREATE TABLE IF NOT EXISTS governance_history (
     FOREIGN KEY (record_id) REFERENCES governance_records(record_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_history_record_id
-    ON governance_history(record_id);
-CREATE INDEX IF NOT EXISTS idx_history_category
-    ON governance_history(history_category);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_history_record_seq
-    ON governance_history(record_id, history_number);
-
 -- Governance Evidence.
 -- Renamed from decision_artifacts (v0.5.2) to reflect that
 -- evidence is not limited to Verdict's output — Sentinel,
@@ -218,9 +198,92 @@ CREATE TABLE IF NOT EXISTS governance_evidence (
     FOREIGN KEY (record_id) REFERENCES governance_records(record_id)
 );
 
+"""
+
+
+# =====================================================
+# INDEXES
+#
+# Deliberately separate from _SCHEMA's table creation.
+# CREATE TABLE IF NOT EXISTS is a no-op on a table that
+# already exists — it does NOT add new columns. If an
+# index here referenced a column added after the table
+# was first created on a user's machine, running it in
+# the same script as CREATE TABLE would fail with
+# "no such column" the moment that column is missing.
+# Indexes run AFTER _MIGRATIONS below, guaranteeing every
+# column they reference actually exists first.
+# =====================================================
+
+_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_gov_records_policy_name
+    ON governance_records(policy_name);
+CREATE INDEX IF NOT EXISTS idx_gov_records_policy_content_hash
+    ON governance_records(policy_content_hash);
+CREATE INDEX IF NOT EXISTS idx_gov_records_objective_hash
+    ON governance_records(governance_objective_hash);
+CREATE INDEX IF NOT EXISTS idx_gov_records_decision
+    ON governance_records(decision);
+CREATE INDEX IF NOT EXISTS idx_gov_records_created_at
+    ON governance_records(created_at);
+CREATE INDEX IF NOT EXISTS idx_gov_records_risk_acceptance
+    ON governance_records(is_risk_acceptance_candidate);
+
+CREATE INDEX IF NOT EXISTS idx_history_record_id
+    ON governance_history(record_id);
+CREATE INDEX IF NOT EXISTS idx_history_category
+    ON governance_history(history_category);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_history_record_seq
+    ON governance_history(record_id, history_number);
+
 CREATE INDEX IF NOT EXISTS idx_evidence_record_id
     ON governance_evidence(record_id);
 """
+
+
+# =====================================================
+# MIGRATIONS
+#
+# Columns added to governance_records after the table was
+# first created on existing installations. CREATE TABLE
+# IF NOT EXISTS never adds columns to an existing table —
+# each addition needs an explicit ALTER TABLE here, applied
+# idempotently (OperationalError means the column already
+# exists, safe to ignore). Same proven pattern used by
+# telemetry/store.py's _MIGRATIONS list.
+#
+# Every column below was added to _SCHEMA incrementally
+# during v0.6.0 development, after some installations had
+# already created the table. Listed here so any existing
+# database gets brought up to the current schema on the
+# next init_governance_db() call, regardless of which
+# intermediate schema version it was created under.
+# =====================================================
+
+_MIGRATIONS: list[str] = [
+    "ALTER TABLE governance_records ADD COLUMN governance_objective_hash TEXT",
+    "ALTER TABLE governance_records ADD COLUMN analyzer_scores TEXT",
+    "ALTER TABLE governance_records ADD COLUMN failed_conditions TEXT",
+    "ALTER TABLE governance_records ADD COLUMN passed_conditions TEXT",
+    "ALTER TABLE governance_records ADD COLUMN "
+    "is_risk_acceptance_candidate INTEGER NOT NULL DEFAULT 0",
+]
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """
+    Apply incremental schema migrations. Safe to run on
+    every init_governance_db() call — each migration is
+    guarded by OperationalError, which fires when the
+    column already exists, making every migration
+    idempotent regardless of the database's current state.
+    """
+    for migration in _MIGRATIONS:
+        try:
+            conn.execute(migration)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists — safe to continue.
 
 
 # =====================================================
@@ -231,16 +294,32 @@ CREATE INDEX IF NOT EXISTS idx_evidence_record_id
 def init_governance_db(db_path: Path | None = None) -> sqlite3.Connection:
     """
     Initialize the governance record schema. Safe to call
-    on every operation — CREATE TABLE IF NOT EXISTS makes
-    this idempotent.
+    on every operation.
+
+    Order matters:
+      1. Create tables (IF NOT EXISTS — no-ops on existing
+         installations, but the CREATE statement includes
+         every column for BRAND NEW installations)
+      2. Run migrations (ALTER TABLE — brings EXISTING
+         installations up to date with any columns added
+         after their table was first created)
+      3. Create indexes (only after migrations guarantee
+         every referenced column actually exists)
     """
     path = db_path or get_db_path()
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+
     conn.executescript(_SCHEMA)
     conn.commit()
+
+    _run_migrations(conn)
+
+    conn.executescript(_INDEXES)
+    conn.commit()
+
     return conn
 
 
@@ -394,7 +473,9 @@ def create_governance_record(
 
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
+            plan_hash = hashlib.sha256(
+                plan_path.encode("utf-8")
+            ).hexdigest()[:16]
 
         # Auto-compute if not explicitly provided
         if policy_content_hash is None:
@@ -403,7 +484,9 @@ def create_governance_record(
             policy_family = _classify_policy(policy_path)
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
-        governance_objective: dict[str, Any] = result.get("governance_objective", {})
+        governance_objective: dict[str, Any] = result.get(
+            "governance_objective", {}
+        )
         objective_statement = governance_objective.get("statement")
         objective_hash = hash_objective_statement(objective_statement)
 
@@ -415,10 +498,14 @@ def create_governance_record(
         # evidence artifact load per record).
         trace: list[dict[str, Any]] = result.get("trace", [])
         failed_condition_ids = [
-            t.get("condition_id", "") for t in trace if not t.get("result", True)
+            t.get("condition_id", "")
+            for t in trace
+            if not t.get("result", True)
         ]
         passed_condition_ids = [
-            t.get("condition_id", "") for t in trace if t.get("result", True)
+            t.get("condition_id", "")
+            for t in trace
+            if t.get("result", True)
         ]
         analyzer_scores_json = json.dumps(
             risk_summary.get("analyzer_scores", {}), default=str
@@ -466,12 +553,10 @@ def create_governance_record(
                 analyzer_scores_json,
                 json.dumps(failed_condition_ids, default=str),
                 json.dumps(passed_condition_ids, default=str),
-                1
-                if (
+                1 if (
                     result.get("decision", "") == "DENY_WITH_OVERRIDE"
                     and result.get("override_possible")
-                )
-                else 0,
+                ) else 0,
             ),
         )
 
@@ -537,7 +622,9 @@ def record_governance_evidence(
     conn = None
     try:
         evidence_json = json.dumps(evidence, default=str)
-        evidence_hash = hashlib.sha256(evidence_json.encode("utf-8")).hexdigest()[:16]
+        evidence_hash = hashlib.sha256(
+            evidence_json.encode("utf-8")
+        ).hexdigest()[:16]
 
         conn = init_governance_db(db_path)
         conn.execute(
@@ -1066,12 +1153,25 @@ def get_policy_effectiveness(
     try:
         conn = init_governance_db(db_path)
 
+        # NOTE: total_denied uses COUNT(DISTINCT CASE WHEN ...
+        # THEN r.record_id END), NOT SUM(CASE WHEN ... THEN 1
+        # ELSE 0 END). The LEFT JOIN to governance_history
+        # produces one row per (record, history entry) pair —
+        # any record with more than one history entry (e.g. a
+        # record that has had verdict sentinel scan run against
+        # it, adding an outcome/drift entry beyond its original
+        # CREATED entry) would have its decision counted once
+        # PER HISTORY ROW under SUM(CASE...), not once per
+        # record. This previously allowed total_denied to
+        # exceed total_evaluations. COUNT(DISTINCT ... record_id)
+        # dedupes correctly regardless of join multiplication,
+        # the same way total_evaluations already did.
         base_query = """
             SELECT
                 r.policy_name,
                 COUNT(DISTINCT r.record_id) as total_evaluations,
-                SUM(CASE WHEN r.decision IN ('DENY', 'DENY_WITH_OVERRIDE')
-                    THEN 1 ELSE 0 END) as total_denied,
+                COUNT(DISTINCT CASE WHEN r.decision IN ('DENY', 'DENY_WITH_OVERRIDE')
+                    THEN r.record_id END) as total_denied,
                 COUNT(DISTINCT CASE WHEN h.history_category = 'override'
                     THEN h.history_id END) as override_count,
                 COUNT(DISTINCT CASE WHEN h.history_category = 'approval'
@@ -1086,7 +1186,8 @@ def get_policy_effectiveness(
             cursor = conn.execute(query, (policy_name,))
         else:
             query = (
-                base_query + " GROUP BY r.policy_name ORDER BY total_evaluations DESC"
+                base_query
+                + " GROUP BY r.policy_name ORDER BY total_evaluations DESC"
             )
             cursor = conn.execute(query)
 
@@ -1356,7 +1457,10 @@ def get_outcome_summary(
                 continue
 
         return sorted(
-            [{"outcome_type": k, "count": v} for k, v in outcome_counts.items()],
+            [
+                {"outcome_type": k, "count": v}
+                for k, v in outcome_counts.items()
+            ],
             key=lambda x: x["count"],  # type: ignore[return-value]
             reverse=True,
         )
@@ -1367,3 +1471,197 @@ def get_outcome_summary(
     finally:
         if conn is not None:
             conn.close()
+
+# =====================================================
+# COMPASS QUERY FOUNDATION
+#
+# Read-only correlation and folding queries that Compass
+# reads directly. Neither function writes anything — they
+# are pure aggregation over data Verdict and Sentinel have
+# already recorded via create_governance_record() and
+# add_history_entry().
+# =====================================================
+
+
+def get_outcome_correlation(
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Correlate governance decisions with their observed outcomes.
+
+    Powers Compass's Governance Intelligence layer. Enables
+    queries like: "92% of cost denials that were overridden
+    resulted in budget_overrun" — joining each record's
+    original decision against every outcome/drift event
+    subsequently recorded against it by verdict sentinel scan.
+
+    Returns rows sorted by frequency, highest first. Empty
+    list if no outcome/drift history exists yet, or on error.
+    Never raises.
+    """
+    conn = None
+    try:
+        conn = init_governance_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT r.policy_name, r.decision, h.history_data
+            FROM governance_records r
+            JOIN governance_history h ON h.record_id = r.record_id
+            WHERE h.history_category IN ('outcome', 'drift')
+            """
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+
+        correlation_counts: dict[tuple[str, str, str], int] = {}
+
+        for row in rows:
+            try:
+                data = json.loads(row["history_data"])
+                outcome_type = data.get("outcome_type", "unknown")
+            except (json.JSONDecodeError, TypeError, KeyError):
+                continue
+
+            key = (row["policy_name"], row["decision"], outcome_type)
+            correlation_counts[key] = correlation_counts.get(key, 0) + 1
+
+        results = [
+            {
+                "policy_name": policy_name,
+                "decision": decision,
+                "outcome_type": outcome_type,
+                "frequency": count,
+            }
+            for (policy_name, decision, outcome_type), count
+            in correlation_counts.items()
+        ]
+
+        return sorted(
+            results,
+            key=lambda x: x["frequency"],  # type: ignore[return-value]
+            reverse=True,
+        )
+
+    except Exception:
+        return []
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# Decision classification for objective summary folding.
+# Mirrors engine/governance_objective.py's mapping exactly —
+# kept as a local copy here rather than imported, since
+# governance_store.py must not depend on engine/ (storage
+# layer stays independent of evaluation logic).
+_OBJECTIVE_UPHELD_DECISIONS = {"ALLOW", "ALLOW_WITH_NOTIFICATION"}
+_OBJECTIVE_VIOLATED_DECISIONS = {"DENY", "DENY_WITH_OVERRIDE"}
+_OBJECTIVE_PENDING_DECISIONS = {"ALLOW_WITH_APPROVAL_REQUIRED"}
+
+
+def _classify_for_objective_summary(decision: str) -> str:
+    """Classify a decision string into upheld/violated/pending/unknown."""
+    if decision in _OBJECTIVE_UPHELD_DECISIONS:
+        return "upheld"
+    if decision in _OBJECTIVE_VIOLATED_DECISIONS:
+        return "violated"
+    if decision in _OBJECTIVE_PENDING_DECISIONS:
+        return "pending"
+    return "unknown"
+
+
+def get_objective_summary(
+    governance_objective_statement: str,
+    db_path: Path | None = None,
+) -> dict[str, Any]:
+    """
+    Fold every governance record sharing a governance objective
+    into aggregate Upheld/Violated/Pending counts, plus a basic
+    trend comparing the most recent half of records against the
+    earlier half.
+
+    This is the query behind Compass's headline capability:
+    "Objective X has been upheld 96.5% of the time this period,
+    improving 2.1% versus the prior period."
+
+    Trend classification:
+      "improving"          upheld_rate rose more than 5 points
+      "declining"           upheld_rate fell more than 5 points
+      "stable"                change within +/-5 points
+      "insufficient_data"      fewer than 4 records total
+
+    Returns an all-zero summary with trend "insufficient_data"
+    if no records exist for this objective. Never raises.
+
+    Args:
+        governance_objective_statement: the exact statement
+            text as declared in policy metadata
+        db_path: optional path override (for testing)
+    """
+    records = get_records_by_objective(
+        governance_objective_statement, db_path=db_path
+    )
+
+    if not records:
+        return {
+            "statement": governance_objective_statement,
+            "total_records": 0,
+            "upheld_count": 0,
+            "violated_count": 0,
+            "pending_count": 0,
+            "upheld_rate": 0.0,
+            "trend": "insufficient_data",
+        }
+
+    total = len(records)
+    upheld_count = sum(
+        1 for r in records
+        if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
+    )
+    violated_count = sum(
+        1 for r in records
+        if _classify_for_objective_summary(r.get("decision", "")) == "violated"
+    )
+    pending_count = sum(
+        1 for r in records
+        if _classify_for_objective_summary(r.get("decision", "")) == "pending"
+    )
+
+    upheld_rate = round(upheld_count / total * 100, 1) if total else 0.0
+
+    # Trend — records are newest-first (per get_records_by_objective).
+    # Split into recent half vs. older half and compare upheld rates.
+    trend = "insufficient_data"
+    if total >= 4:
+        half = total // 2
+        recent = records[:half]
+        older = records[half:]
+
+        recent_upheld = sum(
+            1 for r in recent
+            if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
+        )
+        older_upheld = sum(
+            1 for r in older
+            if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
+        )
+
+        recent_rate = recent_upheld / len(recent) * 100 if recent else 0.0
+        older_rate = older_upheld / len(older) * 100 if older else 0.0
+
+        delta = recent_rate - older_rate
+        if delta > 5.0:
+            trend = "improving"
+        elif delta < -5.0:
+            trend = "declining"
+        else:
+            trend = "stable"
+
+    return {
+        "statement": governance_objective_statement,
+        "total_records": total,
+        "upheld_count": upheld_count,
+        "violated_count": violated_count,
+        "pending_count": pending_count,
+        "upheld_rate": upheld_rate,
+        "trend": trend,
+    }
