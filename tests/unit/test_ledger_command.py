@@ -34,7 +34,14 @@ def _make_result(
 
 def _create_confirmed_risk_acceptance(db_path, policy="budget_policy") -> str:
     """Create a record that IS a confirmed risk acceptance —
-    DENY_WITH_OVERRIDE + subsequently OVERRIDE_APPROVED."""
+    DENY_WITH_OVERRIDE + subsequently OVERRIDE_APPROVED.
+ 
+    actor_identity is passed EXPLICITLY rather than relying on
+    resolve_actor_identity()'s auto-detection — auto-detection
+    reads the real test environment's git config/OS username,
+    which is non-deterministic across machines and would make
+    this test flaky.
+    """
     result = _make_result(policy=policy)
     with patch("telemetry.governance_store.is_telemetry_enabled", return_value=True):
         create_governance_record(result=result, db_path=db_path)
@@ -44,6 +51,7 @@ def _create_confirmed_risk_acceptance(db_path, policy="budget_policy") -> str:
             history_action="approved",
             history_data={"override_role": "budget_owner"},
             actor_role="budget_owner",
+            actor_identity="jsmith@example.com",
             db_path=db_path,
         )
     return result["decision_id"]
@@ -77,7 +85,7 @@ class TestLedgerCommand:
     def test_shows_confirmed_risk_acceptance(self, tmp_path):
         db = tmp_path / "test.db"
         _create_confirmed_risk_acceptance(db, policy="budget_policy")
-
+ 
         with patch(
             "cli.commands.ledger.is_telemetry_enabled", return_value=True
         ):
@@ -88,10 +96,12 @@ class TestLedgerCommand:
                     "telemetry.governance_store.get_db_path", return_value=db
                 ):
                     result = runner.invoke(ledger_app, [])
-
+ 
         assert result.exit_code == 0
         assert "budget_policy" in result.output
-        assert "budget_owner" in result.output
+        # ledger.py's Accepted By column shows the resolved
+        # IDENTITY (actor_identity), not the claimed role.
+        assert "jsmith@example.com" in result.output
 
     def test_json_format_valid(self, tmp_path):
         db = tmp_path / "test.db"

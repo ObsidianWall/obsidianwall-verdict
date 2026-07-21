@@ -99,9 +99,7 @@ def resolve_actor_identity() -> str | None:
     Returns None if nothing could be resolved. Never raises.
     """
     return (
-        _resolve_from_ci_env()
-        or _resolve_from_git_config()
-        or _resolve_from_os_user()
+        _resolve_from_ci_env() or _resolve_from_git_config() or _resolve_from_os_user()
     )
 
 

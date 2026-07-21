@@ -13,24 +13,25 @@
 #     — get_db_dir() never called when db_path is
 #       explicitly passed to init_db()
 #
-#   telemetry/store.py           181
-#     — _run_migrations() pass branch: OperationalError
-#       when migration already applied — mocked directly
-#
-#   telemetry/store.py           672-673, 722-723, 772-773
-#     — json.JSONDecodeError except/continue branches
-#       in domain risk, failed conditions, passed conditions
-#       summaries — triggered by rows with invalid JSON
-#
 #   schemas/policy_schema.py     606, 618-651, 667-686
 #     — policy spec validator error paths:
 #       governance_domains on non-composite type,
 #       composite without declared domains
+#
+# NOTE (v0.6.0): telemetry/store.py has been deleted —
+# it was fully replaced by telemetry/governance_store.py
+# during the v0.6.0 schema redesign, and confirmed unused
+# by any production code path. The tests that previously
+# lived here for _run_migrations(), get_domain_risk_summary(),
+# get_failed_conditions_summary(), and
+# get_passed_conditions_summary() covered that now-deleted
+# module and have been removed. Equivalent coverage for the
+# current schema lives in test_governance_store.py,
+# test_governance_store_aggregates.py, and
+# test_compass_queries.py.
 
 from __future__ import annotations
 
-import os
-import sqlite3
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -42,13 +43,6 @@ from notifications.dispatcher import (
     dispatch_notifications,
 )
 from telemetry.config import get_db_dir
-from telemetry.store import (
-    _run_migrations,
-    get_domain_risk_summary,
-    get_failed_conditions_summary,
-    get_passed_conditions_summary,
-    init_db,
-)
 
 
 # =====================================================
@@ -202,173 +196,6 @@ class TestGetDbDir:
             result = get_db_dir()
         assert result.exists()
         assert result.is_dir()
-
-
-# =====================================================
-# telemetry/store.py — _run_migrations pass branch
-#
-# Line 181 is `pass` inside `except sqlite3.OperationalError`
-# in _run_migrations(). Triggered when ALTER TABLE fails
-# because the column already exists (migration applied).
-#
-# Mock the connection's execute method to raise
-# OperationalError directly — this is the cleanest
-# way to exercise the pass branch without depending
-# on SQLite version-specific ALTER TABLE behavior.
-# =====================================================
-
-
-class TestRunMigrationsAlreadyApplied:
-    """Tests for _run_migrations — covers line 181."""
-
-    def test_commit_called_on_successful_migration(
-        self, tmp_path: Path
-    ) -> None:
-        """
-        Covers line 181 — conn.commit() after successful migration.
-
-        Line 181 is conn.commit() in the SUCCESS path.
-        The current _MIGRATIONS always fails on new databases
-        because policy_path is already in CREATE TABLE.
-        Temporarily replace _MIGRATIONS with a new migration
-        that WILL succeed so conn.commit() is reached.
-        """
-        import telemetry.store as telemetry_store
-
-        database_path = tmp_path / "test.db"
-        conn = sqlite3.connect(str(database_path))
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS migration_test (id TEXT)"
-        )
-        conn.commit()
-
-        original_migrations = telemetry_store._MIGRATIONS
-        telemetry_store._MIGRATIONS = [
-            "ALTER TABLE migration_test ADD COLUMN new_col TEXT"
-        ]
-
-        try:
-            _run_migrations(conn)   # succeeds → conn.commit() → line 181
-        finally:
-            telemetry_store._MIGRATIONS = original_migrations
-            conn.close()
-
-    def test_operational_error_silenced_on_applied_migration(self) -> None:
-        """OperationalError in migration is silenced, not propagated."""
-        mock_connection = MagicMock(spec=sqlite3.Connection)
-        mock_connection.execute.side_effect = sqlite3.OperationalError(
-            "duplicate column name: policy_path"
-        )
-        _run_migrations(mock_connection)
-        mock_connection.execute.assert_called()
-
-
-# =====================================================
-# telemetry/store.py — JSON decode error branches
-#
-# Lines 672-673, 722-723, 772-773 are
-#   except (json.JSONDecodeError, TypeError): continue
-# blocks in the summary query functions.
-# Only reachable when a row has invalid JSON stored
-# in analyzer_scores, failed_conditions, or
-# passed_conditions columns.
-#
-# Insert a row with invalid JSON directly into SQLite,
-# then query — the json.loads() call raises
-# JSONDecodeError and the except block is executed.
-# =====================================================
-
-
-def _insert_invalid_json_row(database_path: Path) -> None:
-    """
-    Insert a decision row with invalid JSON in all three
-    condition/score columns to trigger JSONDecodeError
-    in the summary query functions.
-    """
-    connection = init_db(database_path)
-    connection.execute(
-        """
-        INSERT INTO decisions (
-            id, timestamp, policy_name, decision,
-            conditions_passed, overall_risk_score,
-            analyzer_scores, failed_conditions, passed_conditions
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            "invalid-json-row",
-            "2026-06-09T00:00:00+00:00",
-            "test_policy",
-            "DENY",
-            0,
-            50,
-            "NOT VALID JSON",    # analyzer_scores   → JSONDecodeError
-            "NOT VALID JSON",    # failed_conditions → JSONDecodeError
-            "NOT VALID JSON",    # passed_conditions → JSONDecodeError
-        ),
-    )
-    connection.commit()
-    connection.close()
-
-
-class TestDomainRiskSummaryInvalidJson:
-    """Tests for json.JSONDecodeError branch in get_domain_risk_summary."""
-
-    def test_skips_rows_with_invalid_analyzer_scores(
-        self, tmp_path: Path
-    ) -> None:
-        """
-        Covers lines 672-673.
-        Row with invalid JSON in analyzer_scores → JSONDecodeError
-        → except/continue branch executed.
-        Summary still returns totals for the row.
-        """
-        database_path = tmp_path / "test.db"
-        _insert_invalid_json_row(database_path)
-
-        result = get_domain_risk_summary(db_path=database_path)
-
-        assert result["total_evaluations"] == 1
-        assert result["domain_avg_scores"] == {}
-
-
-class TestFailedConditionsSummaryInvalidJson:
-    """Tests for json.JSONDecodeError branch in get_failed_conditions_summary."""
-
-    def test_skips_rows_with_invalid_failed_conditions(
-        self, tmp_path: Path
-    ) -> None:
-        """
-        Covers lines 722-723.
-        Row with invalid JSON in failed_conditions → JSONDecodeError
-        → except/continue branch executed.
-        Summary returns empty list — invalid row skipped.
-        """
-        database_path = tmp_path / "test.db"
-        _insert_invalid_json_row(database_path)
-
-        result = get_failed_conditions_summary(db_path=database_path)
-
-        assert result == []
-
-
-class TestPassedConditionsSummaryInvalidJson:
-    """Tests for json.JSONDecodeError branch in get_passed_conditions_summary."""
-
-    def test_skips_rows_with_invalid_passed_conditions(
-        self, tmp_path: Path
-    ) -> None:
-        """
-        Covers lines 772-773.
-        Row with invalid JSON in passed_conditions → JSONDecodeError
-        → except/continue branch executed.
-        Summary returns empty list — invalid row skipped.
-        """
-        database_path = tmp_path / "test.db"
-        _insert_invalid_json_row(database_path)
-
-        result = get_passed_conditions_summary(db_path=database_path)
-
-        assert result == []
 
 
 # =====================================================

@@ -255,6 +255,59 @@ class TestConditionSummaries:
         results = get_failed_conditions_summary(db_path=db)
         assert results[0]["condition_id"] == "common_failure"
 
+    def test_rate_scoped_per_condition_not_total_evaluations(self, tmp_path):
+        """
+        v0.6.0 fix: rate must be scoped to how often THIS
+        condition was actually evaluated, not diluted by
+        unrelated evaluations from other policies.
+ 
+        Scenario: budget_check fails 3/3 times it's checked
+        (should be 100%), but 2 OTHER unrelated evaluations
+        exist (a different policy's condition) that must NOT
+        affect budget_check's rate.
+        """
+        db = _tmp_db(tmp_path)
+ 
+        # budget_check evaluated 3 times, fails all 3 times
+        _create(_make_result(failed=["budget_check"]), db)
+        _create(_make_result(failed=["budget_check"]), db)
+        _create(_make_result(failed=["budget_check"]), db)
+ 
+        # Unrelated condition from a different policy —
+        # must not dilute budget_check's rate
+        _create(_make_result(passed=["gpu_governance_check"]), db)
+        _create(_make_result(passed=["gpu_governance_check"]), db)
+ 
+        results = get_failed_conditions_summary(db_path=db)
+        by_id = {r["condition_id"]: r for r in results}
+ 
+        # Before the fix, this would have been 3/5 = 60.0%
+        # (diluted by the 2 unrelated gpu_governance_check
+        # evaluations). After the fix, it's correctly 100%
+        # since budget_check was checked 3 times and failed
+        # all 3.
+        assert by_id["budget_check"]["rate"] == 100.0
+ 
+    def test_rate_accounts_for_mixed_pass_fail_on_same_condition(self, tmp_path):
+        """
+        A condition that sometimes passes and sometimes fails
+        should have its rate reflect only ITS OWN pass/fail
+        history, not the total record count.
+        """
+        db = _tmp_db(tmp_path)
+ 
+        _create(_make_result(failed=["budget_check"]), db)
+        _create(_make_result(passed=["budget_check"]), db)
+        _create(_make_result(passed=["budget_check"]), db)
+        _create(_make_result(passed=["budget_check"]), db)
+ 
+        # budget_check evaluated 4 times total, failed once
+        failed_results = get_failed_conditions_summary(db_path=db)
+        assert failed_results[0]["rate"] == 25.0  # 1/4
+ 
+        passed_results = get_passed_conditions_summary(db_path=db)
+        assert passed_results[0]["rate"] == 75.0  # 3/4    
+
 
 # =====================================================
 # get_outcome_summary
@@ -345,7 +398,7 @@ class TestGetRiskAcceptanceRecords:
             _make_result(decision="DENY_WITH_OVERRIDE", override_possible=True),
             db,
         )
-
+ 
         with patch(
             "telemetry.governance_store.is_telemetry_enabled", return_value=True
         ):
@@ -355,13 +408,22 @@ class TestGetRiskAcceptanceRecords:
                 history_action="approved",
                 history_data={"override_role": "budget_owner"},
                 actor_role="budget_owner",
+                # Explicit actor_identity — without this,
+                # resolve_actor_identity() auto-detects the
+                # REAL git config / OS user on whatever
+                # machine runs the test, making the test
+                # non-deterministic across environments.
+                actor_identity="jsmith@example.com",
                 db_path=db,
             )
-
+ 
         results = get_risk_acceptance_records(db_path=db)
         assert len(results) == 1
         assert results[0]["record_id"] == record_id
-        assert results[0]["accepted_by"] == "budget_owner"
+        # accepted_by is the resolved IDENTITY, not the role.
+        assert results[0]["accepted_by"] == "jsmith@example.com"
+        # accepted_by_role is the separate, claimed role field.
+        assert results[0]["accepted_by_role"] == "budget_owner"
 
     def test_denied_override_not_included(self, tmp_path):
         """An OVERRIDE_DENIED entry should not create a

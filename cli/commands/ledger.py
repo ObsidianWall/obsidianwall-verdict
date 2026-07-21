@@ -133,13 +133,19 @@ def _print_ledger_table(
     typer.echo(f"\n  {len(records)} confirmed risk acceptance(s)")
 
     typer.echo(f"\n{'─' * _WIDTH}")
+    # Accepted By is widened to 26 chars — email addresses
+    # (the most common real value now that actor_identity
+    # auto-resolves via git config/CI env vars) routinely
+    # exceed the old 14-char limit, which was silently
+    # truncating real identities like "jsmith@example.com"
+    # down to "jsmith@example".
     header = (
         f"  {_bold('Decision ID'.ljust(12))}  {_bold('When'.ljust(16))}  "
-        f"{_bold('Policy'.ljust(22))}  {_bold('Accepted By'.ljust(16))}  "
+        f"{_bold('Policy'.ljust(20))}  {_bold('Accepted By'.ljust(26))}  "
         f"{_bold('Risk'.rjust(6))}"
     )
     typer.echo(header)
-    typer.echo(f"  {'─' * 12}  {'─' * 16}  {'─' * 22}  {'─' * 16}  {'─' * 6}")
+    typer.echo(f"  {'─' * 12}  {'─' * 16}  {'─' * 20}  {'─' * 26}  {'─' * 6}")
 
     for record in records:
         short_id: str = str(record.get("record_id", ""))[:8]
@@ -147,13 +153,13 @@ def _print_ledger_table(
         raw_timestamp: str = str(record.get("created_at", ""))
         when: str = raw_timestamp[:16].replace("T", " ") if raw_timestamp else "—"
 
-        policy_name: str = str(record.get("policy_name", ""))[:20]
-        accepted_by: str = str(record.get("accepted_by") or "—")[:14]
+        policy_name: str = str(record.get("policy_name", ""))[:18]
+        accepted_by: str = str(record.get("accepted_by") or "—")[:26]
         risk_score: int = int(record.get("overall_risk_score", 0))
 
         typer.echo(
-            f"  {short_id:<12}  {when:<16}  {policy_name:<22}  "
-            f"{accepted_by:<16}  {risk_score:>4}/100"
+            f"  {short_id:<12}  {when:<16}  {policy_name:<20}  "
+            f"{accepted_by:<26}  {risk_score:>4}/100"
         )
 
     typer.echo(f"\n{'─' * _WIDTH}")

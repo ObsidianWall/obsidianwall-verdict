@@ -138,16 +138,16 @@ class TestRenderExplain:
         assert "budget_owner" in captured.out
         assert "engineering_lead" in captured.out
 
-    def test_output_shows_next_step_action_framing(self, capsys):
+    def test_output_shows_action_required_framing(self, capsys):
         """
         v0.6.0 fix: Override section reframed as an action
-        ("Next Step / Request override from:") rather than
-        a passive noun label.
+        ("Action Required / Request override from:") rather
+        than a passive noun label.
         """
         artifact = _make_artifact()
         render_explain(artifact)
         captured = capsys.readouterr()
-        assert "Next Step" in captured.out
+        assert "Action Required" in captured.out
         assert "Request override from:" in captured.out
 
     def test_output_contains_reasoning_chain(self, capsys):
