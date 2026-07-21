@@ -27,29 +27,14 @@
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 
-_RESET = "\033[0m"
-_BOLD = "\033[1m"
-_DIM = "\033[2m"
-
-
-def _supports_color() -> bool:
-    isatty = getattr(sys.stdout, "isatty", None)
-    return callable(isatty) and isatty()
-
-
-def _color(text: str, code: str) -> str:
-    return f"{code}{text}{_RESET}" if _supports_color() else text
-
-
-def _bold(text: str) -> str:
-    return _color(text, _BOLD)
-
-
-def _dim(text: str) -> str:
-    return _color(text, _DIM)
+# Shared ANSI formatting — see renderers/ansi.py. Both
+# text_renderer.py and explain_renderer.py used to each
+# define their own private copies of these functions;
+# consolidated into one shared, public module so nothing
+# depends on another renderer's underscore-prefixed internals.
+from renderers.ansi import _bold, _dim
 
 
 def _section_header(title: str) -> str:
@@ -81,14 +66,12 @@ _RECOMMENDATION_CATEGORIES: dict[str, str] = {
     "burstable_migration": "Financial",
     "serverless_candidate": "Financial",
     "lifecycle_policy": "Financial",
-
     "network_segmentation": "Security",
     "missing_network_segmentation": "Security",
     "security_posture": "Security",
     "load_balancer_coverage": "Security",
     "database_redundancy": "Security",
     "compute_redundancy": "Security",
-
     "enforcement": "Governance",
     "analyzer_finding": "Governance",
     "optimization_candidate": "Governance",
@@ -107,9 +90,7 @@ def _group_recommendations_by_category(
     display order. Unrecognized recommendation types fall
     into "Other" rather than being dropped.
     """
-    buckets: dict[str, list[dict[str, Any]]] = {
-        cat: [] for cat in _CATEGORY_ORDER
-    }
+    buckets: dict[str, list[dict[str, Any]]] = {cat: [] for cat in _CATEGORY_ORDER}
 
     for rec in recommendations:
         rtype = rec.get("type", "")
@@ -178,9 +159,7 @@ def render_explain(
     # metadata.governance_objective.statement. Shows WHY
     # before HOW — the organizational outcome this decision
     # relates to, and whether it was upheld or violated.
-    governance_objective: dict[str, Any] = artifact.get(
-        "governance_objective", {}
-    )
+    governance_objective: dict[str, Any] = artifact.get("governance_objective", {})
     if governance_objective:
         obj_statement = governance_objective.get("statement", "")
         obj_status = governance_objective.get("status", "")
@@ -227,7 +206,11 @@ def render_explain(
 
         if override_possible:
             override_roles = sorted(
-                {n.get("target_role", "") for n in notifications if n.get("target_role")}
+                {
+                    n.get("target_role", "")
+                    for n in notifications
+                    if n.get("target_role")
+                }
             )
             if override_roles:
                 lines.append("")
@@ -351,14 +334,16 @@ def render_explain(
         lines.append(f"  Artifact Hash    sha256:{artifact_hash}")
     if recorded_at:
         lines.append(f"  Recorded         {recorded_at}")
-    lines.append(f"  Evidence Status  Stored locally")
+    lines.append("  Evidence Status  Stored locally")
 
     # History chain integrity — verify_history_chain() recomputes
     # every history entry's hash and confirms the chain is intact.
     # This is real, computed verification (not aspirational text) —
     # it detects if any past revision was altered after the fact.
     if chain_verified is not None:
-        integrity_label = "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
+        integrity_label = (
+            "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
+        )
         lines.append(f"  Integrity        {integrity_label}")
 
     lines.append("")

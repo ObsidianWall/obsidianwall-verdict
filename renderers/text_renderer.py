@@ -16,8 +16,9 @@
 
 from __future__ import annotations
 
-import sys
 from typing import Any
+
+from renderers.ansi import _bold, _color, _dim
 
 # =====================================================
 # SEVERITY INDICATORS
@@ -39,35 +40,11 @@ _SEVERITY_COLORS: dict[str, str] = {
     "informational": "\033[37m",  # light grey
 }
 
-_RESET = "\033[0m"
-_BOLD = "\033[1m"
-_DIM = "\033[2m"
-_ITALIC = "\033[3m"
-
-
-def _supports_color() -> bool:
-    """Return True if the terminal supports ANSI color codes."""
-    isatty = getattr(sys.stdout, "isatty", None)
-    return callable(isatty) and isatty()
-
-
-def _color(text: str, code: str) -> str:
-    if _supports_color():
-        return f"{code}{text}{_RESET}"
-    return text
-
-
-def _bold(text: str) -> str:
-    return _color(text, _BOLD)
-
-
-def _dim(text: str) -> str:
-    return _color(text, _DIM)
-
-def _dim_italic(text: str) -> str:
-    # ANSI code for dim + italic is \033[2;3m
-    return _color(text, "\033[2;3m")
-
+# Shared ANSI formatting — see renderers/ansi.py. Both
+# text_renderer.py and explain_renderer.py used to each
+# define their own private copies of these functions;
+# consolidated into one shared, public module so nothing
+# depends on another renderer's underscore-prefixed internals.
 
 
 def _severity_color(text: str, severity: str) -> str:
@@ -190,7 +167,7 @@ def render_text(
             n.get("target_role", "") for n in notifications if n.get("target_role")
         ]
         if notif_roles:
-            lines.append(f"  {_bold('Action Required')}")
+            lines.append(f"  {_bold('Next Step')}")
             lines.append("    Request override from:")
             for r in notif_roles:
                 lines.append(f"      • {r}")
@@ -214,7 +191,7 @@ def render_text(
         f"  {_dim('·')}  {_dim(f'Full artifact: {resolved_output_path}')}"
     )
     lines.append(
-        f"  {_dim('Run')}  {_dim_italic(f"'verdict explain {short_id}'")}"
+        f"  {_dim('Run')}  {_dim(f'verdict explain {short_id}')}"
         f"  {_dim('for full reasoning chain')}"
     )
     lines.append(_divider())

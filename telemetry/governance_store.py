@@ -67,6 +67,7 @@ from pathlib import Path
 from typing import Any
 
 from telemetry.config import get_db_path, is_telemetry_enabled
+from telemetry.identity import resolve_actor_identity, resolve_execution_host
 from telemetry.policy_classifier import classify_policy_family
 
 # =====================================================
@@ -173,6 +174,16 @@ CREATE TABLE IF NOT EXISTS governance_history (
                                                              -- entry for this record
 
     actor_role                               TEXT,
+    actor_identity                             TEXT,
+    -- Best-effort actor identity for this specific history
+    -- entry (e.g. who approved an override) — same resolution
+    -- and same "not authentication" caveat as
+    -- governance_records.executed_by.
+    execution_host                               TEXT,
+    -- Hostname only — same scope limit as
+    -- governance_records.execution_host. An override
+    -- approval can happen on a different machine than the
+    -- original decision, so this is captured per-entry.
     created_at                                 TEXT NOT NULL,
 
     FOREIGN KEY (record_id) REFERENCES governance_records(record_id)
@@ -267,6 +278,10 @@ _MIGRATIONS: list[str] = [
     "ALTER TABLE governance_records ADD COLUMN passed_conditions TEXT",
     "ALTER TABLE governance_records ADD COLUMN "
     "is_risk_acceptance_candidate INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE governance_records ADD COLUMN executed_by TEXT",
+    "ALTER TABLE governance_history ADD COLUMN actor_identity TEXT",
+    "ALTER TABLE governance_records ADD COLUMN execution_host TEXT",
+    "ALTER TABLE governance_history ADD COLUMN execution_host TEXT",
 ]
 
 
@@ -511,6 +526,14 @@ def create_governance_record(
             risk_summary.get("analyzer_scores", {}), default=str
         )
 
+        # Best-effort "who ran this" and "on what machine" —
+        # see telemetry/identity.py. NOT authentication.
+        # executed_by separate from user_role (--role), which
+        # is a claimed authorization level, not an identity.
+        # execution_host is hostname only — never IP/location.
+        executed_by = resolve_actor_identity()
+        execution_host = resolve_execution_host()
+
         conn.execute(
             """
             INSERT INTO governance_records (
@@ -522,12 +545,13 @@ def create_governance_record(
                 effective_severity, governance_severity,
                 override_possible, requires_approval,
                 plan_hash, user_role, verdict_version,
+                executed_by, execution_host,
                 created_at, analyzer_scores, failed_conditions,
                 passed_conditions, is_risk_acceptance_candidate,
                 current_history_number,
                 current_history_category, current_history_action
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
                 'decision', 'created'
             )
             """,
@@ -549,6 +573,8 @@ def create_governance_record(
                 plan_hash,
                 None,  # user_role — reserved
                 verdict_version,
+                executed_by,
+                execution_host,
                 timestamp,
                 analyzer_scores_json,
                 json.dumps(failed_condition_ids, default=str),
@@ -744,6 +770,8 @@ def add_history_entry(
     history_action: str,
     history_data: dict[str, Any],
     actor_role: str | None = None,
+    actor_identity: str | None = None,
+    execution_host: str | None = None,
     db_path: Path | None = None,
 ) -> bool:
     """
@@ -770,7 +798,16 @@ def add_history_entry(
                            detected | resolved
         history_data:        type-specific JSON-serializable
                            payload
-        actor_role:          who or what triggered this entry
+        actor_role:          claimed authorization role
+                           (e.g. "budget_owner") — who or
+                           what CLAIMS to have triggered this
+        actor_identity:      best-effort resolved identity
+                           (see telemetry/identity.py) — WHO
+                           actually ran the command. Auto-
+                           resolved via resolve_actor_identity()
+                           if not explicitly provided. NOT
+                           authentication — a signal, not a
+                           security control.
         db_path:              optional path override (for testing)
 
     Returns:
@@ -780,6 +817,11 @@ def add_history_entry(
     """
     if not is_telemetry_enabled():
         return False
+
+    if actor_identity is None:
+        actor_identity = resolve_actor_identity()
+    if execution_host is None:
+        execution_host = resolve_execution_host()
 
     conn = None
     try:
@@ -803,8 +845,9 @@ def add_history_entry(
                 history_id, record_id, history_number,
                 history_category, history_action,
                 history_data, history_hash,
-                prev_history_hash, actor_role, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                prev_history_hash, actor_role, actor_identity,
+                execution_host, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(uuid.uuid4()),
@@ -816,6 +859,8 @@ def add_history_entry(
                 history_hash,
                 prev_hash,
                 actor_role,
+                actor_identity,
+                execution_host,
                 timestamp,
             ),
         )
@@ -1387,7 +1432,9 @@ def get_risk_acceptance_records(
 
     Each returned record includes an "accepted_by" field
     (the actor_role from the approving OVERRIDE_APPROVED
-    entry) and "accepted_at" (that entry's created_at).
+    entry, if resolved — NOT authentication, best-effort only),
+    "accepted_by_role" (the claimed --role at approval time),
+    and "accepted_at" (that entry's created_at).
 
     Returns newest first. Empty list on error or if no
     confirmed risk acceptances exist yet.
@@ -1399,7 +1446,8 @@ def get_risk_acceptance_records(
             """
             SELECT
                 r.*,
-                h.actor_role as accepted_by,
+                h.actor_role as accepted_by_role,
+                h.actor_identity as accepted_by,
                 h.created_at as accepted_at
             FROM governance_records r
             JOIN governance_history h ON h.record_id = r.record_id

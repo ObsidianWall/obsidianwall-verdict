@@ -181,10 +181,14 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
         objective_statement = None  # not present in v0.5.x decisions table
         objective_hash = hash_objective_statement(objective_statement)
 
-        is_risk_candidate = 1 if (
-            row.get("decision", "") == "DENY_WITH_OVERRIDE"
-            and row.get("override_possible")
-        ) else 0
+        is_risk_candidate = (
+            1
+            if (
+                row.get("decision", "") == "DENY_WITH_OVERRIDE"
+                and row.get("override_possible")
+            )
+            else 0
+        )
 
         conn.execute(
             """
@@ -274,10 +278,13 @@ def _migrate_overrides(conn: sqlite3.Connection) -> int:
 
     for row in rows:
         record_id = row["decision_id"]
-        if conn.execute(
-            "SELECT record_id FROM governance_records WHERE record_id = ?",
-            (record_id,),
-        ).fetchone() is None:
+        if (
+            conn.execute(
+                "SELECT record_id FROM governance_records WHERE record_id = ?",
+                (record_id,),
+            ).fetchone()
+            is None
+        ):
             continue
 
         action = "approved" if row.get("approved") else "denied"
@@ -288,7 +295,11 @@ def _migrate_overrides(conn: sqlite3.Connection) -> int:
         }
 
         _append_migrated_history(
-            conn, record_id, "override", action, history_data,
+            conn,
+            record_id,
+            "override",
+            action,
+            history_data,
             row.get("timestamp", datetime.now(timezone.utc).isoformat()),
         )
         migrated += 1
@@ -311,10 +322,13 @@ def _migrate_approvals(conn: sqlite3.Connection) -> int:
 
     for row in rows:
         record_id = row["decision_id"]
-        if conn.execute(
-            "SELECT record_id FROM governance_records WHERE record_id = ?",
-            (record_id,),
-        ).fetchone() is None:
+        if (
+            conn.execute(
+                "SELECT record_id FROM governance_records WHERE record_id = ?",
+                (record_id,),
+            ).fetchone()
+            is None
+        ):
             continue
 
         action = "approved" if row.get("approved") else "denied"
@@ -326,7 +340,11 @@ def _migrate_approvals(conn: sqlite3.Connection) -> int:
         }
 
         _append_migrated_history(
-            conn, record_id, "approval", action, history_data,
+            conn,
+            record_id,
+            "approval",
+            action,
+            history_data,
             row.get("timestamp", datetime.now(timezone.utc).isoformat()),
         )
         migrated += 1
@@ -349,10 +367,13 @@ def _migrate_outcomes(conn: sqlite3.Connection) -> int:
 
     for row in rows:
         record_id = row["decision_id"]
-        if conn.execute(
-            "SELECT record_id FROM governance_records WHERE record_id = ?",
-            (record_id,),
-        ).fetchone() is None:
+        if (
+            conn.execute(
+                "SELECT record_id FROM governance_records WHERE record_id = ?",
+                (record_id,),
+            ).fetchone()
+            is None
+        ):
             continue
 
         outcome_type = row.get("outcome_type", "")
@@ -370,7 +391,11 @@ def _migrate_outcomes(conn: sqlite3.Connection) -> int:
         }
 
         _append_migrated_history(
-            conn, record_id, category, action, history_data,
+            conn,
+            record_id,
+            category,
+            action,
+            history_data,
             row.get("timestamp", datetime.now(timezone.utc).isoformat()),
         )
         migrated += 1
@@ -390,8 +415,7 @@ def _migrate_decision_artifacts(conn: sqlite3.Connection) -> int:
         return 0
 
     rows = [
-        dict(r)
-        for r in conn.execute("SELECT * FROM decision_artifacts").fetchall()
+        dict(r) for r in conn.execute("SELECT * FROM decision_artifacts").fetchall()
     ]
     migrated = 0
 
@@ -399,10 +423,13 @@ def _migrate_decision_artifacts(conn: sqlite3.Connection) -> int:
         record_id = row.get("decision_id")
         if record_id is None:
             continue
-        if conn.execute(
-            "SELECT record_id FROM governance_records WHERE record_id = ?",
-            (record_id,),
-        ).fetchone() is None:
+        if (
+            conn.execute(
+                "SELECT record_id FROM governance_records WHERE record_id = ?",
+                (record_id,),
+            ).fetchone()
+            is None
+        ):
             continue
 
         conn.execute(
@@ -418,9 +445,7 @@ def _migrate_decision_artifacts(conn: sqlite3.Connection) -> int:
                 row.get("artifact_type", "evaluation"),
                 row.get("artifact_json", "{}"),
                 row.get("artifact_hash"),
-                row.get(
-                    "created_at", datetime.now(timezone.utc).isoformat()
-                ),
+                row.get("created_at", datetime.now(timezone.utc).isoformat()),
             ),
         )
         migrated += 1
@@ -436,9 +461,9 @@ def _verify_and_finalize(conn: sqlite3.Connection) -> bool:
     """
     old_decisions = 0
     if _table_exists(conn, "decisions"):
-        old_decisions = conn.execute(
-            "SELECT COUNT(*) as c FROM decisions"
-        ).fetchone()["c"]
+        old_decisions = conn.execute("SELECT COUNT(*) as c FROM decisions").fetchone()[
+            "c"
+        ]
 
     new_records = conn.execute(
         "SELECT COUNT(*) as c FROM governance_records"
@@ -461,7 +486,10 @@ def _verify_and_finalize(conn: sqlite3.Connection) -> bool:
         return False
 
     for table in (
-        "decisions", "overrides", "approvals", "outcomes",
+        "decisions",
+        "overrides",
+        "approvals",
+        "outcomes",
         "decision_artifacts",
     ):
         if _table_exists(conn, table):

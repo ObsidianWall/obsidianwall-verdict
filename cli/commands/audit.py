@@ -20,7 +20,7 @@ from typing import Any, Optional
 import typer
 
 from cli.display import decision_icon
-from renderers.explain_renderer import _bold, _color
+from renderers.ansi import _bold
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.governance_store import (
     get_domain_risk_summary,
@@ -30,8 +30,6 @@ from telemetry.governance_store import (
     get_policy_effectiveness,
     get_recent_records,
 )
-
-
 
 audit_app = typer.Typer(
     help="Governance risk audit across recorded decisions.",
@@ -286,9 +284,7 @@ def _print_audit_table(
         f"  {'Decision ID':<12}  {'When':<16}  {'Policy':<24}  "
         f"{'Decision':<24}  {'Score':>6}"
     )
-    typer.echo(
-        f"  {'─' * 12}  {'─' * 16}  {'─' * 24}  {'─' * 24}  {'─' * 6}"
-    )
+    typer.echo(f"  {'─' * 12}  {'─' * 16}  {'─' * 24}  {'─' * 24}  {'─' * 6}")
     for row in recent[:limit]:
         short_id: str = str(row.get("record_id", ""))[:8]
         # created_at is stored as an ISO 8601 timestamp

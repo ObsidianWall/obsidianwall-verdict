@@ -64,7 +64,25 @@ reproducible, and attributable to a human-authored policy.
 
 ```bash
 pip install obsidianwall-verdict
+verdict --version
 ```
+
+---
+
+**Installing on Debian/Ubuntu (including WSL)?**
+
+If you see `error: externally-managed-environment`, this is expected on modern Debian/Ubuntu systems (Ubuntu 23.04+, Debian 12+) — not specific to Verdict. We recommend installing with [`pipx`](https://pypa.github.io/pipx/), which is built for exactly this case:
+
+```bash
+sudo apt install pipx
+pipx ensurepath
+pipx install obsidianwall-verdict
+```
+
+See [Installation Troubleshooting](https://obsidianwall.dev/docs/verdict/troubleshooting) for the full guide, including virtual environment and upgrade-conflict scenarios.
+
+---
+
 
 **Write a policy**
 

@@ -106,7 +106,12 @@ def backfill(db_path: Path | None = None, dry_run: bool = False) -> dict:
 
     if not path.exists():
         print(f"No database found at {path}. Nothing to backfill.")
-        return {"total_incomplete": 0, "recovered": 0, "skipped_no_evidence": 0, "errors": 0}
+        return {
+            "total_incomplete": 0,
+            "recovered": 0,
+            "skipped_no_evidence": 0,
+            "errors": 0,
+        }
 
     if not dry_run:
         backup_path = _backup_database(path)
@@ -120,7 +125,12 @@ def backfill(db_path: Path | None = None, dry_run: bool = False) -> dict:
 
     if total == 0:
         conn.close()
-        return {"total_incomplete": 0, "recovered": 0, "skipped_no_evidence": 0, "errors": 0}
+        return {
+            "total_incomplete": 0,
+            "recovered": 0,
+            "skipped_no_evidence": 0,
+            "errors": 0,
+        }
 
     recovered = 0
     skipped_no_evidence = 0
