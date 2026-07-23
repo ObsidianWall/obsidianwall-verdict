@@ -100,12 +100,6 @@ jobs:
           semgrep --config=auto engine/ schemas/ audit/ cli/ \
             --error --quiet
 
-      - name: pip-audit SCA
-        run: |
-          pip install --upgrade pip
-          pip install pip-audit
-          pip-audit
-
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51         # v3.95.5
         with:
@@ -124,6 +118,12 @@ jobs:
           pip-licenses \
             --fail-on="GPL-2.0-only;GPL-2.0-or-later;GPL-3.0-only;GPL-3.0-or-later;AGPL-3.0-only;AGPL-3.0-or-later;AGPL-3.0" \
             --ignore-packages obsidianwall-verdict
+
+      - name: pip-audit SCA
+        run: |
+          pip install --upgrade pip
+          pip install pip-audit
+          pip-audit      
 
   # ===================================================
   # TEST SUITE
