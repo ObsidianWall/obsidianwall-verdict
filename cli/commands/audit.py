@@ -293,7 +293,16 @@ def _print_audit_table(
         # full precision remains in the record itself and in
         # verdict explain.
         raw_timestamp: str = str(row.get("created_at", ""))
-        when: str = raw_timestamp[:16].replace("T", " ") if raw_timestamp else "—"
+        # created_at is stored in UTC (see governance_store.py —
+        # datetime.now(timezone.utc)). Explicitly labeled here so
+        # it's never mistaken for local time — the raw ISO string
+        # was previously truncated right before its +00:00 offset
+        # marker, silently discarding the one signal that it was
+        # UTC at all.
+        when: str = (
+            f"{raw_timestamp[:16].replace('T', ' ')} UTC"
+            if raw_timestamp else "—"
+        )
         name_r: str = str(row.get("policy_name", ""))[:22]
         decision: str = str(row.get("decision", ""))[:22]
         score: int = int(row.get("overall_risk_score", 0))

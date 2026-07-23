@@ -488,9 +488,7 @@ def create_governance_record(
 
         plan_hash: str | None = None
         if plan_path:
-            plan_hash = hashlib.sha256(
-                plan_path.encode("utf-8")
-            ).hexdigest()[:16]
+            plan_hash = hashlib.sha256(plan_path.encode("utf-8")).hexdigest()[:16]
 
         # Auto-compute if not explicitly provided
         if policy_content_hash is None:
@@ -499,9 +497,7 @@ def create_governance_record(
             policy_family = _classify_policy(policy_path)
 
         risk_summary: dict[str, Any] = result.get("risk_summary", {})
-        governance_objective: dict[str, Any] = result.get(
-            "governance_objective", {}
-        )
+        governance_objective: dict[str, Any] = result.get("governance_objective", {})
         objective_statement = governance_objective.get("statement")
         objective_hash = hash_objective_statement(objective_statement)
 
@@ -513,14 +509,10 @@ def create_governance_record(
         # evidence artifact load per record).
         trace: list[dict[str, Any]] = result.get("trace", [])
         failed_condition_ids = [
-            t.get("condition_id", "")
-            for t in trace
-            if not t.get("result", True)
+            t.get("condition_id", "") for t in trace if not t.get("result", True)
         ]
         passed_condition_ids = [
-            t.get("condition_id", "")
-            for t in trace
-            if t.get("result", True)
+            t.get("condition_id", "") for t in trace if t.get("result", True)
         ]
         analyzer_scores_json = json.dumps(
             risk_summary.get("analyzer_scores", {}), default=str
@@ -579,10 +571,12 @@ def create_governance_record(
                 analyzer_scores_json,
                 json.dumps(failed_condition_ids, default=str),
                 json.dumps(passed_condition_ids, default=str),
-                1 if (
+                1
+                if (
                     result.get("decision", "") == "DENY_WITH_OVERRIDE"
                     and result.get("override_possible")
-                ) else 0,
+                )
+                else 0,
             ),
         )
 
@@ -648,9 +642,7 @@ def record_governance_evidence(
     conn = None
     try:
         evidence_json = json.dumps(evidence, default=str)
-        evidence_hash = hashlib.sha256(
-            evidence_json.encode("utf-8")
-        ).hexdigest()[:16]
+        evidence_hash = hashlib.sha256(evidence_json.encode("utf-8")).hexdigest()[:16]
 
         conn = init_governance_db(db_path)
         conn.execute(
@@ -1278,8 +1270,7 @@ def get_policy_effectiveness(
             cursor = conn.execute(query, (policy_name,))
         else:
             query = (
-                base_query
-                + " GROUP BY r.policy_name ORDER BY total_evaluations DESC"
+                base_query + " GROUP BY r.policy_name ORDER BY total_evaluations DESC"
             )
             cursor = conn.execute(query)
 
@@ -1418,9 +1409,9 @@ def get_failed_conditions_summary(
                 {
                     "condition_id": cid,
                     "count": count,
-                    "rate": round(
-                        count / evaluated_counts[cid] * 100, 1
-                    ) if evaluated_counts.get(cid) else 0.0,
+                    "rate": round(count / evaluated_counts[cid] * 100, 1)
+                    if evaluated_counts.get(cid)
+                    else 0.0,
                 }
                 for cid, count in failed_counts.items()
             ],
@@ -1491,9 +1482,9 @@ def get_passed_conditions_summary(
                 {
                     "condition_id": cid,
                     "count": count,
-                    "rate": round(
-                        count / evaluated_counts[cid] * 100, 1
-                    ) if evaluated_counts.get(cid) else 0.0,
+                    "rate": round(count / evaluated_counts[cid] * 100, 1)
+                    if evaluated_counts.get(cid)
+                    else 0.0,
                 }
                 for cid, count in passed_counts.items()
             ],
@@ -1599,10 +1590,7 @@ def get_outcome_summary(
                 continue
 
         return sorted(
-            [
-                {"outcome_type": k, "count": v}
-                for k, v in outcome_counts.items()
-            ],
+            [{"outcome_type": k, "count": v} for k, v in outcome_counts.items()],
             key=lambda x: x["count"],  # type: ignore[return-value]
             reverse=True,
         )
@@ -1613,6 +1601,7 @@ def get_outcome_summary(
     finally:
         if conn is not None:
             conn.close()
+
 
 # =====================================================
 # COMPASS QUERY FOUNDATION
@@ -1673,8 +1662,11 @@ def get_outcome_correlation(
                 "outcome_type": outcome_type,
                 "frequency": count,
             }
-            for (policy_name, decision, outcome_type), count
-            in correlation_counts.items()
+            for (
+                policy_name,
+                decision,
+                outcome_type,
+            ), count in correlation_counts.items()
         ]
 
         return sorted(
@@ -1739,9 +1731,7 @@ def get_objective_summary(
             text as declared in policy metadata
         db_path: optional path override (for testing)
     """
-    records = get_records_by_objective(
-        governance_objective_statement, db_path=db_path
-    )
+    records = get_records_by_objective(governance_objective_statement, db_path=db_path)
 
     if not records:
         return {
@@ -1756,15 +1746,18 @@ def get_objective_summary(
 
     total = len(records)
     upheld_count = sum(
-        1 for r in records
+        1
+        for r in records
         if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
     )
     violated_count = sum(
-        1 for r in records
+        1
+        for r in records
         if _classify_for_objective_summary(r.get("decision", "")) == "violated"
     )
     pending_count = sum(
-        1 for r in records
+        1
+        for r in records
         if _classify_for_objective_summary(r.get("decision", "")) == "pending"
     )
 
@@ -1779,11 +1772,13 @@ def get_objective_summary(
         older = records[half:]
 
         recent_upheld = sum(
-            1 for r in recent
+            1
+            for r in recent
             if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
         )
         older_upheld = sum(
-            1 for r in older
+            1
+            for r in older
             if _classify_for_objective_summary(r.get("decision", "")) == "upheld"
         )
 

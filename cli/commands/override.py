@@ -129,8 +129,7 @@ def request(
 
     if not success:
         print(
-            "\n  Failed to record override request. "
-            "Telemetry may be disabled.\n",
+            "\n  Failed to record override request. Telemetry may be disabled.\n",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
@@ -139,7 +138,7 @@ def request(
         f"\n  Override requested for decision {full_id[:8]}.\n"
         f"  Reason: {reason}\n\n"
         f"  Awaiting approval — run:\n"
-        f"    verdict override approve {full_id[:8]} --reason \"...\"\n"
+        f'    verdict override approve {full_id[:8]} --reason "..."\n'
     )
 
 
@@ -174,7 +173,7 @@ def approve(
             f"\n  No override request found for decision "
             f"{full_id[:8]}.\n"
             f"  Run 'verdict override request {full_id[:8]} "
-            f"--reason \"...\"' first.\n",
+            f'--reason "..."\' first.\n',
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
@@ -198,8 +197,7 @@ def approve(
 
     if not success:
         print(
-            "\n  Failed to record override approval. "
-            "Telemetry may be disabled.\n",
+            "\n  Failed to record override approval. Telemetry may be disabled.\n",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
@@ -237,8 +235,7 @@ def deny(
 
     if latest is None:
         print(
-            f"\n  No override request found for decision "
-            f"{full_id[:8]}.\n",
+            f"\n  No override request found for decision {full_id[:8]}.\n",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
@@ -260,13 +257,9 @@ def deny(
 
     if not success:
         print(
-            "\n  Failed to record override denial. "
-            "Telemetry may be disabled.\n",
+            "\n  Failed to record override denial. Telemetry may be disabled.\n",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
 
-    print(
-        f"\n  Override denied for decision {full_id[:8]}.\n"
-        f"  Reason: {reason}\n"
-    )
+    print(f"\n  Override denied for decision {full_id[:8]}.\n  Reason: {reason}\n")

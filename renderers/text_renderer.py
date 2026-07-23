@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from renderers.ansi import _bold, _color, _dim
+from renderers.ansi import _bold, _color, _dim, _dim_italics
 
 # =====================================================
 # SEVERITY INDICATORS
@@ -167,7 +167,7 @@ def render_text(
             n.get("target_role", "") for n in notifications if n.get("target_role")
         ]
         if notif_roles:
-            lines.append(f"  {_bold('Next Step')}")
+            lines.append(f"  {_bold('Action Required')}")
             lines.append("    Request override from:")
             for r in notif_roles:
                 lines.append(f"      • {r}")
@@ -191,7 +191,7 @@ def render_text(
         f"  {_dim('·')}  {_dim(f'Full artifact: {resolved_output_path}')}"
     )
     lines.append(
-        f"  {_dim('Run')}  {_dim(f'verdict explain {short_id}')}"
+        f"  {_dim('Run')}  {_dim_italics(f'verdict explain {short_id}')}"
         f"  {_dim('for full reasoning chain')}"
     )
     lines.append(_divider())

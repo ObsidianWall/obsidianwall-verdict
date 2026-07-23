@@ -37,7 +37,6 @@ import typer
 from telemetry.governance_store import (
     get_governance_evidence,
     get_governance_evidence_metadata,
-    get_governance_record,
     resolve_record_id,
     verify_history_chain,
 )
