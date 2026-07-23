@@ -35,7 +35,6 @@ from typing import Any, Optional
 
 import typer
 
-from cli.display import decision_icon
 from renderers.ansi import _bold, _dim
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.governance_store import get_risk_acceptance_records
@@ -176,9 +175,7 @@ def _print_ledger_table(
         f"{_bold('Risk'.rjust(6))}"
     )
     typer.echo(header)
-    typer.echo(
-        f"  {'─' * 12}  {'─' * 20}  {'─' * 20}  {'─' * 26}  {'─' * 6}"
-    )
+    typer.echo(f"  {'─' * 12}  {'─' * 20}  {'─' * 20}  {'─' * 26}  {'─' * 6}")
 
     for record in records:
         short_id: str = str(record.get("record_id", ""))[:8]
@@ -187,8 +184,7 @@ def _print_ledger_table(
         # created_at is stored in UTC — labeled explicitly so
         # it's never mistaken for local time.
         when: str = (
-            f"{raw_timestamp[:16].replace('T', ' ')} UTC"
-            if raw_timestamp else "—"
+            f"{raw_timestamp[:16].replace('T', ' ')} UTC" if raw_timestamp else "—"
         )
 
         policy_name: str = str(record.get("policy_name", ""))[:18]
@@ -199,7 +195,8 @@ def _print_ledger_table(
         seq, total = sequence_lookup.get(key, (1, 1))
         repeat_note = (
             f"  {_dim(f'({_ordinal(seq)} override on this decision)')}"
-            if total > 1 else ""
+            if total > 1
+            else ""
         )
 
         typer.echo(

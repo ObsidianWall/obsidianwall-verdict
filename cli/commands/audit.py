@@ -300,8 +300,7 @@ def _print_audit_table(
         # marker, silently discarding the one signal that it was
         # UTC at all.
         when: str = (
-            f"{raw_timestamp[:16].replace('T', ' ')} UTC"
-            if raw_timestamp else "—"
+            f"{raw_timestamp[:16].replace('T', ' ')} UTC" if raw_timestamp else "—"
         )
         name_r: str = str(row.get("policy_name", ""))[:22]
         decision: str = str(row.get("decision", ""))[:22]
