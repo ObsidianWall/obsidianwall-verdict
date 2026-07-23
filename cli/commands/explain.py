@@ -15,6 +15,10 @@
 # module docstring for the Governance Record / History /
 # Evidence design rationale.
 #
+# Short-ID resolution (resolve_record_id) lives in
+# governance_store.py as a shared function, not duplicated
+# here privately — verdict override uses the same lookup.
+#
 # Usage:
 #   verdict explain <decision_id>
 #   verdict explain 9e9c0819          (short ID prefix works)
@@ -34,6 +38,7 @@ from telemetry.governance_store import (
     get_governance_evidence,
     get_governance_evidence_metadata,
     get_governance_record,
+    resolve_record_id,
     verify_history_chain,
 )
 
@@ -41,41 +46,6 @@ explain_app = typer.Typer(
     name="explain",
     help="Show the full reasoning chain for a past governance decision.",
 )
-
-
-def _find_full_decision_id(short_id: str) -> str | None:
-    """
-    Resolve a short decision ID prefix (e.g. first 8 chars,
-    as shown in verdict evaluate's text renderer footer) to
-    a full decision_id.
-
-    If short_id is already a full UUID and matches a stored
-    record, returns it unchanged. Otherwise searches recent
-    records for a matching prefix.
-
-    Returns None if no match is found.
-    """
-    # Try exact match first — handles full UUIDs directly.
-    exact = get_governance_record(short_id)
-    if exact is not None:
-        return short_id
-
-    # Fall back to prefix search across recent records.
-    from telemetry.governance_store import init_governance_db
-
-    conn = init_governance_db()
-    cursor = conn.execute(
-        "SELECT record_id FROM governance_records ORDER BY created_at DESC LIMIT 500"
-    )
-    recent_ids = [row["record_id"] for row in cursor.fetchall()]
-    conn.close()
-
-    matches = [rid for rid in recent_ids if rid.startswith(short_id)]
-
-    if len(matches) == 1:
-        return matches[0]
-
-    return None
 
 
 def _print_not_found(short_id: str) -> None:
@@ -115,7 +85,7 @@ def explain(
       Using the full decision ID:
         verdict explain 9e9c0819-58e2-4ac6-a5a6-513ca7258ff6
     """
-    full_id = _find_full_decision_id(decision_id)
+    full_id = resolve_record_id(decision_id)
 
     if full_id is None:
         _print_not_found(decision_id)
