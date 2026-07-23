@@ -147,14 +147,29 @@ jobs:
           python-version: "3.11"
  
       - name: Install project dependencies only
+          #  setuptools upgraded explicitly here — the
+          #  [build-system] requires>=83.0.0 in pyproject.toml
+          #   only governs pip's ISOLATED, temporary build
+          #  environment; it never touches the persistent
+          #  environment pip-audit scans afterward. This is
+          # a completely separate setuptools installation,
+          # bundled by actions/setup-python's toolcache image.
         run: |
+          pip install --upgrade "setuptools>=83.0.0"
           pip install -e ".[dev]"
- 
+
       - name: pip-audit SCA
+          #  --skip-editable: obsidianwall-verdict itself is
+          # installed locally/editable at a version never
+          # published to PyPI, so pip-audit cannot check it
+          # against an advisory database — that's expected,
+          # not a finding. This flag scopes the audit to
+          # actual third-party DEPENDENCIES, which is the
+          # whole point of this job.
         run: |
           pip install --upgrade pip
           pip install pip-audit
-          pip-audit
+          pip-audit --skip-editable
      
 
   # ===================================================
