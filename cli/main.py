@@ -32,6 +32,7 @@ from cli.commands.audit import audit_app
 from cli.commands.coverage import coverage
 from cli.commands.explain import explain_app
 from cli.commands.ledger import ledger_app
+from cli.commands.override import override_app
 from cli.commands.sentinel import sentinel_app
 from cli.commands.simulate import simulate
 from cli.commands.test_command import test_command
@@ -60,6 +61,7 @@ app.add_typer(audit_app, name="audit")
 app.add_typer(sentinel_app, name="sentinel")
 app.add_typer(explain_app, name="explain")
 app.add_typer(ledger_app, name="ledger")
+app.add_typer(override_app, name="override")
 app.command(name="coverage")(coverage)
 app.command(name="simulate")(simulate)
 app.command(name="test")(test_command)
