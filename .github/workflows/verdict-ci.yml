@@ -119,11 +119,43 @@ jobs:
             --fail-on="GPL-2.0-only;GPL-2.0-or-later;GPL-3.0-only;GPL-3.0-or-later;AGPL-3.0-only;AGPL-3.0-or-later;AGPL-3.0" \
             --ignore-packages obsidianwall-verdict
 
+
+  # ===================================================
+  # DEPENDENCY AUDIT
+  #
+  # Runs in a dedicated, clean environment — installs
+  # ONLY obsidianwall-verdict's own dependencies plus
+  # pip-audit itself. Deliberately kept separate from
+  # the lint job (see note at the top of this file).
+  #
+  # Runs in PARALLEL with lint — it doesn't depend on
+  # ruff/bandit/semgrep passing, only on this project's
+  # own dependency tree.
+  # ===================================================
+ 
+  dependency-audit:
+    name: Dependency Audit (pip-audit)
+    runs-on: ubuntu-24.04
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0                  # v6.0.3
+ 
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405               # v6.2.0
+        with:
+          python-version: "3.11"
+ 
+      - name: Install project dependencies only
+        run: |
+          pip install -e ".[dev]"
+ 
       - name: pip-audit SCA
         run: |
           pip install --upgrade pip
           pip install pip-audit
-          pip-audit      
+          pip-audit
+     
 
   # ===================================================
   # TEST SUITE
