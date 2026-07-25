@@ -11,8 +11,8 @@
 
 
 from context.translators.terraform_parser import (
-    _count_ssl_not_enforced,
-    _count_versioning_disabled,
+    count_ssl_not_enforced,
+    count_versioning_disabled,
 )
 
 
@@ -31,7 +31,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"ssl_enforcement_enabled": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_mysql_server_with_ssl(self):
         resources = [
@@ -41,7 +41,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"ssl_enforcement_enabled": True},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
     def test_counts_postgresql_server_without_ssl(self):
         resources = [
@@ -51,7 +51,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"ssl_enforcement_enabled": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_counts_app_service_without_https_only(self):
         resources = [
@@ -61,7 +61,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"https_only": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_app_service_with_https_only(self):
         resources = [
@@ -71,7 +71,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"https_only": True},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
     def test_counts_linux_web_app_without_https_only(self):
         resources = [
@@ -81,7 +81,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"https_only": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_counts_storage_account_with_tls10(self):
         resources = [
@@ -91,7 +91,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"min_tls_version": "TLS1_0"},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_counts_storage_account_with_tls11(self):
         resources = [
@@ -101,7 +101,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"min_tls_version": "TLS1_1"},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_storage_account_with_tls12(self):
         resources = [
@@ -111,7 +111,7 @@ class TestSslNotEnforcedAzure:
                 "values": {"min_tls_version": "TLS1_2"},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
 
 # =====================================================
@@ -129,7 +129,7 @@ class TestSslNotEnforcedAws:
                 "values": {"protocol": "HTTP"},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_https_lb_listener(self):
         resources = [
@@ -139,7 +139,7 @@ class TestSslNotEnforcedAws:
                 "values": {"protocol": "HTTPS"},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
     def test_counts_elasticache_without_transit_encryption(self):
         resources = [
@@ -149,7 +149,7 @@ class TestSslNotEnforcedAws:
                 "values": {"transit_encryption_enabled": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_elasticache_with_transit_encryption(self):
         resources = [
@@ -159,7 +159,7 @@ class TestSslNotEnforcedAws:
                 "values": {"transit_encryption_enabled": True},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
     def test_counts_publicly_accessible_rds(self):
         resources = [
@@ -169,7 +169,7 @@ class TestSslNotEnforcedAws:
                 "values": {"publicly_accessible": True},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 1
+        assert count_ssl_not_enforced(resources) == 1
 
     def test_does_not_count_private_rds(self):
         resources = [
@@ -179,10 +179,10 @@ class TestSslNotEnforcedAws:
                 "values": {"publicly_accessible": False},
             }
         ]
-        assert _count_ssl_not_enforced(resources) == 0
+        assert count_ssl_not_enforced(resources) == 0
 
     def test_returns_zero_for_empty_resources(self):
-        assert _count_ssl_not_enforced([]) == 0
+        assert count_ssl_not_enforced([]) == 0
 
     def test_counts_multiple_violations(self):
         resources = [
@@ -197,7 +197,7 @@ class TestSslNotEnforcedAws:
                 "values": {"transit_encryption_enabled": False},
             },
         ]
-        assert _count_ssl_not_enforced(resources) == 2
+        assert count_ssl_not_enforced(resources) == 2
 
 
 # =====================================================
@@ -217,7 +217,7 @@ class TestVersioningDisabledAzure:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_does_not_count_storage_account_with_versioning(self):
         resources = [
@@ -229,7 +229,7 @@ class TestVersioningDisabledAzure:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 0
+        assert count_versioning_disabled(resources) == 0
 
     def test_counts_storage_account_without_blob_properties(self):
         resources = [
@@ -239,7 +239,7 @@ class TestVersioningDisabledAzure:
                 "values": {},
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_counts_key_vault_without_soft_delete(self):
         resources = [
@@ -249,7 +249,7 @@ class TestVersioningDisabledAzure:
                 "values": {"soft_delete_enabled": False},
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_does_not_count_key_vault_with_soft_delete(self):
         resources = [
@@ -259,7 +259,7 @@ class TestVersioningDisabledAzure:
                 "values": {"soft_delete_enabled": True},
             }
         ]
-        assert _count_versioning_disabled(resources) == 0
+        assert count_versioning_disabled(resources) == 0
 
 
 # =====================================================
@@ -279,7 +279,7 @@ class TestVersioningDisabledAws:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_does_not_count_s3_versioning_enabled(self):
         resources = [
@@ -291,7 +291,7 @@ class TestVersioningDisabledAws:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 0
+        assert count_versioning_disabled(resources) == 0
 
     def test_counts_s3_versioning_without_config(self):
         resources = [
@@ -301,7 +301,7 @@ class TestVersioningDisabledAws:
                 "values": {},
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_counts_dynamodb_without_pitr(self):
         resources = [
@@ -313,7 +313,7 @@ class TestVersioningDisabledAws:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_does_not_count_dynamodb_with_pitr(self):
         resources = [
@@ -325,7 +325,7 @@ class TestVersioningDisabledAws:
                 },
             }
         ]
-        assert _count_versioning_disabled(resources) == 0
+        assert count_versioning_disabled(resources) == 0
 
     def test_counts_dynamodb_without_pitr_block(self):
         resources = [
@@ -335,10 +335,10 @@ class TestVersioningDisabledAws:
                 "values": {},
             }
         ]
-        assert _count_versioning_disabled(resources) == 1
+        assert count_versioning_disabled(resources) == 1
 
     def test_returns_zero_for_empty_resources(self):
-        assert _count_versioning_disabled([]) == 0
+        assert count_versioning_disabled([]) == 0
 
     def test_counts_multiple_violations(self):
         resources = [
@@ -355,4 +355,4 @@ class TestVersioningDisabledAws:
                 "values": {},
             },
         ]
-        assert _count_versioning_disabled(resources) == 2
+        assert count_versioning_disabled(resources) == 2

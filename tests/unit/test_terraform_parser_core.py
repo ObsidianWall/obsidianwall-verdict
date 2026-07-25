@@ -14,13 +14,13 @@ import pytest
 from pathlib import Path
 
 from context.translators.terraform_parser import (
-    _count_compute_instances,
-    _count_gpu_instances,
-    _count_open_ingress_rules,
-    _count_public_storage,
-    _count_unencrypted_databases,
-    _count_untagged_resources,
-    _count_ai_gpu_workloads,
+    count_compute_instances,
+    count_gpu_instances,
+    count_open_ingress_rules,
+    count_public_storage,
+    count_unencrypted_databases,
+    count_untagged_resources,
+    count_ai_gpu_workloads,
     parse_terraform_plan,
 )
 
@@ -176,7 +176,7 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 1
+        assert count_open_ingress_rules(resources) == 1
 
     def test_ignores_azure_nsg_outbound_rule(self):
         resources = [
@@ -194,7 +194,7 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 0
+        assert count_open_ingress_rules(resources) == 0
 
     def test_counts_azure_nsg_rule_with_internet_source(self):
         resources = [
@@ -208,7 +208,7 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 1
+        assert count_open_ingress_rules(resources) == 1
 
     def test_counts_aws_security_group_open_ingress(self):
         resources = [
@@ -220,7 +220,7 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 1
+        assert count_open_ingress_rules(resources) == 1
 
     def test_counts_aws_security_group_ipv6_ingress(self):
         resources = [
@@ -232,7 +232,7 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 1
+        assert count_open_ingress_rules(resources) == 1
 
     def test_counts_aws_standalone_ingress_rule(self):
         resources = [
@@ -242,7 +242,7 @@ class TestCountOpenIngressRulesNewPath:
                 "values": {"cidr_ipv6": "::/0"},
             }
         ]
-        assert _count_open_ingress_rules(resources) == 1
+        assert count_open_ingress_rules(resources) == 1
 
     def test_ignores_restricted_ingress(self):
         resources = [
@@ -254,10 +254,10 @@ class TestCountOpenIngressRulesNewPath:
                 },
             }
         ]
-        assert _count_open_ingress_rules(resources) == 0
+        assert count_open_ingress_rules(resources) == 0
 
     def test_returns_zero_for_empty_list(self):
-        assert _count_open_ingress_rules([]) == 0
+        assert count_open_ingress_rules([]) == 0
 
 
 # =====================================================
@@ -275,7 +275,7 @@ class TestCountPublicStorageNewPath:
                 "values": {"allow_blob_public_access": True},
             }
         ]
-        assert _count_public_storage(resources) == 1
+        assert count_public_storage(resources) == 1
 
     def test_counts_azure_storage_with_public_network_access(self):
         resources = [
@@ -285,7 +285,7 @@ class TestCountPublicStorageNewPath:
                 "values": {"public_network_access_enabled": True},
             }
         ]
-        assert _count_public_storage(resources) == 1
+        assert count_public_storage(resources) == 1
 
     def test_counts_aws_s3_bucket_by_default(self):
         resources = [
@@ -295,7 +295,7 @@ class TestCountPublicStorageNewPath:
                 "values": {},
             }
         ]
-        assert _count_public_storage(resources) == 1
+        assert count_public_storage(resources) == 1
 
     def test_s3_public_access_block_decrements_count(self):
         resources = [
@@ -315,10 +315,10 @@ class TestCountPublicStorageNewPath:
                 },
             },
         ]
-        assert _count_public_storage(resources) == 0
+        assert count_public_storage(resources) == 0
 
     def test_returns_zero_for_empty_list(self):
-        assert _count_public_storage([]) == 0
+        assert count_public_storage([]) == 0
 
 
 # =====================================================
@@ -336,7 +336,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"transparent_data_encryption_enabled": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_does_not_count_azure_sql_with_tde(self):
         resources = [
@@ -346,7 +346,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"transparent_data_encryption_enabled": True},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 0
+        assert count_unencrypted_databases(resources) == 0
 
     def test_counts_azure_postgresql_without_ssl(self):
         resources = [
@@ -356,7 +356,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"ssl_enforcement_enabled": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_counts_azure_mysql_without_ssl(self):
         resources = [
@@ -366,7 +366,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"ssl_enforcement_enabled": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_counts_azure_mssql_without_tde(self):
         resources = [
@@ -376,7 +376,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"transparent_data_encryption_enabled": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_counts_aws_rds_without_encryption(self):
         resources = [
@@ -386,7 +386,7 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"storage_encrypted": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_counts_aws_rds_cluster_without_encryption(self):
         resources = [
@@ -396,10 +396,10 @@ class TestCountUnencryptedDatabasesNewPath:
                 "values": {"storage_encrypted": False},
             }
         ]
-        assert _count_unencrypted_databases(resources) == 1
+        assert count_unencrypted_databases(resources) == 1
 
     def test_returns_zero_for_empty_list(self):
-        assert _count_unencrypted_databases([]) == 0
+        assert count_unencrypted_databases([]) == 0
 
 
 # =====================================================
@@ -411,7 +411,7 @@ class TestCountUntaggedResourcesNewPath:
 
     def test_counts_resource_without_tags(self):
         resources = [{"type": "aws_instance", "name": "vm", "values": {}}]
-        assert _count_untagged_resources(resources) == 1
+        assert count_untagged_resources(resources) == 1
 
     def test_does_not_count_tagged_resource(self):
         resources = [
@@ -421,10 +421,10 @@ class TestCountUntaggedResourcesNewPath:
                 "values": {"tags": {"env": "prod"}},
             }
         ]
-        assert _count_untagged_resources(resources) == 0
+        assert count_untagged_resources(resources) == 0
 
     def test_returns_zero_for_empty_list(self):
-        assert _count_untagged_resources([]) == 0
+        assert count_untagged_resources([]) == 0
 
 
 # =====================================================
@@ -442,7 +442,7 @@ class TestCountComputeAndGpuNewPath:
                 "values": {},
             }
         ]
-        assert _count_compute_instances(resources) == 1
+        assert count_compute_instances(resources) == 1
 
     def test_counts_azure_vmss(self):
         resources = [
@@ -452,13 +452,13 @@ class TestCountComputeAndGpuNewPath:
                 "values": {},
             }
         ]
-        assert _count_compute_instances(resources) == 1
+        assert count_compute_instances(resources) == 1
 
     def test_counts_aws_instance(self):
         resources = [
             {"type": "aws_instance", "name": "ec2", "values": {}}
         ]
-        assert _count_compute_instances(resources) == 1
+        assert count_compute_instances(resources) == 1
 
     def test_counts_azure_gpu_vm_by_size(self):
         resources = [
@@ -468,7 +468,7 @@ class TestCountComputeAndGpuNewPath:
                 "values": {"vm_size": "Standard_NC6"},
             }
         ]
-        assert _count_gpu_instances(resources) == 1
+        assert count_gpu_instances(resources) == 1
 
     def test_does_not_count_non_gpu_azure_vm(self):
         resources = [
@@ -478,7 +478,7 @@ class TestCountComputeAndGpuNewPath:
                 "values": {"vm_size": "Standard_D2s_v3"},
             }
         ]
-        assert _count_gpu_instances(resources) == 0
+        assert count_gpu_instances(resources) == 0
 
     def test_ai_gpu_workloads_equals_gpu_instances(self):
         resources = [
@@ -488,7 +488,7 @@ class TestCountComputeAndGpuNewPath:
                 "values": {"instance_type": "p3.2xlarge"},
             }
         ]
-        assert _count_ai_gpu_workloads(resources) == _count_gpu_instances(resources)
+        assert count_ai_gpu_workloads(resources) == count_gpu_instances(resources)
 
 
 # =====================================================

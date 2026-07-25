@@ -26,6 +26,24 @@
 #   nothing is deleted — the marker file is NOT written,
 #   so migration will be retried on the next run
 # - Fully idempotent — safe to interrupt and re-run
+#
+# Data completeness (added after a smoke test caught this):
+# Old v0.5.x 'decisions' rows never had analyzer_scores/
+# failed_conditions/passed_conditions columns at all. Reading
+# a missing key returns None, which — if written straight
+# through — becomes NULL in the new schema. NULL rows are
+# silently EXCLUDED from every aggregate query's denominator
+# (WHERE ... IS NOT NULL), meaning migrated records would
+# quietly vanish from verdict audit's reports with no error,
+# just wrong numbers. _migrate_decisions() now defaults to
+# empty structures ("{}"/"[]") instead, and
+# _recover_from_evidence() runs automatically afterward to
+# upgrade those defaults with real data recovered from each
+# record's stored evidence artifact, when one exists. This
+# used to be a separate manual script
+# (scripts/backfill_governance_records.py) — folded in here
+# so a real end user gets full recovery automatically, without
+# needing to know that script exists.
 
 from __future__ import annotations
 
@@ -227,9 +245,19 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
                 row.get("plan_hash"),
                 row.get("user_role"),
                 row.get("timestamp", datetime.now(timezone.utc).isoformat()),
-                row.get("analyzer_scores"),
-                row.get("failed_conditions"),
-                row.get("passed_conditions"),
+                # Default to empty structures, NEVER None/NULL, when
+                # the old row genuinely never had these columns.
+                # NULL rows are silently excluded from every aggregate
+                # query's denominator — this is the exact backfill
+                # bug a smoke test caught. Empty-but-present values
+                # correctly say "this record contributed zero
+                # conditions," keeping it properly counted rather
+                # than invisibly dropped. _recover_from_evidence()
+                # below upgrades these defaults with real data when
+                # a stored evidence artifact exists for the record.
+                row.get("analyzer_scores") or "{}",
+                row.get("failed_conditions") or "[]",
+                row.get("passed_conditions") or "[]",
                 is_risk_candidate,
             ),
         )
@@ -454,6 +482,102 @@ def _migrate_decision_artifacts(conn: sqlite3.Connection) -> int:
     return migrated
 
 
+def _recover_from_evidence(db_path: Path) -> int:
+    """
+    Upgrade the empty defaults ("{}"/"[]") written by
+    _migrate_decisions() with real data recovered from each
+    record's stored evidence artifact, when one exists.
+
+    Called automatically at the end of migrate_if_needed() —
+    not a separate manual step. A real end user upgrading
+    from v0.5.x has no reason to know a standalone backfill
+    script exists; folding recovery into the automatic
+    migration path means they get full data recovery without
+    needing to be told to run anything extra.
+
+    Kept as the single canonical implementation of this
+    recovery logic — scripts/backfill_governance_records.py
+    imports this function for its manual/dry-run diagnostic
+    use case (e.g. a database that already migrated before
+    this function existed) rather than duplicating the logic.
+
+    Returns the number of records upgraded with recovered data.
+    Never raises — recovery is a best-effort improvement, not
+    a requirement for migration to succeed.
+    """
+    try:
+        from telemetry.governance_store import get_governance_evidence
+
+        conn = init_governance_db(db_path)
+        cursor = conn.execute(
+            """
+            SELECT record_id FROM governance_records
+            WHERE analyzer_scores = '{}'
+               OR failed_conditions = '[]'
+               OR passed_conditions = '[]'
+            """
+        )
+        candidate_ids = [row["record_id"] for row in cursor.fetchall()]
+        conn.close()
+
+        recovered = 0
+
+        for record_id in candidate_ids:
+            try:
+                artifact = get_governance_evidence(
+                    record_id, evidence_type="evaluation", db_path=db_path
+                )
+                if artifact is None:
+                    continue
+
+                trace = artifact.get("trace", [])
+                failed = [
+                    t.get("condition_id", "")
+                    for t in trace
+                    if not t.get("result", True)
+                ]
+                passed = [
+                    t.get("condition_id", "")
+                    for t in trace
+                    if t.get("result", True)
+                ]
+                analyzer_scores = artifact.get("risk_summary", {}).get(
+                    "analyzer_scores", {}
+                )
+
+                if not (failed or passed or analyzer_scores):
+                    continue  # nothing richer to recover
+
+                update_conn = init_governance_db(db_path)
+                update_conn.execute(
+                    """
+                    UPDATE governance_records
+                    SET failed_conditions = ?,
+                        passed_conditions = ?,
+                        analyzer_scores = ?
+                    WHERE record_id = ?
+                    """,
+                    (
+                        json.dumps(failed, default=str),
+                        json.dumps(passed, default=str),
+                        json.dumps(analyzer_scores, default=str),
+                        record_id,
+                    ),
+                )
+                update_conn.commit()
+                update_conn.close()
+                recovered += 1
+
+            except Exception:
+                continue  # one record's recovery failing must not
+                          # block recovery of the rest
+
+        return recovered
+
+    except Exception:
+        return 0
+
+
 def _verify_and_finalize(conn: sqlite3.Connection) -> bool:
     """
     Confirm row counts match, then drop old tables if safe.
@@ -547,6 +671,12 @@ def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None
         success = _verify_and_finalize(conn)
 
         if success:
+            # Upgrade empty defaults with real data recovered from
+            # evidence, automatically — see _recover_from_evidence()
+            # docstring for why this runs here rather than requiring
+            # a separate manual script.
+            recovered_count = _recover_from_evidence(path)
+
             _marker_path().touch()
             if not silent:
                 print(
@@ -555,6 +685,8 @@ def migrate_if_needed(db_path: Path | None = None, silent: bool = False) -> None
                     f"{approvals_migrated} approval(s), "
                     f"{outcomes_migrated} outcome(s), "
                     f"{evidence_migrated} evidence record(s) preserved.\n"
+                    f"Recovered richer data for {recovered_count} "
+                    f"record(s) from evidence.\n"
                     f"Backup saved at: {backup_path}\n",
                     file=sys.stderr,
                 )

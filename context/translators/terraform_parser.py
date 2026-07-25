@@ -34,6 +34,20 @@
 # terraform_resource_classification.yaml — add new Azure
 # VM sizes, AWS instance families, or resource types there
 # without modifying this file.
+#
+# Public counting functions (v0.6.0):
+# count_open_ingress_rules(), count_public_storage(),
+# count_unencrypted_databases(), count_ssl_not_enforced(),
+# count_versioning_disabled(), count_untagged_resources(),
+# count_compute_instances(), count_gpu_instances(), and
+# count_ai_gpu_workloads() are public — renamed from their
+# original private (_-prefixed) names because
+# context.observers.azure_observer now imports and reuses
+# them directly. A cloud observer normalizes live resource
+# state into the SAME {type, name, values} shape this
+# module already produces from a Terraform plan, then calls
+# these SAME functions — no counting logic is duplicated
+# between plan-based and live-cloud-based evaluation.
 
 import json
 from pathlib import Path
@@ -114,7 +128,7 @@ _OPEN_INGRESS_SOURCE_VALUES: frozenset[str] = frozenset(
 # =====================================================
 
 
-def _count_open_ingress_rules(
+def count_open_ingress_rules(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -161,7 +175,7 @@ def _count_open_ingress_rules(
     return count
 
 
-def _count_public_storage(
+def count_public_storage(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -196,7 +210,7 @@ def _count_public_storage(
     return count
 
 
-def _count_unencrypted_databases(
+def count_unencrypted_databases(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -230,7 +244,7 @@ def _count_unencrypted_databases(
     return count
 
 
-def _count_ssl_not_enforced(
+def count_ssl_not_enforced(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -291,7 +305,7 @@ def _count_ssl_not_enforced(
     return count
 
 
-def _count_versioning_disabled(
+def count_versioning_disabled(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -355,7 +369,7 @@ def _count_versioning_disabled(
 # =====================================================
 
 
-def _count_untagged_resources(
+def count_untagged_resources(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -373,7 +387,7 @@ def _count_untagged_resources(
 # =====================================================
 
 
-def _count_compute_instances(
+def count_compute_instances(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -390,7 +404,7 @@ def _count_compute_instances(
     )
 
 
-def _count_gpu_instances(
+def count_gpu_instances(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -429,7 +443,7 @@ def _count_gpu_instances(
 # =====================================================
 
 
-def _count_ai_gpu_workloads(
+def count_ai_gpu_workloads(
     resources: list[dict[str, Any]],
 ) -> int:
     """
@@ -447,7 +461,7 @@ def _count_ai_gpu_workloads(
     Same underlying hardware, different governance concern.
     """
 
-    return _count_gpu_instances(resources)
+    return count_gpu_instances(resources)
 
 
 # =====================================================
@@ -526,20 +540,20 @@ def parse_terraform_plan(
         # Core resource list
         "resources": parsed_resources,
         # Security domain context keys
-        "open_ingress_rules": _count_open_ingress_rules(parsed_resources),
-        "public_storage_buckets": _count_public_storage(parsed_resources),
-        "unencrypted_databases": _count_unencrypted_databases(parsed_resources),
-        "ssl_not_enforced_count": _count_ssl_not_enforced(parsed_resources),
-        "versioning_disabled_count": _count_versioning_disabled(parsed_resources),
+        "open_ingress_rules": count_open_ingress_rules(parsed_resources),
+        "public_storage_buckets": count_public_storage(parsed_resources),
+        "unencrypted_databases": count_unencrypted_databases(parsed_resources),
+        "ssl_not_enforced_count": count_ssl_not_enforced(parsed_resources),
+        "versioning_disabled_count": count_versioning_disabled(parsed_resources),
         # Compliance domain context keys
-        "untagged_resource_count": _count_untagged_resources(parsed_resources),
+        "untagged_resource_count": count_untagged_resources(parsed_resources),
         "total_resource_count": len(parsed_resources),
         # Resource limits domain context keys
-        "compute_instance_count": _count_compute_instances(parsed_resources),
-        "gpu_instance_count": _count_gpu_instances(parsed_resources),
+        "compute_instance_count": count_compute_instances(parsed_resources),
+        "gpu_instance_count": count_gpu_instances(parsed_resources),
         # AI governance domain context key
         # Semantically distinct from gpu_instance_count —
         # treats GPU instances as AI deployment signals,
         # not infrastructure sizing concerns.
-        "ai_gpu_workloads": _count_ai_gpu_workloads(parsed_resources),
+        "ai_gpu_workloads": count_ai_gpu_workloads(parsed_resources),
     }
