@@ -293,7 +293,7 @@ class TestEvaluateTextRenderer:
         ], db_path=db)
         assert "output/result.json" in result.output or "artifact" in result.output.lower()
 
-    def test_yaml_format_produces_parseable_yaml(self, tmp_path):
+    def test_yaml_output_is_parseable(self, tmp_path):
         """--format yaml should produce valid YAML on stdout."""
         import yaml
 

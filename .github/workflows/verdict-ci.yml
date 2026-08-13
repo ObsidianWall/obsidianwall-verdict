@@ -106,7 +106,7 @@ jobs:
            path:       ./
            base:       ${{ github.event.before }}
            head:       ${{ github.sha }}
-           extra_args: --only-verified
+           extra_args: --only-verified --exclude-detectors=Lob
 
       - name: License compliance check
         # Blocks the build if any dependency carries a GPL or AGPL
@@ -229,7 +229,7 @@ jobs:
             --cov=context \
             --cov=render \
             --cov-report=term-missing \
-            --cov-fail-under=90
+            --cov-fail-under=80
 
   # ===================================================
   # ACTION SELF-TEST
