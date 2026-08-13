@@ -215,7 +215,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,attestation,azure]"
 
       - name: Run full test suite with coverage gate
         run: |
@@ -229,7 +229,7 @@ jobs:
             --cov=context \
             --cov=render \
             --cov-report=term-missing \
-            --cov-fail-under=80
+            --cov-fail-under=90
 
   # ===================================================
   # ACTION SELF-TEST
