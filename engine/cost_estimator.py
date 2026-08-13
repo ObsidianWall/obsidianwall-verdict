@@ -76,6 +76,20 @@ FIXED_RESOURCE_PRICING: dict[str, float] = {
     "azurerm_mssql_server": 100.0,
     "azurerm_kubernetes_cluster": 150.0,
     "azurerm_storage_account": 20.0,
+    # Azure — genuinely free resource types, confirmed
+    # against real Azure pricing structure (these are
+    # control-plane/organizational constructs, not billed
+    # compute/storage). Added after these showed up as
+    # "unknown_resource_type_cost_fallback" against a real
+    # NSG/VNet test deployment — they were previously
+    # missing entirely, not previously priced incorrectly.
+    "azurerm_resource_group": 0.0,
+    "azurerm_virtual_network": 0.0,
+    "azurerm_subnet": 0.0,
+    "azurerm_network_security_group": 0.0,
+    "azurerm_subnet_network_security_group_association": 0.0,
+    "azurerm_resource_group_policy_assignment": 0.0,
+    "azurerm_consumption_budget_resource_group": 0.0,
     # AWS
     "aws_s3_bucket": 5.0,
     "aws_db_instance": 80.0,
@@ -136,12 +150,24 @@ def estimate_cost(
         - cost_breakdown:   per-resource cost breakdown
         - pricing_mode:     which mode was used
         - currency:         always USD
+         - cost_coverage:    "complete" if every resource had a
+                            real price (table/live/known-free),
+                            "partial" if any resource fell back
+                            to an unknown-cost placeholder — see
+                            unpriced_resource_count below. Added
+                            so a fabricated fallback number is
+                            never silently presented with the
+                            same confidence as a real price.
+        - unpriced_resource_count: how many resources contributed
+                            an unknown/placeholder cost rather
+                            than a real one.
     """
 
     resources: list[dict[str, Any]] = context.get("resources", [])
 
     total_cost: float = 0.0
     breakdown: list[dict[str, Any]] = []
+    unpriced_resource_count: int = 0
 
     for resource in resources:
         resource_type: str = resource.get("type", "")
@@ -156,6 +182,9 @@ def estimate_cost(
             region=region,
         )
 
+        if source == "fallback":
+            unpriced_resource_count += 1
+
         total_cost += cost
 
         breakdown.append(
@@ -168,6 +197,8 @@ def estimate_cost(
             }
         )
 
+    cost_coverage: str = "partial" if unpriced_resource_count > 0 else "complete"
+
     logger.info(
         "cost_estimation_complete",
         extra={
@@ -177,6 +208,8 @@ def estimate_cost(
                 "pricing_mode": pricing_mode,
                 "region": region,
                 "currency": CURRENCY,
+                "cost_coverage": cost_coverage,
+                "unpriced_resource_count": unpriced_resource_count,
             }
         },
     )
@@ -186,6 +219,8 @@ def estimate_cost(
         "cost_breakdown": breakdown,
         "pricing_mode": pricing_mode,
         "currency": CURRENCY,
+        "cost_coverage": cost_coverage,
+        "unpriced_resource_count": unpriced_resource_count,
     }
 
 
@@ -263,18 +298,37 @@ def _estimate_resource_cost(
             return DEFAULT_FALLBACK_COST, "fallback"
         return cost, "table"
 
-    # -------------------------------------------------
-    # Fixed-price resources
-    # -------------------------------------------------
+    # -------------------------------------------------------
+    # Fixed-price resources — includes genuinely free ones
+    # now (see FIXED_RESOURCE_PRICING additions). No warning
+    # here at all — this is the CORRECT, expected path for
+    # a known resource type, whether its price is $0 or $150.
+    # -------------------------------------------------------
 
     if resource_type in FIXED_RESOURCE_PRICING:
         return FIXED_RESOURCE_PRICING[resource_type], "table"
 
     # -------------------------------------------------
-    # Unknown resource — log and use fallback
+    # Genuinely unknown resource type.
+    #
+    # Demoted from WARNING to DEBUG — an unrecognized
+    # resource type during normal operation is an expected,
+    # routine occurrence (new resource types get added to
+    # Terraform providers constantly), not something that
+    # should interrupt an interactive `verdict evaluate` run
+    # with a wall of JSON. WARNING is reserved for things
+    # that indicate an actual problem; this doesn't qualify.
+    #
+    # Also: the returned cost is no longer silently treated
+    # as a real number by the caller — see estimate_cost()'s
+    # cost_coverage tracking below. An unknown resource's
+    # true cost is UNKNOWN, not a fabricated $10. The fallback
+    # value below exists only so downstream arithmetic has
+    # something to sum; it must never be presented to a user
+    # as if it were a real estimate.
     # -------------------------------------------------
 
-    logger.warning(
+    logger.debug(
         "unknown_resource_type_cost_fallback",
         extra={
             "extra": {

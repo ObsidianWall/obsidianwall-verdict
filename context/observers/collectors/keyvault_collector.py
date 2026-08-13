@@ -81,14 +81,11 @@ class KeyVaultCollector(ResourceCollector):
 
         try:
             vaults = list(
-                keyvault_client.vaults.list_by_resource_group(
-                    resource_group_name=scope
-                )
+                keyvault_client.vaults.list_by_resource_group(resource_group_name=scope)
             )
         except Exception as exc:
             raise CloudObserverError(
-                f"Failed to list key vaults in resource group "
-                f"'{scope}': {exc}"
+                f"Failed to list key vaults in resource group '{scope}': {exc}"
             ) from exc
 
         return [self._normalize(vault) for vault in vaults]

@@ -138,18 +138,42 @@ class TestRenderExplain:
         assert "budget_owner" in captured.out
         assert "engineering_lead" in captured.out
 
-    def test_output_shows_action_required_framing(self, capsys):
+    def test_output_shows_request_exception_framing(self, capsys):
         """
         v0.6.0 fix: Override section reframed as an action
-        ("Action Required / Request override from:") rather
-        than a passive noun label.
+        ("Request Exception" heading) rather than a passive
+        noun label, with remediation shown as a parallel
+        alternative under a shared "Resolution Options"
+        heading — not a mandatory follow-on step.
         """
         artifact = _make_artifact()
         render_explain(artifact)
         captured = capsys.readouterr()
-        assert "Action Required" in captured.out
-        assert "Request override from:" in captured.out
+        assert "Request Exception" in captured.out
+        assert "request an override from:" in captured.out
 
+    def test_resolution_options_shows_both_remediate_and_exception(self, capsys):
+        """
+        NEW: confirms remediation and override render as two
+        parallel options under one shared "Resolution Options"
+        heading, not override alone — the actual structural
+        fix, not just the wording rename the previous test
+        already covered. Added into the existing explanation
+        dict rather than replacing it, so reasoning_chain and
+        analyzer_findings (also required by other tests'
+        assertions on the same fixture shape) stay intact.
+        """
+        artifact = _make_artifact()
+        artifact["explanation"]["policy_reasoning"] = {
+            "remediation_steps": ["Fix the underlying condition."]
+        }
+        render_explain(artifact)
+        captured = capsys.readouterr()
+        assert "Resolution Options" in captured.out
+        assert "Remediate" in captured.out
+        assert "Fix the underlying condition." in captured.out
+        assert "Request Exception" in captured.out
+ 
     def test_output_contains_reasoning_chain(self, capsys):
         artifact = _make_artifact()
         render_explain(artifact)

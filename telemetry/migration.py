@@ -57,7 +57,7 @@ from typing import Any
 
 from telemetry.config import get_db_dir, get_db_path
 from telemetry.governance_store import (
-    _hash_history_data,
+    hash_history_data,
     hash_objective_statement,
     init_governance_db,
 )
@@ -143,7 +143,7 @@ def _append_migrated_history(
     ).fetchone()
     prev_hash = prev_hash_row["history_hash"] if prev_hash_row else None
 
-    history_hash = _hash_history_data(history_data)
+    history_hash = hash_history_data(history_data)
 
     conn.execute(
         """
@@ -267,7 +267,7 @@ def _migrate_decisions(conn: sqlite3.Connection) -> int:
             "policy": row.get("policy_name", ""),
             "migrated_from": "v0.5.x decisions table",
         }
-        history_hash = _hash_history_data(history_data)
+        history_hash = hash_history_data(history_data)
 
         conn.execute(
             """
@@ -537,9 +537,7 @@ def _recover_from_evidence(db_path: Path) -> int:
                     if not t.get("result", True)
                 ]
                 passed = [
-                    t.get("condition_id", "")
-                    for t in trace
-                    if t.get("result", True)
+                    t.get("condition_id", "") for t in trace if t.get("result", True)
                 ]
                 analyzer_scores = artifact.get("risk_summary", {}).get(
                     "analyzer_scores", {}
@@ -570,7 +568,7 @@ def _recover_from_evidence(db_path: Path) -> int:
 
             except Exception:
                 continue  # one record's recovery failing must not
-                          # block recovery of the rest
+                # block recovery of the rest
 
         return recovered
 

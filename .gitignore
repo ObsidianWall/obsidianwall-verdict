@@ -13,6 +13,9 @@ output/
 .venv/
 verdict_venv/
 owv-venv/
+ow-venv/
+owv-venv-windows/
+owv-venv-wsl/
 
 # Agents
 claude/

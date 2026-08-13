@@ -38,7 +38,17 @@ from engine.recommender import generate_suggestions
 from engine.risk_scorer import compute_risk_summary
 from engine.validator import validate_policy
 from engine.workflows import build_approval_request, route_notifications
+from notifications import dispatch_notifications
 from schemas.policy_schema import Policy
+
+_DISPATCH_TRIGGERING_DECISIONS = frozenset(
+    [
+        "ALLOW_WITH_NOTIFICATION",
+        "ALLOW_WITH_APPROVAL_REQUIRED",
+        "DENY_WITH_OVERRIDE",
+        "DENY",
+    ]
+)
 
 logger = get_logger()
 
@@ -210,6 +220,24 @@ class PolicyOrchestrator:
             risk_summary=risk_summary,
             policy_governance=policy_governance,
         )
+
+        if str(evaluation_result["decision"]) in _DISPATCH_TRIGGERING_DECISIONS:
+            try:
+                dispatch_notifications(
+                    notification_manifest=notification_manifest,
+                    decision_id=decision_id,
+                )
+            except Exception as error:
+                logger.warning(
+                    "notification_dispatch_failed",
+                    extra={
+                        "extra": {
+                            "decision_id": decision_id,
+                            "decision": str(evaluation_result["decision"]),
+                            "error": str(error),
+                        }
+                    },
+                )
 
         approval_request: dict[str, Any] = build_approval_request(
             decision_id=decision_id,

@@ -59,13 +59,10 @@ class StorageCollector(ResourceCollector):
             )
         except Exception as exc:
             raise CloudObserverError(
-                f"Failed to list storage accounts in resource group "
-                f"'{scope}': {exc}"
+                f"Failed to list storage accounts in resource group '{scope}': {exc}"
             ) from exc
 
-        return [
-            self._normalize(storage_client, account, scope) for account in accounts
-        ]
+        return [self._normalize(storage_client, account, scope) for account in accounts]
 
     @staticmethod
     def _normalize(
@@ -97,8 +94,10 @@ class StorageCollector(ResourceCollector):
         # unknown state as compliant for a security check.
         versioning_enabled = False
         try:
-            blob_service_properties = storage_client.blob_services.get_service_properties(
-                resource_group, account_name
+            blob_service_properties = (
+                storage_client.blob_services.get_service_properties(
+                    resource_group, account_name
+                )
             )
             versioning_enabled = bool(
                 getattr(blob_service_properties, "is_versioning_enabled", False)
@@ -111,9 +110,7 @@ class StorageCollector(ResourceCollector):
             "name": account_name,
             "values": {
                 "allow_blob_public_access": allow_public_access is True,
-                "public_network_access_enabled": (
-                    public_network_access == "Enabled"
-                ),
+                "public_network_access_enabled": (public_network_access == "Enabled"),
                 "min_tls_version": str(min_tls_version),
                 "blob_properties": {
                     "versioning_enabled": versioning_enabled,

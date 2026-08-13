@@ -37,6 +37,7 @@ import typer
 from telemetry.governance_store import (
     get_governance_evidence,
     get_governance_evidence_metadata,
+    get_governance_history,
     resolve_record_id,
     verify_history_chain,
 )
@@ -112,7 +113,10 @@ def explain(
     # in the Evidence section as "Integrity: Verified".
     chain_result = verify_history_chain(full_id)
 
-    from renderers.explain_renderer import render_explain
+    from renderers.explain_renderer import (
+        render_explain,
+        render_history_timeline,
+    )
 
     render_explain(
         artifact,
@@ -120,3 +124,11 @@ def explain(
         recorded_at=metadata.get("created_at") if metadata else None,
         chain_verified=chain_result.get("verified"),
     )
+
+    # Full lifecycle timeline — every override request/approve/
+    # deny, every Sentinel drift/outcome entry — AFTER the
+    # decision was created. Separate from render_explain()
+    # above, which only covers the original evaluation.
+    # See ADR-0001 for why this exists.
+    history = get_governance_history(full_id)
+    render_history_timeline(history)

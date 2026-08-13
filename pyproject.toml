@@ -60,6 +60,11 @@ azure = [
     "azure-mgmt-keyvault>=10.2.1",
 ]
 
+attestation = [
+    "cryptography>=41.0.0",
+    "keyring>=24.0.0",
+]
+
 [project.scripts]
 verdict = "cli.main:app"
 
@@ -96,6 +101,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+pythonpath = ["."]
 addopts = "-v --tb=short"
 
 
@@ -111,7 +117,7 @@ per-file-ignores = {"**/__init__.py" = ["F401"]}
 
 [tool.coverage.run]
 source = ["engine", "schemas", "audit"]
-omit = ["tests/*", "cli/*"]
+omit = ["tests/*", "cli/*", "scripts/*"]
 
 [tool.coverage.report]
 fail_under = 90

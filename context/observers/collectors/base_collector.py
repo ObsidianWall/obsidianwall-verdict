@@ -20,8 +20,8 @@
 #
 #   AzureObserver
 #   ├── StorageCollector
-#   ├── NSGCollector       
-#   ├── KeyVaultCollector  
+#   ├── NSGCollector
+#   ├── KeyVaultCollector
 #   └── ...
 #
 # Each collector creates its OWN typed SDK client (e.g.

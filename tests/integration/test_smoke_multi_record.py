@@ -55,6 +55,7 @@ from telemetry.governance_store import (
     verify_history_chain,
 )
 from telemetry.migration import migrate_if_needed
+from tests.helpers.telemetry_patching import patch_telemetry
 
 
 # =====================================================
@@ -128,9 +129,7 @@ class _MessyDataset:
 
     def _create(self, **kwargs) -> str:
         result = _make_result(**kwargs)
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=self.db_path)
 
         self.total_records += 1
@@ -145,9 +144,7 @@ class _MessyDataset:
         return result["decision_id"]
 
     def _add_history(self, record_id: str, category: str, action: str, data: dict) -> None:
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category=category,

@@ -93,7 +93,7 @@ class AzureObserver(CloudObserver):
             "network_security": "network_security_groups" in registered_types,
             "storage_security": "storage_accounts" in registered_types,
             "database_security": False,  # no SQL/Postgres/MySQL collector yet
-            "compute_sizing": False,      # no compute/GPU collector yet
+            "compute_sizing": False,  # no compute/GPU collector yet
             "secrets_management": "key_vaults" in registered_types,
         }
 
@@ -146,9 +146,7 @@ class AzureObserver(CloudObserver):
                 fails.
         """
         if self._credential is None:
-            raise CloudObserverError(
-                "authenticate() must be called before observe()."
-            )
+            raise CloudObserverError("authenticate() must be called before observe().")
 
         from context.translators.terraform_parser import (
             count_open_ingress_rules,
@@ -158,9 +156,7 @@ class AzureObserver(CloudObserver):
 
         all_resources: list[dict[str, Any]] = []
         for collector in self.collectors:
-            resources = collector.collect(
-                self._credential, self.subscription_id, scope
-            )
+            resources = collector.collect(self._credential, self.subscription_id, scope)
             all_resources.extend(resources)
 
         context: dict[str, Any] = {"resources": all_resources}

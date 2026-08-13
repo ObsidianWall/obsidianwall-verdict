@@ -6,7 +6,6 @@
 
 import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 from telemetry.governance_store import (
     add_history_entry,
@@ -14,6 +13,7 @@ from telemetry.governance_store import (
     get_objective_summary,
     get_outcome_correlation,
 )
+from tests.helpers.telemetry_patching import patch_telemetry
 
 
 def _tmp_db(tmp_path: Path) -> Path:
@@ -45,7 +45,7 @@ def _make_result(
 
 
 def _create(result: dict, db_path: Path) -> str:
-    with patch("telemetry.governance_store.is_telemetry_enabled", return_value=True):
+    with patch_telemetry(enabled=True):
         create_governance_record(result=result, db_path=db_path)
     return result["decision_id"]
 
@@ -66,9 +66,7 @@ class TestGetOutcomeCorrelation:
             _make_result(decision="DENY_WITH_OVERRIDE", policy="budget_policy"), db
         )
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="outcome",
@@ -97,10 +95,7 @@ class TestGetOutcomeCorrelation:
                 _make_result(decision="DENY_WITH_OVERRIDE", policy="budget_policy"),
                 db,
             )
-            with patch(
-                "telemetry.governance_store.is_telemetry_enabled",
-                return_value=True,
-            ):
+            with patch_telemetry(enabled=True):
                 add_history_entry(
                     record_id=record_id,
                     history_category="outcome",
@@ -118,9 +113,7 @@ class TestGetOutcomeCorrelation:
 
         # 1x rare outcome
         record_id = _create(_make_result(policy="p1"), db)
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="outcome",
@@ -132,10 +125,7 @@ class TestGetOutcomeCorrelation:
         # 2x common outcome
         for _ in range(2):
             record_id = _create(_make_result(policy="p2"), db)
-            with patch(
-                "telemetry.governance_store.is_telemetry_enabled",
-                return_value=True,
-            ):
+            with patch_telemetry(enabled=True):
                 add_history_entry(
                     record_id=record_id,
                     history_category="outcome",
@@ -154,9 +144,7 @@ class TestGetOutcomeCorrelation:
         db = _tmp_db(tmp_path)
         record_id = _create(_make_result(decision="DENY_WITH_OVERRIDE"), db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -171,9 +159,7 @@ class TestGetOutcomeCorrelation:
         db = _tmp_db(tmp_path)
         record_id = _create(_make_result(decision="ALLOW"), db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="drift",

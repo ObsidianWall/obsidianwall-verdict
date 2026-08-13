@@ -48,7 +48,7 @@ def _parse_plan(plan_path: str) -> dict[str, Any]:
 
 def build_context(
     plan_path: str,
-    current_spend: float = 0.0,
+    current_spend: float | None = None,
     pricing_mode: str = "table",
     region: str = "eastus",
 ) -> dict[str, Any]:
@@ -89,7 +89,12 @@ def build_context(
     context: dict[str, Any] = dict(parsed_context)
     context["estimated_cost"] = cost_data["estimated_cost"]
     context["cost_breakdown"] = cost_data["cost_breakdown"]
-    context["current_spend"] = current_spend
+    context["cost_coverage"] = cost_data.get("cost_coverage", "complete")
+    context["unpriced_resource_count"] = cost_data.get("unpriced_resource_count", 0)
+    context["current_spend"] = current_spend if current_spend is not None else 0.0
+    context["current_spend_trust"] = (
+        "caller_supplied" if current_spend is not None else "unset"
+    )  # Track whether the caller supplied a value
     context["pricing_mode"] = pricing_mode
 
     return context

@@ -10,7 +10,6 @@
 
 import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 from telemetry.governance_store import (
     add_history_entry,
@@ -24,6 +23,11 @@ from telemetry.governance_store import (
     get_recent_records,
     get_risk_acceptance_records,
 )
+from unittest.mock import patch
+ 
+from telemetry.governance_objectives import _classify_for_objective_summary
+from telemetry.governance_ledger import get_risk_acceptance_records
+from tests.helpers.telemetry_patching import patch_telemetry
 
 
 def _tmp_db(tmp_path: Path) -> Path:
@@ -64,7 +68,7 @@ def _make_result(
 
 
 def _create(result: dict, db_path: Path) -> str:
-    with patch("telemetry.governance_store.is_telemetry_enabled", return_value=True):
+    with patch_telemetry(enabled=True):
         create_governance_record(result=result, db_path=db_path)
     return result["decision_id"]
 
@@ -156,9 +160,7 @@ class TestGetPolicyEffectiveness:
             _make_result(policy="p1", decision="DENY_WITH_OVERRIDE"), db
         )
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -323,9 +325,7 @@ class TestGetOutcomeSummary:
         db = _tmp_db(tmp_path)
         record_id = _create(_make_result(), db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="drift",
@@ -352,9 +352,7 @@ class TestGetOutcomeSummary:
         db = _tmp_db(tmp_path)
         record_id = _create(_make_result(), db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -399,9 +397,7 @@ class TestGetRiskAcceptanceRecords:
             db,
         )
  
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -434,9 +430,7 @@ class TestGetRiskAcceptanceRecords:
             db,
         )
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -453,9 +447,7 @@ class TestGetRiskAcceptanceRecords:
         db = _tmp_db(tmp_path)
         record_id = _create(_make_result(decision="ALLOW"), db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled", return_value=True
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -465,3 +457,41 @@ class TestGetRiskAcceptanceRecords:
             )
 
         assert get_risk_acceptance_records(db_path=db) == []
+
+
+class TestClassifyForObjectiveSummaryUnknownFallback:
+    def test_unrecognized_decision_returns_unknown(self):
+        """
+        Covers the line-34 fallback in
+        _classify_for_objective_summary() — every existing test
+        fixture maps to one of the three known decision sets
+        (UPHELD/VIOLATED/PENDING), so the final `return "unknown"`
+        was never exercised. A genuinely unrecognized decision
+        string closes this gap directly.
+        """
+        result = _classify_for_objective_summary("SOME_UNRECOGNIZED_DECISION")
+        assert result == "unknown"
+
+
+class TestGetRiskAcceptanceRecordsExceptionPath:
+    def test_returns_empty_list_on_database_error(self, tmp_path):
+        """
+        Covers the except/finally block (lines 65-69) — the
+        query-failure path, never naturally triggered by a
+        working test database. Mocking init_governance_db to
+        return a connection whose execute() raises forces this
+        path without needing a genuinely corrupted database file.
+        """
+        db = tmp_path / "test.db"
+
+        with patch(
+            "telemetry.governance_ledger.init_governance_db"
+        ) as mock_init:
+            mock_conn = mock_init.return_value
+            mock_conn.execute.side_effect = Exception("simulated DB failure")
+
+            result = get_risk_acceptance_records(db_path=db)
+
+        assert result == []
+
+

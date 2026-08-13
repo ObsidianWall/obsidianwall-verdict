@@ -295,13 +295,36 @@ class Budget(BaseModel):
 
 
 class SecurityConfig(BaseModel):
-    """Security posture parameters. Required for policy_type: security."""
+    """
+    Security posture parameters. Required for policy_type: security.
+
+    Field pairs follow the established allow_X / max_X convention:
+    each observable signal gets a boolean toggle (is this ever
+    permitted at all) and a numeric threshold (how many, if
+    permitted).
+
+    allow_versioning_disabled / max_versioning_disabled (added):
+    covers the Integrity leg of the CIA triad. The other three
+    signals here (open_ingress, public_storage, unencrypted_db)
+    are all Confidentiality concerns — can an unauthorized party
+    ACCESS this. Versioning is a genuinely different concern —
+    can this be TAMPERED WITH or overwritten without a trace,
+    independent of who can see it. Availability during an outage
+    is deliberately NOT covered here; that's ResilienceConfig's
+    concern, not SecurityConfig's.
+
+    See count_versioning_disabled() in
+    context.translators.terraform_parser for the HIPAA
+    164.312(c)(1) / SOC 2 CC9.1 citations this maps to.
+    """
 
     allow_open_ingress: bool = False
     allow_public_storage: bool = False
     allow_unencrypted_db: bool = False
+    allow_versioning_disabled: bool = False
     max_open_ingress_rules: int = 0
     max_public_buckets: int = 0
+    max_versioning_disabled: int = 0
 
 
 class ComplianceConfig(BaseModel):
@@ -448,8 +471,10 @@ _SECURITY_KEYWORDS: frozenset[str] = frozenset(
         "open_ingress_rules",
         "public_storage_buckets",
         "unencrypted_databases",
+        "versioning_disabled_count",
         "security.max_open_ingress",
         "security.max_public",
+        "security.max_versioning_disabled",
     }
 )
 

@@ -64,6 +64,9 @@ def analyze_cost(runtime_context: dict) -> dict:
     budget_amount = runtime_context.get("budget.amount")
     cost_breakdown = runtime_context.get("cost_breakdown", [])
 
+    cost_coverage = runtime_context.get("cost_coverage", "complete")
+    unpriced_resource_count = runtime_context.get("unpriced_resource_count", 0)
+
     findings = []
     optimization_candidates = []
     risk_score = 0
@@ -240,5 +243,7 @@ def analyze_cost(runtime_context: dict) -> dict:
             "estimated_cost": estimated_cost,
             "current_spend": current_spend,
             "budget_amount": budget_amount,
+            "cost_coverage": cost_coverage,
+            "unpriced_resource_count": unpriced_resource_count,
         },
     }

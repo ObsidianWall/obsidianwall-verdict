@@ -148,6 +148,23 @@ def render_explain(
     lines.append(f"  Decision     {_bold(decision)}")
     lines.append(f"  Severity     {eff_severity}")
     lines.append(f"  Risk Score   {risk_score}/100")
+
+    cost_metadata = (
+        artifact.get("analyzer_results", {})
+        .get("cost_analysis", {})
+        .get("metadata", {})
+    )
+    cost_coverage = cost_metadata.get("cost_coverage", "complete")
+    unpriced_count = cost_metadata.get("unpriced_resource_count", 0)
+
+    if cost_coverage == "partial" and unpriced_count > 0:
+        caveat_text = (
+            "Cost estimate incomplete - "
+            + str(unpriced_count)
+            + " resource(s) unpriced (see --format json for detail)"
+        )
+        lines.append("  " + _dim(caveat_text))
+
     lines.append(f"  Timestamp    {timestamp}")
 
     if risk_narrative:
@@ -175,21 +192,24 @@ def render_explain(
     approval_request: dict[str, Any] = artifact.get("approval_request", {})
     override_possible: bool = artifact.get("override_possible", False)
 
-    if notifications or approval_request or override_possible:
+    # Remediation steps — extracted early specifically so they
+    # can be shown ALONGSIDE the override option below, as two
+    # parallel alternatives, rather than override appearing to
+    # be the only or mandatory path. Previously not read anywhere
+    # in this renderer at all, even though text_renderer.py's
+    # shorter default view already shows it — the fuller
+    # explain view was missing something the shorter summary had.
+    policy_reasoning: dict[str, Any] = artifact.get("explanation", {}).get(
+        "policy_reasoning", {}
+    )
+    remediation: list[str] = policy_reasoning.get("remediation_steps", [])
+
+    if notifications or approval_request or override_possible or remediation:
         lines.append(_section_header("Governance Routing"))
 
         # Notified / Approval are short single-line label-value
         # facts — a small shared width keeps them tight and
-        # readable. Action Required is a different KIND of
-        # content — a heading introducing a multi-line list, not
-        # a single-line fact — so it is rendered as its own
-        # sub-block below, indented consistently, rather than
-        # forced into the same label column as the short facts.
-        # Trying to align a long label ("Action Required") with
-        # short ones ("Notified", "Approval") in one shared
-        # column always produces an oversized gap for the short
-        # rows or a cramped one for the long row — treating it
-        # as its own block avoids that tradeoff entirely.
+        # readable.
         _FACT_LABEL_WIDTH = 10
 
         for n in notifications:
@@ -204,6 +224,15 @@ def render_explain(
             label = "Approval".ljust(_FACT_LABEL_WIDTH)
             lines.append(f"  {label}{approval_status}")
 
+        # Resolution Options — remediation and override presented
+        # as two clearly PARALLEL alternatives, not a mandatory
+        # follow-on action. DENY_WITH_OVERRIDE means the proposed
+        # state is prohibited, but an authorized exception is
+        # available IF the engineer can't or won't fix the
+        # underlying condition instead — showing the override
+        # path alone, with no remediation option visible beside
+        # it, made escalation look like the only next step.
+        override_roles: list[str] = []
         if override_possible:
             override_roles = sorted(
                 {
@@ -212,12 +241,24 @@ def render_explain(
                     if n.get("target_role")
                 }
             )
+
+        if remediation or override_roles:
+            lines.append("")
+            lines.append(f"  {_bold('Resolution Options')}")
+
+            if remediation:
+                lines.append("")
+                lines.append(f"    {_bold('Remediate')}")
+                for step in remediation[:2]:
+                    lines.append(f"      →  {step}")
+
             if override_roles:
                 lines.append("")
-                lines.append(f"  {_bold('Action Required')}")
-                lines.append("    Request override from:")
+                lines.append(f"    {_bold('Request Exception')}")
+                lines.append("      If the current configuration is intentional,")
+                lines.append("      request an override from:")
                 for r in override_roles:
-                    lines.append(f"      • {r}")
+                    lines.append(f"        • {r}")
 
     # ---- 4. Governance Reasoning Chain ----
     explanation: dict[str, Any] = artifact.get("explanation", {})
@@ -276,20 +317,6 @@ def render_explain(
             lines.append("")
 
     # ---- 7. Recommendations — grouped by category ----
-    # recommendation_confidence and priority_score are
-    # deliberately omitted here. They are internal scoring
-    # metadata for Compass, not human-facing signal. Both
-    # remain available via --format json / --format yaml.
-    #
-    # Recommendations are grouped into three categories
-    # (Financial, Security, Governance) rather than listed
-    # flat. Individual recommendation types (budget_exceeded,
-    # elevated_projected_cost, cost_optimization) often
-    # represent the same underlying issue from different
-    # analyzer angles — grouping collapses that repetition
-    # into one conversation per category instead of six
-    # near-duplicate entries. Full per-finding detail with
-    # zero grouping remains available via --format json.
     explained_recs: dict[str, Any] = explanation.get("explained_recommendations", {})
     all_recs: list[dict[str, Any]] = explained_recs.get("all_recommendations", [])
 
@@ -316,18 +343,6 @@ def render_explain(
             lines.append("")
 
     # ---- 8. Evidence ----
-    # Confirms this is governance evidence, not just a
-    # policy check result. Artifact hash and recorded_at
-    # come from the evidence store (decision_artifacts),
-    # not from the artifact content itself.
-    #
-    # "Evidence Status" describes the current storage
-    # backend honestly rather than referencing planned
-    # future infrastructure that does not exist yet.
-    # This line can be updated truthfully as the storage
-    # backend evolves (local → immutable ledger → external
-    # archive) without ever having overstated the current
-    # guarantee at any point along the way.
     lines.append(_section_header("Evidence"))
     lines.append(f"  Decision ID      {decision_id}")
     if artifact_hash:
@@ -336,10 +351,6 @@ def render_explain(
         lines.append(f"  Recorded         {recorded_at}")
     lines.append("  Evidence Status  Stored locally")
 
-    # History chain integrity — verify_history_chain() recomputes
-    # every history entry's hash and confirms the chain is intact.
-    # This is real, computed verification (not aspirational text) —
-    # it detects if any past revision was altered after the fact.
     if chain_verified is not None:
         integrity_label = (
             "Verified — chain intact" if chain_verified else "TAMPERED — chain broken"
@@ -350,3 +361,109 @@ def render_explain(
     lines.append(_dim("─" * 54))
 
     print("\n".join(lines))
+
+
+# Purpose:
+# Render the FULL lifecycle of a decision after it was
+# created — every override request/approve/deny, every
+# Sentinel drift/outcome entry — in chronological order.
+#
+# Why this is separate from render_explain():
+# render_explain() renders the ORIGINAL evaluation's
+# reasoning (the stored evidence artifact). It has no
+# visibility into what happened to the record AFTERWARD —
+# that data lives in governance_history, not in the
+# evidence artifact, and is a fundamentally different
+# question: "why was this decision made" vs. "what
+# happened to it since." Keeping them separate functions
+# also means this can be added without touching
+# render_explain()'s existing, tested internals.
+
+
+# Icons per history action — mirrors the icon conventions
+# already used elsewhere (audit.py, text_renderer.py)
+_ACTION_ICONS: dict[str, str] = {
+    "requested": "→",
+    "approved": "✓",
+    "denied": "✗",
+    "detected": "⚠",
+    "observed": "ℹ",
+}
+
+
+def render_history_timeline(
+    history: list[dict[str, Any]], record_id: str | None = None
+) -> None:
+    """
+    Render every governance_history entry for a record in
+    chronological order — the decision's full lifecycle
+    after creation, not just its original evaluation.
+
+    Args:
+        history: result of get_governance_history(record_id),
+            already ordered oldest-first by history_number.
+        record_id: needed to call verify_signature() per
+            entry — without it, signature status is shown
+            (signed/unsigned) but not independently
+            re-verified against the stored data.
+    """
+    import typer
+
+    lifecycle_entries = [h for h in history if h.get("history_number", 0) > 1]
+
+    if not lifecycle_entries:
+        return
+
+    width = 72
+    typer.echo(f"\n{'─' * width}")
+    typer.echo("  History Timeline")
+    typer.echo("─" * width)
+
+    for entry in lifecycle_entries:
+        category = entry.get("history_category", "")
+        action = entry.get("history_action", "")
+        icon = _ACTION_ICONS.get(action, "•")
+
+        raw_timestamp = str(entry.get("created_at", ""))
+        # Full precision, including seconds — a truncated
+        # [:16] slice (through the minute only) collapses
+        # any decisions made within the same real minute into
+        # an identical-looking timestamp, exactly the bug
+        # found and fixed in cli/display.py for verdict audit
+        # and verdict ledger. This is the same pattern in a
+        # different file (renderers/, not cli/), which a
+        # cli/**/*.py-scoped search would not have reached.
+        timestamp = (
+            f"{raw_timestamp[:19].replace('T', ' ')} UTC" if raw_timestamp else "—"
+        )
+
+        actor = entry.get("actor_identity") or entry.get("actor_role") or "—"
+
+        data = entry.get("history_data") or {}
+        reason = data.get("reason", "")
+
+        typer.echo(f"  {icon}  {timestamp}  {category}.{action}  —  {actor}")
+        if reason:
+            typer.echo(f"       Reason: {reason}")
+
+        if record_id is not None:
+            from telemetry.governance_store import verify_signature
+
+            history_number = entry.get("history_number")
+            sig_status = verify_signature(record_id, history_number=history_number)
+
+            if not sig_status["signed"]:
+                typer.echo("       Unsigned")
+            elif sig_status["verified"]:
+                fp = sig_status.get("key_fingerprint") or ""
+                typer.echo(
+                    f"       Signed: {sig_status['signing_method']} "
+                    f"(key {fp[:16]})  ✓ Verified"
+                )
+            else:
+                typer.echo(
+                    f"       Signed: {sig_status['signing_method']}  "
+                    f"⚠ VERIFICATION FAILED — {sig_status['detail']}"
+                )
+
+    typer.echo("\n" + "─" * width + "\n")

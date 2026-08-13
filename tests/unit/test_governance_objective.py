@@ -102,3 +102,76 @@ class TestComputeGovernanceObjective:
         }
         result = compute_governance_objective(policy, "DENY")
         assert result["statement"] == statement_text
+
+
+class TestComputeGovernanceObjectiveEdgeCases:
+    def test_returns_none_when_objective_declared_but_statement_missing(self):
+        """
+        Covers line 77 — `if not statement: return None`.
+        Distinct from the "no governance_objective block at
+        all" case (already covered elsewhere): this is a policy
+        that DOES declare governance_objective, but with no
+        statement key, or an empty one — the intermediate case
+        between "nothing declared" and "fully declared".
+        """
+        policy_dict = {
+            "metadata": {
+                "governance_objective": {
+                    # statement deliberately absent
+                }
+            }
+        }
+
+        result = compute_governance_objective(
+            policy_dict=policy_dict,
+            decision="ALLOW",
+        )
+
+        assert result is None
+
+    def test_returns_none_when_statement_is_empty_string(self):
+        """
+        Same code path (falsy check), different concrete input —
+        an explicitly empty string should be treated the same
+        as a missing key, not as "declared."
+        """
+        policy_dict = {
+            "metadata": {
+                "governance_objective": {
+                    "statement": ""
+                }
+            }
+        }
+
+        result = compute_governance_objective(
+            policy_dict=policy_dict,
+            decision="ALLOW",
+        )
+
+        assert result is None
+
+    def test_status_is_unknown_for_unrecognized_decision(self):
+        """
+        Covers line 86 — the `else: status = "Unknown"` fallback.
+        Every existing test fixture's decision value maps to one
+        of the three known sets (UPHELD/VIOLATED/PENDING); a
+        genuinely unrecognized decision string closes this gap,
+        mirroring the same fix already applied to
+        telemetry/governance_objectives.py's analogous fallback.
+        """
+        policy_dict = {
+            "metadata": {
+                "governance_objective": {
+                    "statement": "Some real objective statement"
+                }
+            }
+        }
+
+        result = compute_governance_objective(
+            policy_dict=policy_dict,
+            decision="SOME_UNRECOGNIZED_DECISION",
+        )
+
+        assert result is not None
+        assert result["status"] == "Unknown"
+        assert result["statement"] == "Some real objective statement"

@@ -14,16 +14,22 @@ from context.observers.sufficiency import (
 
 
 def _make_policy(*expressions: str) -> dict:
+    # Real schema (confirmed against schemas/policy_schema.py and
+    # real working policy files) has NO "policy:" wrapper —
+    # apiVersion/kind/metadata/spec are top-level. This fixture
+    # previously used a wrapper that never existed in the real
+    # schema — internally consistent with sufficiency.py's OWN
+    # (also wrong, now fixed) assumption, which is exactly why
+    # these tests passed while the real code path was silently
+    # broken against actual policy files.
     return {
-        "policy": {
-            "name": "test_policy",
-            "spec": {
-                "conditions": [
-                    {"id": f"cond_{i}", "expression": expr}
-                    for i, expr in enumerate(expressions)
-                ]
-            },
-        }
+        "metadata": {"name": "test_policy"},
+        "spec": {
+            "conditions": [
+                {"id": f"cond_{i}", "expression": expr}
+                for i, expr in enumerate(expressions)
+            ]
+        },
     }
 
 

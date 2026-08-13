@@ -154,9 +154,14 @@ def infer_required_context_keys(policy_dict: dict[str, Any]) -> set[str]:
         by this policy's conditions. Empty set if the policy
         has no conditions or none reference a known key.
     """
-    conditions = (
-        policy_dict.get("policy", {}).get("spec", {}).get("conditions", [])
-    )
+    # Real schema (confirmed against schemas/policy_schema.py and
+    # real working policy files) has NO "policy:" wrapper key —
+    # apiVersion/kind/metadata/spec are all top-level. An earlier
+    # version of this function incorrectly assumed a wrapper that
+    # never existed, which meant this ALWAYS returned an empty
+    # set against real policies — the sufficiency gate was
+    # silently inert. Fixed here.
+    conditions = policy_dict.get("spec", {}).get("conditions", [])
 
     referenced: set[str] = set()
     for condition in conditions:
@@ -204,12 +209,10 @@ def check_sufficiency(
         )
 
     required_keys = infer_required_context_keys(policy_dict)
-    missing_keys = {
-        key for key in required_keys if key not in observed_context
-    }
+    missing_keys = {key for key in required_keys if key not in observed_context}
 
     if missing_keys:
-        policy_name = policy_dict.get("policy", {}).get("name", "unknown")
+        policy_name = policy_dict.get("metadata", {}).get("name", "unknown")
         return SufficiencyResult(
             outcome=EvaluationOutcome.POLICY_NOT_EVALUATED,
             missing_keys=missing_keys,

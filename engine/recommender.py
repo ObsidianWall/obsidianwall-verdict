@@ -114,7 +114,14 @@ def classify_resource(resource_type: str) -> str:
     classification: str | None = RESOURCE_CLASSES.get(resource_type)
 
     if classification is None:
-        logger.warning(
+        # Demoted from WARNING to DEBUG — an unclassified
+        # resource type during normal operation is routine
+        # (new Terraform resource types appear constantly),
+        # not evidence of a real problem. This was the second
+        # source (alongside cost_estimator.py's fallback
+        # warning) of the JSON noise flooding a real
+        # `verdict evaluate` run tonight.
+        logger.debug(
             "unclassified_resource_type",
             extra={"extra": {"resource_type": resource_type}},
         )

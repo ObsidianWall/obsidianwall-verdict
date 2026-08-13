@@ -1,0 +1,93 @@
+# policies/security/storage_security.yaml
+#
+# Purpose:
+# Baseline Azure Storage Account security governance.
+#
+# Governance model:
+# - Blocks deployments with public storage exposure or
+#   disabled blob versioning
+# - Security admin and engineering lead notified on DENY
+# - Security admin may authorize override with approval
+#
+# Use this policy alongside network and cost policies.
+# Each governance domain is evaluated independently.
+
+apiVersion: obsidianwall.io/v1
+kind: Policy
+
+metadata:
+  name: storage_security_verdict
+  version: "0.1"
+  owner: security-team
+  description: "Pre-deployment Azure Storage Account security governance — blocks public access and missing versioning before infrastructure deploys"
+
+spec:
+
+  policy_type: security
+
+  inputs:
+    - public_storage_buckets
+    - versioning_disabled_count
+
+  parameters:
+    security:
+      allow_open_ingress:       false
+      allow_public_storage:     false
+      allow_unencrypted_db:     false
+      allow_versioning_disabled:   false
+      max_open_ingress_rules:   0
+      max_public_buckets:       0
+      max_versioning_disabled:  0
+
+  conditions:
+    - id: no_public_storage
+      expression: "public_storage_buckets <= security.max_public_buckets"
+      description: "No storage account should allow public blob access or public network access"
+
+    - id: versioning_enabled
+      expression: "versioning_disabled_count == 0"
+      description: "All storage accounts should have blob versioning enabled"
+      # NOTE: SecurityConfig has no dedicated versioning threshold
+      # field (only max_open_ingress_rules, max_public_buckets) —
+      # this condition uses a direct literal threshold rather than
+      # referencing an unrelated parameter, which an earlier draft
+      # incorrectly did (reused max_public_buckets for this check).
+
+  decision:
+    allow: ALLOW
+    deny:  DENY_WITH_OVERRIDE
+    warn:  ALLOW_WITH_NOTIFICATION
+
+  # ---------------------------------------------------
+  # GOVERNANCE WORKFLOW
+  # Storage security violations route to the security
+  # team and engineering lead simultaneously.
+  # Security admin has override authority with approval.
+  # ---------------------------------------------------
+
+  governance:
+    severity: high
+
+    notifications:
+      - role: security_admin
+        channel: email
+      - role: engineering_lead
+        channel: slack
+
+    approvals:
+      required:
+        - security_admin
+
+  override:
+    roles:
+      - security_admin
+    requires_approval: true
+
+  actions:
+    - type: notify
+      severity: high
+      message: "Storage security policy violation detected. Deployment blocked pending security review."
+
+    - type: log
+      severity: info
+      message: "Storage security governance evaluation recorded in audit trail."

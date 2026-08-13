@@ -3,10 +3,19 @@
 #
 # Tests for telemetry/governance_store.py — the v0.6.0
 # Sentinel governance record store, replacing telemetry/store.py.
+#
+# Uses patch_telemetry() from tests/helpers/telemetry_patching.py
+# rather than patching "telemetry.governance_store.
+# is_telemetry_enabled" directly — since the module split,
+# create_governance_record/add_history_entry/etc. live in
+# governance_records.py/governance_history.py, each with their
+# OWN independent binding of is_telemetry_enabled. Patching
+# only governance_store's copy silently did nothing to those,
+# and every test here always passes db_path explicitly, so
+# get_db_path() patching isn't needed in this specific file.
 
 import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -24,6 +33,8 @@ from telemetry.governance_store import (
     record_governance_evidence,
     verify_history_chain,
 )
+
+from tests.helpers.telemetry_patching import patch_telemetry
 
 
 def _tmp_db(tmp_path: Path) -> Path:
@@ -54,11 +65,6 @@ def _make_result(
             "status": "Violated" if "DENY" in decision else "Upheld",
         }
     return result
-
-
-# =====================================================
-# SCHEMA
-# =====================================================
 
 
 class TestSchema:
@@ -103,11 +109,6 @@ class TestSchema:
         assert "history_action" in columns
 
 
-# =====================================================
-# hash_objective_statement
-# =====================================================
-
-
 class TestHashObjectiveStatement:
     def test_none_for_none_input(self):
         assert hash_objective_statement(None) is None
@@ -126,20 +127,12 @@ class TestHashObjectiveStatement:
         assert a != b
 
 
-# =====================================================
-# create_governance_record
-# =====================================================
-
-
 class TestCreateGovernanceRecord:
     def test_creates_record_when_enabled(self, tmp_path):
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             success = create_governance_record(result=result, db_path=db)
 
         assert success is True
@@ -148,10 +141,7 @@ class TestCreateGovernanceRecord:
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=False,
-        ):
+        with patch_telemetry(enabled=False):
             success = create_governance_record(result=result, db_path=db)
 
         assert success is False
@@ -161,10 +151,7 @@ class TestCreateGovernanceRecord:
         result = _make_result()
         result["decision_id"] = ""
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             success = create_governance_record(result=result, db_path=db)
 
         assert success is False
@@ -173,10 +160,7 @@ class TestCreateGovernanceRecord:
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
 
         record = get_governance_record(result["decision_id"], db_path=db)
@@ -188,10 +172,7 @@ class TestCreateGovernanceRecord:
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
 
         history = get_governance_history(result["decision_id"], db_path=db)
@@ -205,10 +186,7 @@ class TestCreateGovernanceRecord:
         statement = "Maintain cloud spend within approved budget"
         result = _make_result(objective_statement=statement)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
 
         record = get_governance_record(result["decision_id"], db_path=db)
@@ -219,12 +197,9 @@ class TestCreateGovernanceRecord:
 
     def test_no_objective_fields_when_not_declared(self, tmp_path):
         db = _tmp_db(tmp_path)
-        result = _make_result()  # no objective
+        result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
 
         record = get_governance_record(result["decision_id"], db_path=db)
@@ -237,10 +212,7 @@ class TestCreateGovernanceRecord:
         policy_file.write_text("metadata:\n  name: test_budget\n")
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(
                 result=result,
                 policy_path=str(policy_file),
@@ -254,10 +226,7 @@ class TestCreateGovernanceRecord:
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(
                 result=result,
                 policy_content_hash="explicit_hash_value",
@@ -268,18 +237,10 @@ class TestCreateGovernanceRecord:
         assert record["policy_content_hash"] == "explicit_hash_value"
 
 
-# =====================================================
-# add_history_entry
-# =====================================================
-
-
 class TestAddHistoryEntry:
     def _create_parent(self, db_path) -> str:
         result = _make_result()
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db_path)
         return result["decision_id"]
 
@@ -287,10 +248,7 @@ class TestAddHistoryEntry:
         db = _tmp_db(tmp_path)
         record_id = self._create_parent(db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             success = add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -308,10 +266,7 @@ class TestAddHistoryEntry:
     def test_returns_false_for_nonexistent_record(self, tmp_path):
         db = _tmp_db(tmp_path)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             success = add_history_entry(
                 record_id="nonexistent-id",
                 history_category="override",
@@ -326,10 +281,7 @@ class TestAddHistoryEntry:
         db = _tmp_db(tmp_path)
         record_id = self._create_parent(db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="drift",
@@ -347,10 +299,7 @@ class TestAddHistoryEntry:
         db = _tmp_db(tmp_path)
         record_id = self._create_parent(db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="outcome",
@@ -360,17 +309,13 @@ class TestAddHistoryEntry:
             )
 
         history = get_governance_history(record_id, db_path=db)
-        # Second entry's prev_history_hash must equal first entry's hash
         assert history[1]["prev_history_hash"] == history[0]["history_hash"]
 
     def test_filter_by_category(self, tmp_path):
         db = _tmp_db(tmp_path)
         record_id = self._create_parent(db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             add_history_entry(
                 record_id=record_id,
                 history_category="override",
@@ -400,20 +345,12 @@ class TestAddHistoryEntry:
         assert all(h["history_category"] == "override" for h in override_history)
 
 
-# =====================================================
-# verify_history_chain
-# =====================================================
-
-
 class TestVerifyHistoryChain:
     def test_verified_true_for_intact_chain(self, tmp_path):
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
             add_history_entry(
                 record_id=result["decision_id"],
@@ -438,14 +375,9 @@ class TestVerifyHistoryChain:
         db = _tmp_db(tmp_path)
         result = _make_result()
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db)
 
-        # Directly tamper with the stored history_data,
-        # bypassing add_history_entry entirely
         import sqlite3
 
         conn = sqlite3.connect(str(db))
@@ -460,18 +392,10 @@ class TestVerifyHistoryChain:
         assert verification["verified"] is False
 
 
-# =====================================================
-# Governance Evidence
-# =====================================================
-
-
 class TestGovernanceEvidence:
     def _create_parent(self, db_path) -> str:
         result = _make_result()
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(result=result, db_path=db_path)
         return result["decision_id"]
 
@@ -480,10 +404,7 @@ class TestGovernanceEvidence:
         record_id = self._create_parent(db)
         evidence = {"trace": [1, 2, 3], "decision": "DENY_WITH_OVERRIDE"}
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             success = record_governance_evidence(
                 record_id=record_id, evidence=evidence, db_path=db
             )
@@ -496,10 +417,7 @@ class TestGovernanceEvidence:
         db = _tmp_db(tmp_path)
         record_id = self._create_parent(db)
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             record_governance_evidence(
                 record_id=record_id, evidence={"data": "x"}, db_path=db
             )
@@ -515,20 +433,12 @@ class TestGovernanceEvidence:
         assert result is None
 
 
-# =====================================================
-# Relational Queries
-# =====================================================
-
-
 class TestRelationalQueries:
     def test_get_records_by_objective(self, tmp_path):
         db = _tmp_db(tmp_path)
         statement = "Maintain cloud spend within approved budget"
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(
                 result=_make_result(objective_statement=statement),
                 db_path=db,
@@ -550,10 +460,7 @@ class TestRelationalQueries:
         policy_file = tmp_path / "policy.yaml"
         policy_file.write_text("metadata:\n  name: shared_policy\n")
 
-        with patch(
-            "telemetry.governance_store.is_telemetry_enabled",
-            return_value=True,
-        ):
+        with patch_telemetry(enabled=True):
             create_governance_record(
                 result=_make_result(),
                 policy_path=str(policy_file),
@@ -565,8 +472,6 @@ class TestRelationalQueries:
                 db_path=db,
             )
 
-        # Both records share the same policy_content_hash since
-        # they were created from the same policy file contents.
         expected_hash = _compute_hash_for_test(policy_file)
         records = get_records_by_policy(expected_hash, db_path=db)
         assert len(records) == 2

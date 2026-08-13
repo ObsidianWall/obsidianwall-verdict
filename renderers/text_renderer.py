@@ -159,16 +159,21 @@ def render_text(
             lines.append(f"    →  {step}")
         lines.append("")
 
-    # Override / approval — framed as an action, not a noun.
-    # Humans scan verbs faster than labels when deciding what
-    # to do next.
+    # Override / approval — reframed to match explain_renderer.py's
+    # equivalent fix. "Action Required" made an available exception
+    # look mandatory, when remediation (shown directly above) is
+    # an equally valid path. Kept as a single-line heading rather
+    # than the full "Resolution Options" wrapper explain_renderer.py
+    # uses — this renderer is deliberately budgeted to ~15 lines,
+    # and Remediation already appearing immediately above already
+    # signals these are two options, not one required step.
     if override_possible and "DENY" in decision:
         notif_roles: list[str] = [
             n.get("target_role", "") for n in notifications if n.get("target_role")
         ]
         if notif_roles:
-            lines.append(f"  {_bold('Action Required')}")
-            lines.append("    Request override from:")
+            lines.append(f"  {_bold('Request Exception')}")
+            lines.append("    If intentional, request an override from:")
             for r in notif_roles:
                 lines.append(f"      • {r}")
             lines.append("")

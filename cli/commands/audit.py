@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 import typer
 
-from cli.display import decision_icon
+from cli.display import decision_icon, format_display_timestamp
 from renderers.ansi import _bold
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.governance_store import (
@@ -193,8 +193,22 @@ def _print_audit_table(
     # ── Domain risk scores ────────────────────────────
     domain_scores: dict[str, float] = domain_summary.get("domain_avg_scores", {})
     if domain_scores:
+        # Sampling window disclosed dynamically rather than a
+        # static claim of "all recorded decisions" — this
+        # section is deliberately sampled to the 500 most
+        # recent records (see get_domain_risk_summary()'s
+        # docstring), while total_evaluations above it is the
+        # true, unbounded count. Once total exceeds 500 those
+        # two numbers describe different populations, so the
+        # header says so explicitly instead of implying they
+        # match.
+        total_for_label: int = domain_summary.get("total_evaluations", 0)
+        if total_for_label > 500:
+            scope_label = f"average across most recent 500 of {total_for_label}"
+        else:
+            scope_label = "average across recorded decisions"
         typer.echo(f"\n{'─' * _WIDTH}")
-        typer.echo(_bold("  Domain Risk Scores  (average across recorded decisions)"))
+        typer.echo(_bold(f"  Domain Risk Scores  ({scope_label})"))
         typer.echo("─" * _WIDTH)
         for domain, score in sorted(
             domain_scores.items(),
@@ -214,13 +228,13 @@ def _print_audit_table(
 
         if failed_conditions:
             typer.echo("\n  Failed conditions  (why deployments were DENIED)")
-            typer.echo(f"  {'Condition':<40}  {'Failures':>8}  {'Rate':>6}")
+            typer.echo(f"  {'Condition':<40}  {'Failures':>8}  {'Rate':>5}")
             typer.echo(f"  {'─' * 40}  {'─' * 8}  {'─' * 6}")
             for c in failed_conditions[:10]:
                 typer.echo(
                     f"  {str(c['condition_id']):<40}  "
-                    f"{int(c['count']):>8}  "
-                    f"{float(c['rate']):>5.1f}%"
+                    f"{int(c['count']):>5}  "
+                    f"{float(c['rate']):>8.1f}%"
                 )
 
         if passed_conditions:
@@ -240,24 +254,33 @@ def _print_audit_table(
         typer.echo(_bold("  Policy Effectiveness"))
         typer.echo("─" * _WIDTH)
         typer.echo(
-            f"  {'Policy':<34}  {'Evals':>5}  "
-            f"{'Denied':>6}  {'Overrides':>9}  "
+            f"  {'Policy':<28}  {'Evals':>3}  "
+            f"{'Denied':>6}  {'Elig.':>4}  {'Overrides':>7}  "
             f"{'Override%':>9}  {'Deny%':>6}"
         )
         typer.echo(
-            f"  {'─' * 34}  {'─' * 5}  {'─' * 6}  {'─' * 9}  {'─' * 9}  {'─' * 6}"
+            f"  {'─' * 28}  {'─' * 5}  {'─' * 6}  {'─' * 5}  "
+            f"{'─' * 9}  {'─' * 9}  {'─' * 6}"
         )
         for row in effectiveness:
             evals: int = int(row.get("total_evaluations", 0))
             denied_r: int = int(row.get("total_denied", 0))
+            eligible: int = int(row.get("override_eligible_count", 0))
             overrides: int = int(row.get("override_count", 0))
             deny_pct: float = round(denied_r / evals * 100, 1) if evals else 0.0
-            over_pct: float = round(overrides / denied_r * 100, 1) if denied_r else 0.0
-            name: str = str(row.get("policy_name", ""))[:32]
+            # Override% denominator is override-ELIGIBLE decisions
+            # (DENY_WITH_OVERRIDE only) — NOT total_denied. A hard
+            # DENY has no override path at all; including it in
+            # the denominator understates how often an available
+            # exception was actually granted. "Elig." is shown
+            # explicitly so this denominator is checkable, not
+            # hidden inside a single percentage.
+            over_pct: float = round(overrides / eligible * 100, 1) if eligible else 0.0
+            name: str = str(row.get("policy_name", ""))[:26]
             typer.echo(
-                f"  {name:<34}  {evals:>5}  "
-                f"{denied_r:>6}  {overrides:>9}  "
-                f"{over_pct:>8.1f}%  {deny_pct:>5.1f}%"
+                f"  {name:<28}  {evals:>3}  "
+                f"{denied_r:>6}  {eligible:>5}  {overrides:>9}  "
+                f"{over_pct:>8.1f}%  {deny_pct:>8.1f}%"
             )
 
     # ── Deployment outcomes ────────────────────────────
@@ -281,34 +304,21 @@ def _print_audit_table(
     typer.echo(_bold(f"  Recent Decisions  (last {min(len(recent), limit)})"))
     typer.echo("─" * _WIDTH)
     typer.echo(
-        f"  {'Decision ID':<12}  {'When':<16}  {'Policy':<24}  "
-        f"{'Decision':<24}  {'Score':>6}"
+        f"  {'Decision ID':<12}  {'When':<31}  {'Policy':<28}  "
+        f"{'Decision':<21}  {'Score':>6}"
     )
-    typer.echo(f"  {'─' * 12}  {'─' * 16}  {'─' * 24}  {'─' * 24}  {'─' * 6}")
+    typer.echo(f"  {'─' * 12}  {'─' * 31}  {'─' * 28}  {'─' * 22}  {'─' * 6}")
     for row in recent[:limit]:
         short_id: str = str(row.get("record_id", ""))[:8]
-        # created_at is stored as an ISO 8601 timestamp
-        # (e.g. "2026-07-18T00:08:30.863793+00:00"). Trim to
-        # "2026-07-18 00:08" for a compact, readable column —
-        # full precision remains in the record itself and in
-        # verdict explain.
         raw_timestamp: str = str(row.get("created_at", ""))
-        # created_at is stored in UTC (see governance_store.py —
-        # datetime.now(timezone.utc)). Explicitly labeled here so
-        # it's never mistaken for local time — the raw ISO string
-        # was previously truncated right before its +00:00 offset
-        # marker, silently discarding the one signal that it was
-        # UTC at all.
-        when: str = (
-            f"{raw_timestamp[:16].replace('T', ' ')} UTC" if raw_timestamp else "—"
-        )
-        name_r: str = str(row.get("policy_name", ""))[:22]
+        when: str = format_display_timestamp(raw_timestamp)
+        name_r: str = str(row.get("policy_name", ""))[:28]
         decision: str = str(row.get("decision", ""))[:22]
         score: int = int(row.get("overall_risk_score", 0))
         icon: str = decision_icon(str(row.get("decision", "")))
         typer.echo(
-            f"  {short_id:<12}  {when:<16}  {name_r:<24}  "
-            f"{icon} {decision:<22}  {score:>5}/100"
+            f"  {short_id:<12}  {when:<31}  {name_r:<28}  "
+            f"{icon} {decision:<16}  {score:>3}/100"
         )
 
     # ── Governance insights + recommendations ─────────

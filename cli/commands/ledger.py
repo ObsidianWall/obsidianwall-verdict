@@ -35,6 +35,7 @@ from typing import Any, Optional
 
 import typer
 
+from cli.display import format_display_timestamp
 from renderers.ansi import _bold, _dim
 from telemetry.config import get_db_path, is_telemetry_enabled
 from telemetry.governance_store import get_risk_acceptance_records
@@ -169,13 +170,21 @@ def _print_ledger_table(
             sequence_lookup[key] = (i, total)
 
     typer.echo(f"\n{'─' * _WIDTH}")
+    # Status column added per ADR-0001 — every row in this
+    # table was, by construction, an APPROVED override
+    # (get_risk_acceptance_records() filters to
+    # history_action='approved' only). That was previously
+    # only implied by the row existing at all, never stated.
+    # This makes it explicit rather than assumed.
     header = (
-        f"  {_bold('Decision ID'.ljust(12))}  {_bold('When'.ljust(20))}  "
+        f"  {_bold('Decision ID'.ljust(12))}  {_bold('When'.ljust(24))}  "
         f"{_bold('Policy'.ljust(20))}  {_bold('Accepted By'.ljust(26))}  "
-        f"{_bold('Risk'.rjust(6))}"
+        f"{_bold('Status'.ljust(10))}  {_bold('Risk'.rjust(6))}"
     )
     typer.echo(header)
-    typer.echo(f"  {'─' * 12}  {'─' * 20}  {'─' * 20}  {'─' * 26}  {'─' * 6}")
+    typer.echo(
+        f"  {'─' * 12}  {'─' * 24}  {'─' * 20}  {'─' * 26} {'─' * 10}  {'─' * 6}"
+    )
 
     for record in records:
         short_id: str = str(record.get("record_id", ""))[:8]
@@ -183,9 +192,7 @@ def _print_ledger_table(
         raw_timestamp: str = str(record.get("created_at", ""))
         # created_at is stored in UTC — labeled explicitly so
         # it's never mistaken for local time.
-        when: str = (
-            f"{raw_timestamp[:16].replace('T', ' ')} UTC" if raw_timestamp else "—"
-        )
+        when: str = format_display_timestamp(raw_timestamp)
 
         policy_name: str = str(record.get("policy_name", ""))[:18]
         accepted_by: str = str(record.get("accepted_by") or "—")[:26]
@@ -200,8 +207,8 @@ def _print_ledger_table(
         )
 
         typer.echo(
-            f"  {short_id:<12}  {when:<20}  {policy_name:<20}  "
-            f"{accepted_by:<26}  {risk_score:>4}/100{repeat_note}"
+            f"  {short_id:<12}  {when:<24}  {policy_name:<20}  "
+            f"{accepted_by:<26}  {'Approved':<10}  {risk_score:>4}/100{repeat_note}"
         )
 
     typer.echo(f"\n{'─' * _WIDTH}")

@@ -41,7 +41,6 @@ from engine.governance_objective import compute_governance_objective
 from engine.orchestrator import PolicyOrchestrator
 from engine.policy_loader import load_policy
 from engine.validator import validate_policy
-from notifications import dispatch_notifications
 from renderers import SUPPORTED_FORMATS, render
 from telemetry.governance_store import (
     create_governance_record,
@@ -147,15 +146,17 @@ def evaluate(
             "Examples: eastus, westeurope, eastasia."
         ),
     ),
-    current_spend: float = typer.Option(
-        0.0,
+    current_spend: float | None = typer.Option(
+        None,
         "--current-spend",
         help=(
             "Current period spend in USD already incurred this month. "
             "Combined with estimated_cost to check total projected spend "
             "against your budget limit. "
             "Example: --current-spend 30.0 means $30 already spent this month. "
-            "Defaults to 0.0."
+            "If omitted, treated as $0 but marked in the evidence artifact "
+            "as unverified rather than indistinguishable from an explicit "
+            "'--current-spend 0' claim — see context_builder.py."
         ),
     ),
     verbose: bool = typer.Option(
@@ -330,29 +331,6 @@ def evaluate(
             record_id=result.get("decision_id", ""),
             evidence=result,
             evidence_type="evaluation",
-        )
-
-        # ---------------------------------------------
-        # STEP 5b — Dispatch notifications
-        # Routes pending notifications to configured
-        # channels (email, Slack).
-        # Silently no-ops if no channels are configured.
-        # Never raises — notifications must not crash CLI.
-        # ---------------------------------------------
-
-        dispatch_notifications(
-            notification_manifest=result.get("notification_manifest", {}),
-            decision_id=result.get("decision_id", ""),
-        )
-
-        logger.info(
-            "evaluation_completed",
-            extra={
-                "extra": {
-                    "decision": result["decision"],
-                    "decision_id": result["decision_id"],
-                }
-            },
         )
 
         # ---------------------------------------------
