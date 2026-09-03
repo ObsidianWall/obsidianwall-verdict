@@ -27,6 +27,12 @@
 # - scoped perms  → contents: read only on all jobs
 # - pinned SHAs   → all actions pinned to exact commit SHA
 #
+# Source coverage policy:
+# - 90% is the project-wide minimum coverage gate.
+# - The same threshold is enforced locally and in routine CI.
+# - Slow distribution tests are excluded because they validate
+#   built-artifact behavior rather than source-coverage semantics.
+#
 # Note: PyPI publish is handled by release.yml on main.
 # This file does NOT publish to PyPI.
 
@@ -42,6 +48,8 @@ on:
   pull_request:
     branches:
       - main
+      - staging
+      - testing
 
 permissions:
   contents: read
@@ -84,20 +92,20 @@ jobs:
 
       - name: Ruff lint
         run: |
-          ruff check engine/ schemas/ audit/ cli/
+          ruff check engine/ schemas/ audit/ cli/ authority/
 
       - name: Ruff format check
         run: |
-          ruff format --check engine/ schemas/ audit/ cli/
+          ruff format --check engine/ schemas/ audit/ cli/ authority/
 
       - name: Bandit security scan
         run: |
-          bandit -r engine/ schemas/ audit/ -ll -f txt
+          bandit -r engine/ schemas/ audit/ authority/ -ll -f txt
 
       - name: Semgrep SAST
         run: |
           pip install semgrep "pyjwt>=2.13.0"
-          semgrep --config=auto engine/ schemas/ audit/ cli/ \
+          semgrep --config=auto engine/ schemas/ audit/ cli/ authority/ \
             --error --quiet
 
       - name: TruffleHog secret scan
@@ -106,7 +114,7 @@ jobs:
            path:       ./
            base:       ${{ github.event.before }}
            head:       ${{ github.sha }}
-           extra_args: --only-verified --exclude-detectors=Lob
+           extra_args: --only-verified
 
       - name: License compliance check
         # Blocks the build if any dependency carries a GPL or AGPL
@@ -175,7 +183,8 @@ jobs:
   # ===================================================
   # TEST SUITE
   #
-  # Runs full test suite across Python 3.11, 3.12, 3.13.
+  # Runs the fast routine test suite across Python 3.11, 3.12, 3.13.
+  # Slow distribution tests are reserved for staging/release gates.
   # Matrix testing ensures compatibility across all
   # supported Python versions before any code reaches main.
   #
@@ -188,6 +197,7 @@ jobs:
   #   telemetry/     governance history store
   #   context/         evaluation context
   #   render/          policy rendering
+  #   authority/       governance authority foundation
   #
   # Coverage gate enforces minimum 90% coverage across all modules.
   # ===================================================
@@ -215,11 +225,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev,attestation,azure]"
+          pip install -e ".[dev]"
 
-      - name: Run full test suite with coverage gate
+      - name: Run fast test suite with coverage gate
         run: |
-          python -m pytest tests/ -v \
+          python -m pytest tests/ -v -m "not slow" \
             --cov=engine \
             --cov=cli \
             --cov=schemas \
@@ -228,6 +238,7 @@ jobs:
             --cov=telemetry \
             --cov=context \
             --cov=render \
+            --cov=authority \
             --cov-report=term-missing \
             --cov-fail-under=90
 
@@ -399,31 +410,64 @@ jobs:
           pip install -e .
           verdict --help
 
-      - name: Verify data files included in wheel
-        # Inspects the built wheel to confirm YAML data files
-        # are packaged correctly. Fails if the CloudFormation
-        # resource type map is missing from the wheel.
-        # Uses a script file to avoid inline Python YAML issues.
+      - name: Verify data files and authority package included in wheel
+        # Inspects the wheel already produced by the preceding
+        # "Build package" step — does NOT rebuild. Confirms YAML
+        # data files and the authority/ subsystem are packaged
+        # correctly. The deeper install/import regression remains
+        # in Family 5 at staging/release checkpoints.
         run: |
-          python -m build --wheel
           cat > /tmp/check_wheel.py << 'PYEOF'
-          import zipfile, glob, sys
+          import glob
+          import sys
+          import zipfile
+
           wheels = glob.glob("dist/*.whl")
           if not wheels:
-              print("No wheel found")
+              print("ERROR: No wheel found")
               sys.exit(1)
-          whl = zipfile.ZipFile(wheels[0])
-          yaml_files = [f for f in whl.namelist() if f.endswith(".yaml")]
+
+          with zipfile.ZipFile(wheels[0]) as whl:
+              names = whl.namelist()
+
+          yaml_files = [f for f in names if f.endswith(".yaml")]
           if not yaml_files:
               print("ERROR: No YAML files found in wheel")
               sys.exit(1)
-          matches = [f for f in yaml_files if "cloudformation_resource_type_map" in f]
+
+          matches = [
+              f for f in yaml_files
+              if "cloudformation_resource_type_map" in f
+          ]
           if not matches:
               print("ERROR: cloudformation_resource_type_map.yaml not in wheel")
               print("YAML files present: " + str(yaml_files))
               sys.exit(1)
+
           print("YAML files verified in wheel: " + str(len(yaml_files)))
           for f in yaml_files:
+              print("  " + f)
+
+          required_authority_modules = {
+              "authority/models.py",
+              "authority/provider.py",
+              "authority/organization_loader.py",
+              "authority/local_provider.py",
+          }
+          authority_files = {f for f in names if f.startswith("authority/")}
+          missing = required_authority_modules - authority_files
+          if missing:
+              print(
+                  "ERROR: authority/ modules missing from wheel: "
+                  + str(sorted(missing))
+              )
+              sys.exit(1)
+
+          print(
+              "authority/ modules verified in wheel: "
+              + str(len(authority_files))
+          )
+          for f in sorted(authority_files):
               print("  " + f)
           PYEOF
           python3 /tmp/check_wheel.py

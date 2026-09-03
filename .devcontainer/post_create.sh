@@ -1,4 +1,3 @@
-
 #!/bin/bash
 # obsidianwall-verdict/.devcontainer/post_create.sh
 #
@@ -94,9 +93,20 @@ echo ""
 echo "→ Verifying Makefile targets..."
 if [ -f "Makefile" ]; then
     echo "  Makefile ✓"
-    make --dry-run test > /dev/null 2>&1 \
-        && echo "  make test target ✓" \
-        || echo "  make test target — check Makefile"
+
+    for target in \
+        test \
+        test-all \
+        test-distribution \
+        unit \
+        lint \
+        check \
+        staging
+    do
+        make --dry-run "$target" > /dev/null 2>&1 \
+            && echo "  make $target target ✓" \
+            || echo "  make $target target — check Makefile"
+    done
 else
     echo "  Makefile missing"
 fi
@@ -110,10 +120,12 @@ echo "════════════════════════�
 echo "  ✅ Dev environment ready."
 echo ""
 echo "  Quick commands:"
-echo "    make test       — run full test suite"
-echo "    make unit       — run unit tests only"
-echo "    make lint       — run ruff + bandit"
-echo "    make check      — lint + audit + test"
-echo "    make staging    — build + smoke test Docker image"
+echo "    make test               — run fast development suite"
+echo "    make test-all           — run complete suite, including distribution"
+echo "    make test-distribution  — run slow distribution regression suite"
+echo "    make unit               — run unit tests only"
+echo "    make lint               — run ruff + bandit"
+echo "    make check              — lint + audit + fast tests"
+echo "    make staging            — build + smoke test Docker image"
 echo "═══════════════════════════════════════════════════════════"
 echo ""

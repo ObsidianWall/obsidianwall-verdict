@@ -1,0 +1,38 @@
+apiVersion: obsidianwall.io/v1
+kind: OrganizationAuthority
+
+metadata:
+  organization_id: example-organization
+  version: "0.1"
+
+roles:
+  - id: role_security_admin
+    name: security_admin
+    display_name: Security Administrator
+    status: active
+
+    members:
+      - security-admin@example.com
+
+    notification:
+      preferred: email
+
+      email:
+        address: security-admin@example.com
+
+      slack:
+        webhook_env: OW_SECURITY_ADMIN_SLACK_WEBHOOK
+
+  - id: role_engineering_lead
+    name: engineering_lead
+    display_name: Engineering Lead
+    status: active
+
+    members:
+      - engineering-lead@example.com
+
+    notification:
+      preferred: slack
+
+      slack:
+        webhook_env: OW_ENGINEERING_LEAD_SLACK_WEBHOOK

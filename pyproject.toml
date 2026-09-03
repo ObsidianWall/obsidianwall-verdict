@@ -42,6 +42,8 @@ dependencies = [
     "typer>=0.9",
     "python-json-logger>=2.0",
     "requests>=2.28",
+    "email-validator>=2.0",
+    "filelock>=3.13",
 ]
 
 [project.optional-dependencies]
@@ -86,6 +88,7 @@ include = [
     "telemetry*",
     "notifications*",
     "renderers*",
+    "authority*",
 ]
 exclude = [
     "tests*",
@@ -103,6 +106,9 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 pythonpath = ["."]
 addopts = "-v --tb=short"
+markers = [
+        "slow: builds a real wheel — run explicitly, not in the default fast loop",
+    ]
 
 
 [tool.ruff]
@@ -116,8 +122,16 @@ ignore = ["E501"]
 per-file-ignores = {"**/__init__.py" = ["F401"]}
 
 [tool.coverage.run]
-source = ["engine", "schemas", "audit"]
-omit = ["tests/*", "cli/*", "scripts/*"]
+source = [
+    "engine", 
+    "schemas", 
+    "audit", 
+    "telemetry", 
+    "notifications", 
+    "renderers",
+    "authority"
+]
+omit = ["tests/*", "cli/*", "scripts/*", ]
 
 [tool.coverage.report]
 fail_under = 90

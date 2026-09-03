@@ -783,8 +783,8 @@ git clone https://github.com/obsidianwall/obsidianwall-verdict
 cd obsidianwall-verdict
 pip install -e ".[dev]"
 
-# Run the full test suite
-pytest tests/ -v
+# Run the fast development suite
+pytest tests/ -m "not slow" -v
 
 # Run a sample evaluation
 verdict evaluate \
@@ -793,12 +793,14 @@ verdict evaluate \
   --role   engineer
 ```
 
-**Test suite:** 823+ tests — unit and integration.
+**Test suite:** 1000+ tests — unit, integration, contract, and distribution coverage.
 
 ```bash
-pytest tests/unit/        # unit tests
-pytest tests/integration/ # integration tests
-pytest tests/             # full suite
+pytest tests/unit/                         # unit tests
+pytest tests/integration/                  # integration tests
+pytest tests/distribution/ -m slow         # distribution/packaging regression (slow)
+pytest tests/ -m "not slow"                # fast suite — routine development
+pytest tests/                              # complete suite — everything, including distribution
 ```
 
 **Policy examples** are in `policies/` organized by governance domain:

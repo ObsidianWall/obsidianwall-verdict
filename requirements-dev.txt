@@ -1,0 +1,7 @@
+
+# requirements-dev.txt for ObsidianWall-Verdict
+
+-r requirements.txt
+pytest>=7.0
+
+
